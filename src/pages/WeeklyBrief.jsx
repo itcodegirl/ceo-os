@@ -3,6 +3,7 @@ import SectionCard from '../components/ui/SectionCard';
 import PageHeader from '../components/ui/PageHeader';
 import SummaryCards from '../components/ui/SummaryCards';
 import SourceStatusNotice from '../components/ui/SourceStatusNotice';
+import PageLoading from '../components/ui/PageLoading';
 import PrioritiesSection from '../components/weekly/PrioritiesSection';
 import WinsSection from '../components/weekly/WinsSection';
 import BlockersSection from '../components/weekly/BlockersSection';
@@ -115,7 +116,7 @@ function WeeklyBrief() {
         onRetry={refreshWeeklyBrief}
         retryAriaLabel="Retry loading weekly brief"
       />
-      {isLoading ? <p className="sr-only" role="status" aria-live="polite">Loading weekly brief.</p> : null}
+      <PageLoading visible={isLoading} label="Loading weekly brief" variant="sr-only" />
 
       <SummaryCards
         className="weekly-overview"

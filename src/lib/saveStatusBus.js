@@ -36,6 +36,25 @@ export function notifySaveSucceeded(key) {
   dispatch({ phase: SAVED_PHASE, key, at: new Date().toISOString() });
 }
 
+/**
+ * Browser-portable quota-exceeded detector. localStorage quota errors
+ * surface under different names across browsers:
+ *   - Chrome / Firefox: name === 'QuotaExceededError'
+ *   - Safari (old):     name === 'NS_ERROR_DOM_QUOTA_REACHED' or code 22
+ *   - Spec'd code:      22
+ * We treat any of these as quota so the UI can show storage-specific copy
+ * instead of the generic "save failed" line.
+ */
+export function isQuotaExceededError(error) {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  if (error.name === 'QuotaExceededError') return true;
+  if (error.name === 'NS_ERROR_DOM_QUOTA_REACHED') return true;
+  if (error.code === 22 || error.code === 1014) return true;
+  return false;
+}
+
 export function notifySaveFailed(key, error) {
   if (typeof key !== 'string' || !key) {
     return;
@@ -43,7 +62,8 @@ export function notifySaveFailed(key, error) {
   const message = error && typeof error === 'object'
     ? String(error.message || error.code || 'Unknown save error')
     : String(error || 'Unknown save error');
-  dispatch({ phase: FAILED_PHASE, key, at: new Date().toISOString(), message });
+  const kind = isQuotaExceededError(error) ? 'quota' : 'generic';
+  dispatch({ phase: FAILED_PHASE, key, at: new Date().toISOString(), message, kind });
 }
 
 export function subscribeSaveStatus(handler) {

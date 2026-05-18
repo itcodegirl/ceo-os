@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  STORAGE_ARCHIVED_EVENT,
   STORAGE_CORRUPTION_EVENT,
   STORAGE_RESTORED_EVENT,
+  archiveStorageValue,
   discardCorruptBackup,
   listCorruptBackups,
   parseJsonOrPreserveCorruption,
@@ -178,5 +180,72 @@ describe('discardCorruptBackup', () => {
     expect(discardCorruptBackup(key, backupKey)).toBe(true);
     expect(window.localStorage.getItem(backupKey)).toBeNull();
     expect(listCorruptBackups(key)).toEqual([]);
+  });
+});
+
+describe('archiveStorageValue', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('moves the existing value into a backup and removes the primary key', () => {
+    const key = 'ceo-os-test-archive';
+    window.localStorage.setItem(key, '{"legacy":true}');
+
+    const backupKey = archiveStorageValue(key, { reason: 'legacy-cleanup' });
+
+    expect(backupKey).toMatch(/^ceo-os-test-archive__corrupt_\d+-\d{3}$/);
+    expect(window.localStorage.getItem(key)).toBeNull();
+    expect(window.localStorage.getItem(backupKey)).toBe('{"legacy":true}');
+  });
+
+  it('emits STORAGE_ARCHIVED_EVENT (not the corruption event) so the UI does not misclassify the archive', () => {
+    const key = 'ceo-os-test-archive-event';
+    window.localStorage.setItem(key, 'value');
+
+    const archivedDetails = [];
+    const corruptionDetails = [];
+    const archivedListener = (event) => archivedDetails.push(event.detail);
+    const corruptionListener = (event) => corruptionDetails.push(event.detail);
+    window.addEventListener(STORAGE_ARCHIVED_EVENT, archivedListener);
+    window.addEventListener(STORAGE_CORRUPTION_EVENT, corruptionListener);
+
+    try {
+      archiveStorageValue(key, { reason: 'legacy-cleanup' });
+    } finally {
+      window.removeEventListener(STORAGE_ARCHIVED_EVENT, archivedListener);
+      window.removeEventListener(STORAGE_CORRUPTION_EVENT, corruptionListener);
+    }
+
+    expect(archivedDetails).toHaveLength(1);
+    expect(archivedDetails[0]).toMatchObject({ key, reason: 'legacy-cleanup' });
+    expect(typeof archivedDetails[0].backupKey).toBe('string');
+    expect(corruptionDetails).toHaveLength(0);
+  });
+
+  it('is a no-op and returns null when the primary key is empty or missing', () => {
+    expect(archiveStorageValue('ceo-os-test-archive-missing')).toBeNull();
+
+    window.localStorage.setItem('ceo-os-test-archive-empty', '');
+    expect(archiveStorageValue('ceo-os-test-archive-empty')).toBeNull();
+  });
+
+  it('produces a backup that listCorruptBackups and restoreCorruptBackup recognise', () => {
+    const key = 'ceo-os-test-archive-recover';
+    window.localStorage.setItem(key, 'recoverable');
+
+    const backupKey = archiveStorageValue(key, { reason: 'legacy-cleanup' });
+    expect(backupKey).toBeTruthy();
+
+    const backups = listCorruptBackups(key);
+    expect(backups).toHaveLength(1);
+    expect(backups[0]).toMatchObject({ backupKey, value: 'recoverable' });
+
+    expect(restoreCorruptBackup(key, backupKey)).toBe(true);
+    expect(window.localStorage.getItem(key)).toBe('recoverable');
   });
 });

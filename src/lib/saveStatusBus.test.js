@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  isQuotaExceededError,
   notifySaveFailed,
   notifySaveSucceeded,
   SAVE_STATUS_EVENT,
@@ -67,5 +68,40 @@ describe('saveStatusBus', () => {
     notifySaveSucceeded('ceo-os-test');
     expect(handler).toHaveBeenCalled();
     window.removeEventListener(SAVE_STATUS_EVENT, handler);
+  });
+
+  it('tags quota-exceeded failures with kind="quota" so banners can branch on the reason', () => {
+    const quotaError = new Error('Quota exceeded');
+    quotaError.name = 'QuotaExceededError';
+    notifySaveFailed('ceo-os-test', quotaError);
+    expect(received[0]).toMatchObject({ phase: SAVE_STATUS_PHASES.FAILED, kind: 'quota' });
+  });
+
+  it('tags non-quota failures with kind="generic"', () => {
+    notifySaveFailed('ceo-os-test', new Error('something else'));
+    expect(received[0].kind).toBe('generic');
+  });
+});
+
+describe('isQuotaExceededError', () => {
+  it('recognises the standard QuotaExceededError name', () => {
+    const error = new Error('out of room');
+    error.name = 'QuotaExceededError';
+    expect(isQuotaExceededError(error)).toBe(true);
+  });
+
+  it('recognises the old Safari NS_ERROR_DOM_QUOTA_REACHED name', () => {
+    expect(isQuotaExceededError({ name: 'NS_ERROR_DOM_QUOTA_REACHED' })).toBe(true);
+  });
+
+  it('recognises the spec code 22 and the legacy Firefox code 1014', () => {
+    expect(isQuotaExceededError({ code: 22 })).toBe(true);
+    expect(isQuotaExceededError({ code: 1014 })).toBe(true);
+  });
+
+  it('returns false for unrelated errors and primitive inputs', () => {
+    expect(isQuotaExceededError(new Error('parse error'))).toBe(false);
+    expect(isQuotaExceededError(null)).toBe(false);
+    expect(isQuotaExceededError('quota?')).toBe(false);
   });
 });

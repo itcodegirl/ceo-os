@@ -5,6 +5,7 @@ import Topbar from '../components/ui/Topbar';
 import SystemPulse from '../components/ui/SystemPulse';
 import ErrorBoundary from '../components/ui/ErrorBoundary';
 import StorageCorruptionBanner from '../components/ui/StorageCorruptionBanner';
+import StorageQuotaBanner from '../components/ui/StorageQuotaBanner';
 import LocalOnlyNotice from '../components/ui/LocalOnlyNotice';
 import ToastProvider from '../components/ui/ToastProvider';
 import { useSettings } from '../hooks/useSettings';
@@ -116,6 +117,7 @@ function AppShellInner() {
       <div className="app-main">
         <Topbar pageTitle={currentPageTitle} />
         <StorageCorruptionBanner />
+        <StorageQuotaBanner />
         <LocalOnlyNotice />
         {showSystemPulse ? <SystemPulse /> : null}
         <main className="app-content" id="main-content" tabIndex="-1" ref={mainRef}>

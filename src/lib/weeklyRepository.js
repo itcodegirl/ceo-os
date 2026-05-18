@@ -7,7 +7,7 @@ import {
 import { buildCreateId } from './utils';
 import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
 import { StaleRecordError, assertRecordIsFresh, readUpdatedAtMs } from './staleRecordError';
-import { parseJsonOrPreserveCorruption } from './storageCorruption';
+import { archiveStorageValue, parseJsonOrPreserveCorruption } from './storageCorruption';
 import { STORAGE_DOMAINS } from './dataSchema';
 import { readVersionedLocalStorage, writeVersionedLocalStorage } from './versionedStorage';
 
@@ -306,15 +306,25 @@ function buildWeekPayload(reviewNotes, source) {
   return payload;
 }
 
+/**
+ * Archive each legacy weekly key under a timestamped backup before removing
+ * it. Both call sites (demo reset, demo clear) write a fresh payload into
+ * the versioned store first, so the legacy values are technically migrated —
+ * but a destructive removeItem with no recovery path violates the
+ * local-first data contract established elsewhere in the app. Routing
+ * through archiveStorageValue keeps the same outcome (legacy key gone) but
+ * preserves the prior value in the corruption backup index, where it can be
+ * recovered via listCorruptBackups / restoreCorruptBackup.
+ */
 function removeLegacyWeeklyKeys() {
   if (typeof window === 'undefined') {
     return;
   }
 
-  window.localStorage.removeItem(LEGACY_PRIORITIES_KEY);
-  window.localStorage.removeItem(LEGACY_WINS_KEY);
-  window.localStorage.removeItem(LEGACY_BLOCKERS_KEY);
-  window.localStorage.removeItem(LEGACY_REVIEW_NOTES_KEY);
+  archiveStorageValue(LEGACY_PRIORITIES_KEY, { reason: 'weekly-legacy-cleanup' });
+  archiveStorageValue(LEGACY_WINS_KEY, { reason: 'weekly-legacy-cleanup' });
+  archiveStorageValue(LEGACY_BLOCKERS_KEY, { reason: 'weekly-legacy-cleanup' });
+  archiveStorageValue(LEGACY_REVIEW_NOTES_KEY, { reason: 'weekly-legacy-cleanup' });
 }
 
 function resolveLocalWeekPayload(weekStart) {

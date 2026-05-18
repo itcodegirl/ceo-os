@@ -232,7 +232,7 @@ body::after {
   width: 0.58rem;
   height: 0.58rem;
   border-radius: 999px;
-  background: linear-gradient(180deg, #8de8ff, #35baff);
+  background: var(--gradient-signal);
   box-shadow: 0 0 0 3px rgba(64, 173, 255, 0.22), 0 0 18px rgba(75, 201, 255, 0.4);
 }
 
@@ -380,7 +380,8 @@ body::after {
 }
 
 :root[data-theme="light"] .signal-node {
-  background: linear-gradient(180deg, #5fa8d8, #1f7fc6);
+  /* Gradient overridden via --gradient-signal in tokens.css (light block);
+   * shadows are theme-specific and stay inline. */
   box-shadow:
     0 0 0 3px rgba(31, 127, 198, 0.14),
     0 0 12px rgba(31, 127, 198, 0.18);

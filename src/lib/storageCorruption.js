@@ -12,6 +12,7 @@
 
 export const STORAGE_CORRUPTION_EVENT = 'ceo-os:storage-corruption';
 export const STORAGE_RESTORED_EVENT = 'ceo-os:storage-restored';
+export const STORAGE_ARCHIVED_EVENT = 'ceo-os:storage-archived';
 const CORRUPT_BACKUP_PREFIX_SUFFIX = '__corrupt_';
 const CORRUPT_INDEX_SUFFIX = '__corrupt_index';
 const MAX_BACKUPS_PER_KEY = 3;
@@ -63,30 +64,38 @@ function trimOldBackups(storage, key, list) {
   return trimmed;
 }
 
+/**
+ * Internal: write `rawValue` to a timestamped backup slot for `key`, update
+ * the index, and trim old backups. Returns the backup key on success, null
+ * on failure. Shared by preserveCorruptStorageValue (corruption path) and
+ * archiveStorageValue (intentional pre-delete archive path) so both feed the
+ * same recovery index — restoreCorruptBackup works for either origin.
+ */
+function writeBackupSlot(storage, key, rawValue) {
+  monotonicCounter = (monotonicCounter + 1) % 1000;
+  const suffix = `${Date.now()}-${String(monotonicCounter).padStart(3, '0')}`;
+  const backupKey = `${key}${CORRUPT_BACKUP_PREFIX_SUFFIX}${suffix}`;
+
+  try {
+    storage.setItem(backupKey, String(rawValue));
+  } catch {
+    return null;
+  }
+
+  const currentIndex = readBackupIndex(storage, key);
+  currentIndex.push(backupKey);
+  const nextIndex = trimOldBackups(storage, key, currentIndex);
+  writeBackupIndex(storage, key, nextIndex);
+  return backupKey;
+}
+
 export function preserveCorruptStorageValue(key, rawValue, error) {
   const storage = safeStorage();
   if (!storage || typeof key !== 'string' || rawValue == null) {
     return null;
   }
 
-  monotonicCounter = (monotonicCounter + 1) % 1000;
-  const suffix = `${Date.now()}-${String(monotonicCounter).padStart(3, '0')}`;
-  const backupKey = `${key}${CORRUPT_BACKUP_PREFIX_SUFFIX}${suffix}`;
-  let backupWritten = false;
-
-  try {
-    storage.setItem(backupKey, String(rawValue));
-    backupWritten = true;
-  } catch {
-    // Storage may be full; we still want to dispatch the event so the UI can warn.
-  }
-
-  if (backupWritten) {
-    const currentIndex = readBackupIndex(storage, key);
-    currentIndex.push(backupKey);
-    const nextIndex = trimOldBackups(storage, key, currentIndex);
-    writeBackupIndex(storage, key, nextIndex);
-  }
+  const backupKey = writeBackupSlot(storage, key, rawValue);
 
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     try {
@@ -94,7 +103,7 @@ export function preserveCorruptStorageValue(key, rawValue, error) {
         new CustomEvent(STORAGE_CORRUPTION_EVENT, {
           detail: {
             key,
-            backupKey: backupWritten ? backupKey : null,
+            backupKey,
             at: new Date().toISOString(),
             message: error?.message || 'Stored value was unreadable.',
           },
@@ -109,7 +118,69 @@ export function preserveCorruptStorageValue(key, rawValue, error) {
     console.warn(`Preserved corrupt localStorage value for "${key}" at "${backupKey}".`);
   }
 
-  return backupWritten ? backupKey : null;
+  return backupKey;
+}
+
+/**
+ * Archive the current value at `key` into a timestamped backup, then remove
+ * the primary key. Use this before any intentional cleanup that would
+ * otherwise discard user data without trace — for example, removing legacy
+ * storage keys during a migration or demo reset.
+ *
+ * Returns the backup key on success, or null if the primary key was empty
+ * or the write failed. Emits STORAGE_ARCHIVED_EVENT (NOT the corruption
+ * event) so the UI can surface a recoverable banner without misclassifying
+ * this as a corruption.
+ *
+ * Backups land in the same index as preserveCorruptStorageValue, so
+ * listCorruptBackups / restoreCorruptBackup recover them transparently.
+ */
+export function archiveStorageValue(key, options = {}) {
+  const storage = safeStorage();
+  if (!storage || typeof key !== 'string' || !key) {
+    return null;
+  }
+
+  let rawValue = null;
+  try {
+    rawValue = storage.getItem(key);
+  } catch {
+    return null;
+  }
+
+  if (rawValue === null || rawValue === '') {
+    return null;
+  }
+
+  const backupKey = writeBackupSlot(storage, key, rawValue);
+  if (!backupKey) {
+    return null;
+  }
+
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Original couldn't be removed; the backup still exists.
+  }
+
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent(STORAGE_ARCHIVED_EVENT, {
+          detail: {
+            key,
+            backupKey,
+            at: new Date().toISOString(),
+            reason: typeof options.reason === 'string' ? options.reason : 'manual',
+          },
+        }),
+      );
+    } catch {
+      // ignore dispatch errors
+    }
+  }
+
+  return backupKey;
 }
 
 function resolveFallback(fallbackValue) {

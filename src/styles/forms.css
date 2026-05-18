@@ -83,7 +83,9 @@
   display: inline-grid;
   place-content: center;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--duration-fast, 120ms) var(--easing-standard, ease),
+    background-color var(--duration-fast, 120ms) var(--easing-standard, ease),
+    box-shadow var(--duration-fast, 120ms) var(--easing-standard, ease);
 }
 
 .settings-toggle input[type='checkbox']::before {
@@ -94,7 +96,9 @@
   border-bottom: 2px solid transparent;
   transform: rotate(45deg) scale(0.75);
   opacity: 0;
-  transition: opacity 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  transition: opacity var(--duration-fast, 120ms) var(--easing-standard, ease),
+    transform var(--duration-fast, 120ms) var(--easing-standard, ease),
+    border-color var(--duration-fast, 120ms) var(--easing-standard, ease);
 }
 
 .settings-toggle input[type='checkbox']:hover {
