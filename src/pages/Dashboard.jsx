@@ -17,6 +17,7 @@ import { usePromotionAction } from '../hooks/usePromotionAction';
 import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup';
 import { useReminderActions } from '../hooks/useReminderActions';
 import { useReminderComposer } from '../hooks/useReminderComposer';
+import { useRoutePrefetch } from '../hooks/useRoutePrefetch';
 import { getReminderProgress } from '../lib/remindersRepository';
 import { createWeeklyItem } from '../lib/weeklyRepository';
 import { buildDeterministicSuggestions } from '../lib/suggestions';
@@ -35,7 +36,19 @@ import '../styles/dashboard.css';
 
 const FOCUS_TOOLS_DRAWER_ID = 'focus-tools-drawer';
 
+// Likely-next routes from the Focus Home. Defined at module scope so the
+// useRoutePrefetch dependency stays stable across renders (the hook reruns
+// its effect when this array changes). Capture, Chief, and WeeklyBrief are
+// the three surfaces the Dashboard's hero panels directly invite the user
+// toward — promoting captures to Chief or weekly priorities.
+const LIKELY_NEXT_ROUTES = [
+  () => import('./Capture'),
+  () => import('./ChiefOfStaff'),
+  () => import('./WeeklyBrief'),
+];
+
 function Dashboard() {
+  useRoutePrefetch(LIKELY_NEXT_ROUTES);
   const { showToast } = useToast();
   const [focusMode, setFocusMode] = usePersistentState('ceo-os-focus-mode', 'planning');
   // The top fold leads with the hero (Today's Focus → next step → safe to
