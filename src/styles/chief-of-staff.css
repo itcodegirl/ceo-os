@@ -85,7 +85,7 @@
 
 .chief-output-warning strong,
 .chief-output-warning small {
-  font-size: 0.82rem;
+  font-size: var(--fs-caption);
 }
 
 .chief-output-warning small {
@@ -102,7 +102,7 @@
 
 .chief-acceptance-summary p {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: var(--fs-body-sm);
   line-height: 1.45;
 }
 
@@ -143,7 +143,7 @@
 }
 
 .chief-make__label {
-  font-size: 0.85rem;
+  font-size: var(--fs-body-sm);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -161,14 +161,14 @@
 
 .chief-make__hint {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--fs-caption);
   line-height: 1.45;
   opacity: 0.82;
 }
 
 .chief-notes-meta {
   margin: 0.55rem 0 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-caption);
   opacity: 0.78;
   text-align: right;
 }
@@ -184,7 +184,7 @@
   margin-top: 0.75rem;
   min-height: 1.2rem;
   opacity: 0.84;
-  font-size: 0.88rem;
+  font-size: var(--fs-body-sm);
 }
 
 .chief-output-panel {
@@ -244,7 +244,7 @@
 }
 
 .chief-section-destination {
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
 }
 
 .chief-count-badge {
@@ -274,7 +274,7 @@
 
 .chief-history-notice p {
   margin: 0;
-  font-size: 0.86rem;
+  font-size: var(--fs-body-sm);
   opacity: 0.9;
 }
 
@@ -310,7 +310,7 @@
 
 .chief-history-item__title {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--fs-helper);
 }
 
 .chief-history-item__meta {
@@ -367,7 +367,7 @@
 }
 
 .chief-recent-chip__title {
-  font-size: 0.85rem;
+  font-size: var(--fs-body-sm);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
