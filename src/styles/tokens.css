@@ -162,6 +162,15 @@
   --fw-topbar-title: 600;
   --fs-meta: 0.92rem;
   --fs-helper: 0.92rem;
+  /* Small-text ladder added by the May 2026 audit Phase 5 typography
+   * consolidation. dashboard.css had drifted into 16 distinct font-sizes
+   * in a 16% range; these four tokens collapse the cluster into a clean
+   * 4-step scale (tag → caption → body-sm → body). Other files may
+   * adopt incrementally; existing literals continue to render. */
+  --fs-tag: 0.7rem;
+  --fs-caption: 0.78rem;
+  --fs-body-sm: 0.86rem;
+  --fs-body: 1rem;
 
   --space-card-padding: 1.25rem;
   --space-card-inner-gap: 1rem;
