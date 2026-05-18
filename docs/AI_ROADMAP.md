@@ -110,7 +110,7 @@ Do **not** build these — they break the product's character:
 Each AI action follows the same five-stage pipeline. This mirrors and formalizes
 what `chiefOfStaffProxyCore.js` already does.
 
-```
+```text
 [1] Collect      → user-authored text + chosen action key (plan|summarize|draft|actions|priorities|blockers|followup)
 [2] Validate     → trim, enforce MAX_NOTES_LENGTH, reject empty; client + server agree via shared/chiefConfig
 [3] Compose      → system prompt (role + bounds + output schema) + action instruction (from CHIEF_ACTIONS) + user text
@@ -121,7 +121,7 @@ what `chiefOfStaffProxyCore.js` already does.
 
 **System prompt skeleton (shared across actions):**
 
-```
+```text
 You are the Chief of Staff inside CodeHerWay CEO OS, an operating system for a
 solo founder. Your only job is to reorganize the founder's own notes into the
 requested structure. Rules:
@@ -235,7 +235,7 @@ What the user must always be able to see and control:
 Build on the existing `src/components/chief/*` + `src/hooks/useChiefOfStaff.js`
 structure. No new framework, no global AI context.
 
-```
+```text
 src/
   features/ai/                    # new home for AI-shared pieces (or keep under components/chief)
     aiActions.js                  # client mirror of action keys + labels + descriptions
@@ -468,7 +468,7 @@ current preference.
 > stays as-is; this work wraps it in user control, disclosure, and clean
 > fallbacks.
 
-```
+```text
 TASK: Make CodeHerWay CEO OS "AI-ready" — add user-facing controls, disclosure,
 and consistent fallback behavior around the existing Chief of Staff AI proxy.
 Do NOT add new model providers, new paid API calls, or any client-side API key.
