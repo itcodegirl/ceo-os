@@ -1,3 +1,5 @@
+import EmptyHint from '../ui/EmptyHint';
+
 function formatEventTimestamp(value) {
   if (typeof value !== 'string' || !value.trim()) {
     return 'Unknown time';
@@ -77,7 +79,7 @@ export default function ChiefTelemetryDiagnostics({
               ))}
             </ul>
           ) : (
-            <p className="chief-telemetry-copy">No telemetry events yet.</p>
+            <EmptyHint className="chief-telemetry-copy">No telemetry events yet.</EmptyHint>
           )}
         </>
       )}

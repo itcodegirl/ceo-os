@@ -1,4 +1,5 @@
 import { memo, useId } from 'react';
+import EmptyHint from '../ui/EmptyHint';
 
 const DEFAULT_POINT_LABELS = [
   'Opportunity',
@@ -23,11 +24,7 @@ function MomentumChartComponent({ values = [] }) {
     : 'Momentum trend chart has no points yet';
 
   if (!points.length) {
-    return (
-      <p className="helper-text momentum-chart__empty" role="status" aria-live="polite">
-        No momentum data points yet.
-      </p>
-    );
+    return <EmptyHint className="momentum-chart__empty">No momentum data points yet.</EmptyHint>;
   }
 
   return (

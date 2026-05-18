@@ -1,13 +1,14 @@
 import { memo } from 'react';
+import EmptyHint from '../ui/EmptyHint';
 
 function ActivityFeedComponent({ items = [] }) {
   const normalizedItems = Array.isArray(items) ? items : [];
 
   if (!normalizedItems.length) {
     return (
-      <p className="helper-text" role="status" aria-live="polite">
+      <EmptyHint>
         No activity yet. Add a note or mark a priority complete to begin the feed.
-      </p>
+      </EmptyHint>
     );
   }
 

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import SectionCard from '../ui/SectionCard';
 import ConfirmModal from '../ui/ConfirmModal';
+import EmptyHint from '../ui/EmptyHint';
 import WeeklyTextList from './WeeklyTextList';
 import WeeklyEditorModal from './WeeklyEditorModal';
 import { useWeeklySectionEditor } from '../../hooks/useWeeklySectionEditor';
@@ -58,7 +59,9 @@ function WinsSection({ items, setItems, defaultItems }) {
             onDeleteItem={requestDelete}
           />
         ) : (
-          <p className="helper-text">No wins logged. Start with one &mdash; momentum compounds when you write it down.</p>
+          <EmptyHint>
+            No wins logged. Start with one &mdash; momentum compounds when you write it down.
+          </EmptyHint>
         )}
         {impactMessage ? <p className="helper-text weekly-impact-copy" role="status">{impactMessage}</p> : null}
       </SectionCard>
