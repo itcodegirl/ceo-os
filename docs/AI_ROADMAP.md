@@ -300,9 +300,11 @@ actions share. Do **not** spread model calls across the app.
 
 - **Single endpoint** `/api/chief-of-staff` (keep the name for now; or
   `/api/ai-action`) → `handleAiProxy({ method, body, headers })`.
-- **Request contract:** `{ action: <known key>, notes: <string ≤ MAX_NOTES_LENGTH>, correlationId? }`.
-  Reject unknown actions (the allow-list already exists), reject oversized notes,
-  reject empty.
+- **Request contract:** `{ actionKey: <known key>, notes: <string ≤ MAX_NOTES_LENGTH>, correlationId? }`.
+  (The field is named `actionKey` in `server/chiefOfStaffProxyCore.js`; the
+  proxy currently falls back to `summarize` if it's missing or unknown — keep
+  that behaviour explicit, and reject genuinely unknown keys client-side too.)
+  Reject oversized notes, reject empty.
 - **Auth:** Bearer token / `X-Chief-Staff-Token`, fail-closed via
   `CHIEF_STAFF_REQUIRE_TOKEN`. Per-client rate limit
   (`CHIEF_STAFF_RATE_LIMIT_PER_MINUTE`, default 10).
@@ -493,7 +495,7 @@ DELIVERABLES:
        "This sends the notes you typed above to our AI provider to generate a
         draft. Nothing else from your workspace is included."
      - Expandable "See what we send" showing the exact request payload
-       ({ action, notes }) — read-only, monospace.
+       ({ actionKey, notes }) — read-only, monospace.
    - Add a short retention/privacy paragraph to Settings AND to
      docs/CONFIGURATION.md, stating: typed notes are sent per-request to the
      model provider and not stored by CEO OS as training data; AI outputs are
@@ -530,7 +532,7 @@ DELIVERABLES:
 
 6. Tests (Vitest + existing patterns)
    - useAiEnabled: ON/OFF behavior; OFF prevents proxy calls.
-   - AiDisclosure: renders the static line; expandable shows the { action, notes }
+   - AiDisclosure: renders the static line; expandable shows the { actionKey, notes }
      payload and nothing else.
    - ChiefOfStaff page: renders all four states; AI-OFF state hides the network
      action and shows the Settings link; fallback results show the offline badge
