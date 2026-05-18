@@ -321,9 +321,11 @@ actions share. Do **not** spread model calls across the app.
   `source: "fallback"` and a human `fallbackReason`.
 - **Environment handling is a precondition, not a feature:** if `OPENAI_API_KEY`
   is unset, the proxy must return a clean `{ source: "fallback", fallbackReason:
-  "AI provider not configured" }` — never 500, never leak which var is missing
-  (the `phase 1: trust copy` commit already removed an env-var leak; keep it
-  that way).
+  "AI provider not configured" }` — never 500, never leak which var is missing.
+  **Current state:** the proxy returns `500` with
+  `error_code: "OPENAI_API_KEY_MISSING"` and the variable name in the message
+  (`server/chiefOfStaffProxyCore.js`). This is a Phase 0 fix — see the
+  appendix checklist and the Codex prompt §11 deliverable #4.
 - **Observability:** structured logs with `requestId` + `correlationId` +
   `action` + outcome + latency. No note content in logs. Reuse the existing
   `appErrorTelemetryIngest` path for client-visible error reporting.
@@ -332,11 +334,13 @@ actions share. Do **not** spread model calls across the app.
   heavyweight SDK layer.
 
 **Hard gate before any of this calls a paid API in production:** env-var
-handling ✅ (exists), error states ✅ (exist), loading states ✅ (exist), privacy
-copy ⬜ (needs the disclosure + retention paragraph from §6), fallback behavior
-✅ (exists), an evaluation gate ⬜ (§12), a spend ceiling ⬜ (§13). Ship the
-privacy copy and the spend ceiling first; stand up the evaluation gate before
-turning on a new model or changing a prompt.
+*reading* ✅ (exists), env-var *graceful fallback* ⬜ (proxy still 500s on
+missing `OPENAI_API_KEY`), error states ✅ (exist), loading states ✅ (exist),
+privacy copy ⬜ (needs the disclosure + retention paragraph from §6), fallback
+behavior for runtime failures ✅ (exists), an evaluation gate ⬜ (§12), a spend
+ceiling ⬜ (§13). Ship the env-var fallback, privacy copy, and spend ceiling
+first; stand up the evaluation gate before turning on a new model or changing a
+prompt.
 
 ---
 
@@ -640,7 +644,8 @@ itself" is part of the calm promise.
 
 | Requirement before paid API calls | Status |
 |---|---|
-| Server-side env var handling (`OPENAI_API_KEY`, proxy) | ✅ exists |
+| Server-side env var reading (`OPENAI_API_KEY`, proxy) | ✅ exists |
+| Graceful fallback when `OPENAI_API_KEY` is unset (no 500, no var-name leak) | ⬜ Phase 0 |
 | Fail-closed auth + rate limiting + request timeout | ✅ exists |
 | Loading states | ✅ exists (`OutputLoadingState`) |
 | Error states | ✅ exists (`PanelErrorFallback`, `loadError`) |
