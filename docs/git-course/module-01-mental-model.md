@@ -1,6 +1,4 @@
-# MODULE 01
-
-# The Mental Model
+# Module 01 — The Mental Model
 
 Before you touch a terminal, before you type a single Git command, you need a picture in your head. Not a diagram from a textbook — a real mental model of what Git is doing and why. Developers who skip this step spend months knowing the commands but not knowing what they mean. This module gives you the picture. Module 02 gives you the practice.
 
