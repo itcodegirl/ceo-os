@@ -69,8 +69,8 @@
 }
 
 .chief-source-badge--fallback {
-  background: rgba(248, 162, 180, 0.14);
-  border-color: rgba(248, 162, 180, 0.45);
+  background: rgba(var(--danger-tint-rgb), 0.14);
+  border-color: rgba(var(--danger-tint-rgb), 0.45);
 }
 
 .chief-output-warning {
@@ -79,8 +79,8 @@
   margin-top: 0.95rem;
   padding: 0.75rem 0.85rem;
   border-radius: 0.8rem;
-  border: 1px solid rgba(248, 162, 180, 0.42);
-  background: rgba(248, 162, 180, 0.1);
+  border: 1px solid rgba(var(--danger-tint-rgb), 0.42);
+  background: rgba(var(--danger-tint-rgb), 0.1);
 }
 
 .chief-output-warning strong,
@@ -390,14 +390,14 @@
 
 /* Light-theme retuning for the Chief fallback semantic surfaces. */
 :root[data-theme="light"] .chief-source-badge--fallback {
-  background: rgba(177, 69, 69, 0.08);
-  border-color: rgba(177, 69, 69, 0.4);
+  background: rgba(var(--danger-tint-rgb), 0.08);
+  border-color: rgba(var(--danger-tint-rgb), 0.4);
   color: var(--danger-text);
 }
 
 :root[data-theme="light"] .chief-output-warning {
-  background: rgba(177, 69, 69, 0.06);
-  border-color: rgba(177, 69, 69, 0.32);
+  background: rgba(var(--danger-tint-rgb), 0.06);
+  border-color: rgba(var(--danger-tint-rgb), 0.32);
 }
 
 :root[data-theme="light"] .chief-output-warning strong {
