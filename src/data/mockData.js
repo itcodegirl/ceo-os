@@ -30,39 +30,71 @@ export const contentItems = [
     id: 1,
     title: 'Why Women Belong in Tech Leadership',
     platform: 'LinkedIn',
+    contentType: 'Article',
     status: 'Drafting',
+    purpose: 'Thought leadership — reinforce the CodeHerWay point of view',
+    scheduledFor: '',
+    notes: 'Repurpose into a 5-part LinkedIn carousel and a newsletter section.',
   },
   {
     id: 2,
-    title: 'CodeHerWay Founder Update',
-    platform: 'Blog',
+    title: 'CodeHerWay Founder Update — May',
+    platform: 'Newsletter',
+    contentType: 'Newsletter',
     status: 'Editing',
+    purpose: 'Community trust — monthly progress and what is next',
+    scheduledFor: '2026-05-16',
+    notes: 'Pull highlights from the Weekly Brief wins. Tease the CEO OS demo.',
   },
   {
     id: 3,
-    title: 'CEO OS Build in Public Post',
+    title: 'Building CEO OS in Public — Week 3',
     platform: 'LinkedIn',
+    contentType: 'Post',
     status: 'Scheduled',
+    purpose: 'Product awareness — show the build, invite feedback',
+    scheduledFor: '2026-05-14',
+    notes: 'Cross-post a shorter version to X. Link to the live walkthrough video.',
+  },
+  {
+    id: 4,
+    title: 'How a Founder Operating System Replaced My 6 Spreadsheets',
+    platform: 'Blog',
+    contentType: 'Article',
+    status: 'Idea',
+    purpose: 'Top-of-funnel SEO — capture the "founder operating system" search intent',
+    scheduledFor: '',
+    notes: 'Could become a conference talk. Pair with the dashboard screenshot.',
+  },
+  {
+    id: 5,
+    title: 'Lessons From Shipping the Weekly Brief Ritual',
+    platform: 'LinkedIn',
+    contentType: 'Post',
+    status: 'Published',
+    purpose: 'Build-in-public credibility — document the decision and the trade-offs',
+    scheduledFor: '2026-05-05',
+    notes: 'Performed well — expand into a longer Substack essay.',
   },
 ];
 
 export const weeklyPriorities = [
   {
     id: 1,
-    title: 'Ship a meaningful progress update for XPAIRK partnership',
-    owner: 'Team Member',
+    title: 'Send the XPAIRK partnership proposal and book the follow-up call',
+    owner: '',
     status: 'In Progress',
   },
   {
     id: 2,
-    title: "Finalize this week's founder narrative draft",
-    owner: 'Team Lead',
+    title: "Finish this week's founder narrative draft and schedule it",
+    owner: '',
     status: 'Planned',
   },
   {
     id: 3,
-    title: 'Recruiter follow-up sequence for Studio North',
-    owner: 'Team Member',
+    title: 'Close out the Studio North recruiter conversation',
+    owner: '',
     status: 'Blocked',
   },
 ];
@@ -70,31 +102,31 @@ export const weeklyPriorities = [
 export const weeklyWins = [
   {
     id: 1,
-    text: 'Shipped baseline dashboard and executive KPI surface with responsive cards.',
-    category: 'Product',
+    text: 'Closed the first paid pilot — revenue is real now.',
+    category: 'Revenue',
   },
   {
     id: 2,
-    text: 'Built a clean side nav + top bar pattern with route-level shell consistency.',
-    category: 'Execution',
+    text: 'Shipped the onboarding flow the team has been asking for.',
+    category: 'Product',
   },
   {
     id: 3,
-    text: 'Established a modular style architecture for page-specific CSS refinements.',
-    category: 'Engineering',
+    text: 'Said no to a distracting partnership without burning the bridge.',
+    category: 'Personal',
   },
 ];
 
 export const weeklyBlockers = [
   {
     id: 1,
-    text: 'Partnership proposal follow-up needs a clear owner before Friday.',
-    severity: 'warning',
+    text: 'Partnership proposal is stuck — no one owns the follow-up.',
+    severity: 'owner',
   },
   {
     id: 2,
-    text: 'Founder content queue has strong ideas but no protected publishing window.',
-    severity: 'warning',
+    text: 'Strong content ideas, but no protected window to write.',
+    severity: 'time',
   },
 ];
 
@@ -127,6 +159,6 @@ export const dashboardDemoData = {
   focusScore: {
     demoSuffix: 'Local demo',
   },
-  demoNote: 'Demo data is active on this device. It is not synced.',
+  demoNote: 'Data source: Local only. Sample records stay on this device.',
 };
 

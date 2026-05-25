@@ -2,10 +2,17 @@ import { contentItems as mockContentItems } from '../data/mockData';
 import { deleteRecordById, replaceRecordById } from './stateUtils';
 import { buildCreateId } from './utils';
 import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
-import { StaleRecordError, assertRecordIsFresh, readUpdatedAtMs } from './staleRecordError';
+import {
+  StaleRecordError,
+  assertRecordIsFresh,
+  expectedUpdatedAtToIso,
+  readUpdatedAtMs,
+} from './staleRecordError';
 import { tryRemoteOrEnqueue } from './offlineWriteQueueIntegration';
 import { isDemoWorkspaceEnabled } from './workspaceSetup';
 import { STORAGE_DOMAINS } from './dataSchema';
+import { buildContentSignature } from './recordIdentity';
+import { createDuplicateRecordError } from './repositoryErrors';
 import {
   readVersionedLocalStorage,
   safeWriteVersionedLocalStorage,
@@ -15,27 +22,51 @@ import {
 export const CONTENT_QUEUE_KIND_CREATE = 'content:create';
 export const CONTENT_QUEUE_KIND_UPDATE = 'content:update';
 export const CONTENT_QUEUE_KIND_DELETE = 'content:delete';
-
-function expectedUpdatedAtToIso(expectedUpdatedAt) {
-  const expected = Number(expectedUpdatedAt);
-  if (!Number.isFinite(expected) || expected <= 0) {
-    return null;
-  }
-  return new Date(expected).toISOString();
-}
+const DUPLICATE_CONTENT_MESSAGE = 'This content item already exists for that platform.';
 
 export const CONTENT_ITEMS_UPDATED_EVENT = 'ceo-os:content-items-updated';
 const DEMO_CONTENT_ITEM_IDS = new Set(mockContentItems.map((item) => String(item.id)));
+
+function normalizeDateOnly(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+  // Postgres `date` columns come back as YYYY-MM-DD, but tolerate a full
+  // timestamp just in case the column type changes underneath us.
+  return trimmed.slice(0, 10);
+}
 
 function normalizeContentItem(item) {
   return {
     id: String(item.id),
     title: item.title || '',
     platform: item.platform || '',
-    status: item.status || 'Drafting',
+    contentType: item.contentType || item.content_type || 'Post',
+    status: item.status || 'Idea',
+    purpose: item.purpose || '',
+    scheduledFor: normalizeDateOnly(item.scheduledFor ?? item.scheduled_for),
+    notes: item.notes || '',
     updatedAt: readUpdatedAtMs(item),
   };
 }
+
+function toContentItemRow(normalizedPayload) {
+  return {
+    title: normalizedPayload.title,
+    platform: normalizedPayload.platform,
+    content_type: normalizedPayload.contentType,
+    status: normalizedPayload.status,
+    purpose: normalizedPayload.purpose,
+    scheduled_for: normalizedPayload.scheduledFor || null,
+    notes: normalizedPayload.notes,
+  };
+}
+
+const CONTENT_ITEM_COLUMNS = 'id, title, platform, content_type, status, purpose, scheduled_for, notes, updated_at';
 
 function getSeededLocalItems() {
   if (!isDemoWorkspaceEnabled()) {
@@ -92,6 +123,37 @@ function notifyContentItemsUpdated(detail = {}) {
   window.dispatchEvent(new CustomEvent(CONTENT_ITEMS_UPDATED_EVENT, { detail }));
 }
 
+function hasDuplicateContentItem(items, payload, { excludeId = '' } = {}) {
+  const nextSignature = buildContentSignature(payload);
+  if (!nextSignature) {
+    return false;
+  }
+
+  return items.some((item) => {
+    if (excludeId && String(item.id) === String(excludeId)) {
+      return false;
+    }
+
+    return buildContentSignature(item) === nextSignature;
+  });
+}
+
+async function assertNoSupabaseContentDuplicate({ supabaseClient, userId, payload, excludeId = '' }) {
+  const { data, error } = await supabaseClient
+    .from('content_items')
+    .select(CONTENT_ITEM_COLUMNS)
+    .eq('user_id', userId);
+
+  if (error) {
+    throw error;
+  }
+
+  const existingItems = (Array.isArray(data) ? data : []).map((item) => normalizeContentItem(item));
+  if (hasDuplicateContentItem(existingItems, payload, { excludeId })) {
+    throw createDuplicateRecordError(DUPLICATE_CONTENT_MESSAGE);
+  }
+}
+
 export function getContentSource() {
   return isSupabaseRuntimeEnabled ? 'supabase' : 'local';
 }
@@ -103,7 +165,7 @@ export async function listContentItems() {
     const userId = await supabase.requireSupabaseUserId();
     const { data, error } = await supabaseClient
       .from('content_items')
-      .select('id, title, platform, status, updated_at')
+      .select(CONTENT_ITEM_COLUMNS)
       .eq('user_id', userId);
 
     if (error) {
@@ -128,15 +190,19 @@ export async function createContentItem(payload, options = {}) {
   if (supabaseClient) {
     const attempt = async () => {
       const userId = await supabase.requireSupabaseUserId();
+      await assertNoSupabaseContentDuplicate({
+        supabaseClient,
+        userId,
+        payload: normalizedPayload,
+      });
+
       const { data, error } = await supabaseClient
         .from('content_items')
         .insert({
           user_id: userId,
-          title: normalizedPayload.title,
-          platform: normalizedPayload.platform,
-          status: normalizedPayload.status,
+          ...toContentItemRow(normalizedPayload),
         })
-        .select('id, title, platform, status, updated_at')
+        .select(CONTENT_ITEM_COLUMNS)
         .single();
 
       if (error) {
@@ -154,6 +220,10 @@ export async function createContentItem(payload, options = {}) {
   }
 
   const current = readLocalContentItems();
+  if (hasDuplicateContentItem(current, normalizedPayload)) {
+    throw createDuplicateRecordError(DUPLICATE_CONTENT_MESSAGE);
+  }
+
   const next = [normalizedPayload, ...current];
   writeLocalContentItems(next);
   notifyContentItemsUpdated({ source: 'local', type: 'create' });
@@ -167,13 +237,16 @@ export async function updateContentItem(id, payload, options = {}) {
     const attempt = async () => {
       const normalizedPayload = normalizeContentItem({ id, ...payload });
       const userId = await supabase.requireSupabaseUserId();
+      await assertNoSupabaseContentDuplicate({
+        supabaseClient,
+        userId,
+        payload: normalizedPayload,
+        excludeId: id,
+      });
+
       let query = supabaseClient
         .from('content_items')
-        .update({
-          title: normalizedPayload.title,
-          platform: normalizedPayload.platform,
-          status: normalizedPayload.status,
-        })
+        .update(toContentItemRow(normalizedPayload))
         .eq('id', id)
         .eq('user_id', userId);
 
@@ -184,7 +257,7 @@ export async function updateContentItem(id, payload, options = {}) {
       }
 
       const { data, error } = await query
-        .select('id, title, platform, status, updated_at')
+        .select(CONTENT_ITEM_COLUMNS)
         .maybeSingle();
 
       if (error) {
@@ -220,6 +293,9 @@ export async function updateContentItem(id, payload, options = {}) {
     options.expectedUpdatedAt,
     'This content item was changed in another window. Reload to see the latest version before saving.',
   );
+  if (hasDuplicateContentItem(current, payload, { excludeId: id })) {
+    throw createDuplicateRecordError(DUPLICATE_CONTENT_MESSAGE);
+  }
 
   const normalizedPayload = normalizeContentItem({
     id,

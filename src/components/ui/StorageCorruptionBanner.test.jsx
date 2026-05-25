@@ -74,6 +74,35 @@ describe('StorageCorruptionBanner', () => {
     expect(screen.getByText(/Backup restored/i)).toBeInTheDocument();
   });
 
+  it('wires the recover button as a WAI-ARIA disclosure (aria-controls points to the panel id, aria-expanded reflects state)', () => {
+    const key = 'ceo-os-test-disclosure';
+    const backupKey = preserveCorruptStorageValue(key, 'recoverable', new Error('parse'));
+
+    render(<StorageCorruptionBanner />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(STORAGE_CORRUPTION_EVENT, {
+          detail: { key, backupKey, message: 'parse' },
+        }),
+      );
+    });
+
+    const recoverButton = screen.getByRole('button', { name: /recover data/i });
+    const controlsId = recoverButton.getAttribute('aria-controls');
+    expect(controlsId).toBeTruthy();
+    expect(recoverButton.getAttribute('aria-expanded')).toBe('false');
+
+    const panel = document.getElementById(controlsId);
+    expect(panel).not.toBeNull();
+    expect(panel.hasAttribute('hidden')).toBe(true);
+
+    fireEvent.click(recoverButton);
+
+    expect(screen.getByRole('button', { name: /hide backups/i }).getAttribute('aria-expanded')).toBe('true');
+    expect(panel.hasAttribute('hidden')).toBe(false);
+  });
+
   it('lets the user discard a preserved backup', () => {
     const key = 'ceo-os-test-discard-ui';
     const backupKey = preserveCorruptStorageValue(key, 'gone-soon', new Error('parse'));

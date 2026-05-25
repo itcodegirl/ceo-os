@@ -6,18 +6,19 @@
  * `<article className="focus-panel" aria-label="...">
  *    <p className="calm-copy">... couldn’t load. Refresh the page to retry.</p>
  *  </article>`
- * fallback inside the ErrorBoundary, producing ~7 copies across Dashboard,
- * TodayFocusPanel, OpenLoopsPanel, BlockersPanel, and RemindersPanel.
+ * fallback inside the ErrorBoundary, producing several near-identical copies
+ * across Dashboard, TodayFocusPanel, NeedsAttentionPanel, and RemindersPanel.
  * Centralising the markup keeps the recovery copy and the focus-panel
  * shape consistent — and makes calm-OS copy edits a one-place change.
  *
  * Props:
- *   - panelName: User-facing name of the panel ("Reminders", "Blockers", …).
- *                Used both in the visible copy and as the aria-label suffix.
+ *   - panelName: User-facing name of the panel ("Reminders", "Needs your
+ *                attention", …). Used both in the visible copy and as the
+ *                aria-label suffix.
  *   - panelClassName: Optional override; defaults to "focus-panel". Set this
  *                     when the live panel uses a modifier class so the
  *                     fallback occupies the same grid slot (e.g. the
- *                     "Today's Main Focus" panel uses "focus-panel--main").
+ *                     "Today's Focus" hero uses "focus-panel--main focus-panel--hero").
  *   - ariaLabel: Optional override of the computed aria-label.
  */
 function PanelErrorFallback({

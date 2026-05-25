@@ -25,11 +25,6 @@ out of scope for that PR:
 - **Cmd+K command palette.** The "Keyboard shortcuts" Settings toggle was
   removed because it was disabled and unwired. Restoring a real command
   palette is the bigger feature it was placeholder for.
-- **`useWeeklyBrief` and `useFocusHomeSignals` migration to `useSilentRefresh`.**
-  Phase 5 migrated `useDashboardData` and `useWorkspaceSettings` as the
-  lowest-risk callers. The other two hooks have shape concerns
-  (per-event granular updaters, event-payload filters) that warrant
-  individual review rather than a forced shared signature.
 - **Telemetry / KMS / ops-incident scope reduction.** The audit
   recommended moving `server/appErrorTelemetry*` behind an
   `experimental/telemetry/` boundary. Not done in this PR — too large a
@@ -40,16 +35,34 @@ out of scope for that PR:
 
 ## Recently closed audit items
 
+The May 24, 2026 architecture & code-quality audit closed these on
+`improve/ceo-os-architecture-audit-2026-05` (see
+[docs/audits/ceo-os-architecture-audit-2026-05-24.md](audits/ceo-os-architecture-audit-2026-05-24.md)):
+
+- ✅ **`useSilentRefresh` migration finished.** `useFocusHomeSignals` and `useWeeklyBrief` no longer hand-roll the four-listener + coalesce wiring; they now share `useSilentRefresh` like `useDashboardData`/`useWorkspaceSettings`, so the prior "all four hooks share it" comment is true. `useFocusHomeSignals` uses `coalesceMs: 0` to preserve its fire-on-every-event timing; `useWeeklyBrief` keeps its 400ms window and moves the per-week guard to `eventFilter`. Behavior is unchanged (covered by existing hook + page tests).
+- ✅ **Orphaned `ChiefRecentOutputs` removed.** Imported by no production file and superseded by `ChiefHistoryList`; the component, its test, and its `chief-recent-*` CSS are gone.
+- ✅ **`expectedUpdatedAtToIso` deduplicated.** Hoisted from three repositories into `staleRecordError.js` beside its inverse `readUpdatedAtMs`.
+- ✅ **`WeeklyPriorities` consolidated.** `PrioritiesSection` now uses the shared `WeeklyTextList` (as Wins/Blockers already did); the 52-line clone is deleted.
+- ✅ **Storage-quota recovery deep-link.** The banner CTA now resolves `/settings#workspace-data` and Settings scrolls + focuses the Workspace Data section (reduced-motion aware), so a storage-full user lands on the Export/Clear controls.
+- ✅ **Touch targets on Chief + recovery banners.** 44px `(pointer: coarse)` targets for the Chief accept / "Add all" buttons and the corruption/quota banner actions.
+- ✅ **Chief fallback tint tokenized.** The last hardcoded `rgba()` on the AI-fallback badge/warning moved to a per-theme `--danger-tint-rgb`; alphas preserved, no visual change.
+
+Still deferred after that pass (each its own PR): the telemetry/KMS
+`experimental/` quarantine, a `useWorkspaceBackup` extraction from
+`SettingsWorkspaceDataSection`, moving `useWeeklyBrief`'s persistence calls out
+of its `setState` updaters, and `makeDuplicateValidator` / `ChiefAcceptList`
+consolidation.
+
 The May 8, 2026 senior audit pass closed these gaps on `improve/ceo-os-audit-fixes`:
 
 - ✅ **Forward-compat schema migration registry.** `src/lib/storageMigrations.js` ships a per-domain × `fromVersion` migrator registry, wired into `readVersionedLocalStorage` so reads transparently lift legacy/older payloads into the current shape. Today the registry is empty (every domain ships v1) but the pattern is in place so the next schema bump only requires registering a single migrator function.
 - ✅ **Calm momentum signal.** The Dashboard's "Momentum: NN%" pill is replaced with a qualitative state — `Visible`, `In motion`, `Steady`, `Quiet day` — read from `buildMomentumMessage().label`. The numeric score remains on the data shape for analytics but is no longer surfaced; a numeric score conflicted with the calm-OS thesis because it nudged users toward optimisation.
-- ✅ **Chief-of-Staff hint on empty Focus Home.** When `buildMainFocus` reports `isEmpty: true` (no priority, opportunity, or content in motion yet), the Today's Main Focus panel surfaces a Chief-of-Staff link so first-time founders discover that they can paste raw notes and have them drafted into structure.
+- ✅ **Chief-of-Staff hint on empty Focus Home.** When `buildMainFocus` reports `isEmpty: true` (no priority, opportunity, or content in motion yet), the Today's Focus hero panel surfaces a Chief-of-Staff link so first-time founders discover that they can paste raw notes and have them drafted into structure.
 - ✅ **Snooze-until-tomorrow on reminders.** Reminders carry an optional `snoozedUntil` ISO timestamp; the UI offers a Snooze button on each active row that defers the reminder until tomorrow at 6 AM local. Snoozed items disappear from the active list and are reachable via "Show N snoozed". A Wake button pulls them back. Completed reminders cannot be snoozed (no-op). Reduces the binary done-or-not pressure that conflicted with the calm-OS thesis.
 - ✅ **Warmer empty states.** `EmptyState` gained an optional `icon` slot rendered inside an accent-tinted bubble; wired into Opportunities, Content, and Capture so first-time list pages feel like an invitation instead of a placeholder.
 - ✅ **Touch targets on touch devices.** `(pointer: coarse)` media query widens reminder action buttons (delete, promote, edit, snooze, wake) to 44px on touch devices without changing the 32px desktop density.
 - ✅ **OS color-scheme + noscript fallback.** `index.html` now declares `color-scheme: dark light` and per-scheme `theme-color`, and a `<noscript>` block explains the JS requirement instead of rendering empty.
-- ✅ **Dashboard page boundary discipline.** `TodayFocusPanel`, `OpenLoopsPanel`, and `BlockersPanel` were extracted from `Dashboard.jsx` into co-located components in `src/components/dashboard/`, each with isolation tests. Dashboard.jsx 623 → 567 LOC.
+- ✅ **Dashboard page boundary discipline.** The presentational sections were extracted from `Dashboard.jsx` into co-located components in `src/components/dashboard/` (`TodayFocusPanel`, `NeedsAttentionPanel`, `RemindersPanel`, `FocusModeChips`), each with isolation tests; the add-reminder form state lives in `useReminderComposer`. Dashboard.jsx orchestrates the hooks but holds little markup.
 
 ## Earlier audit pass
 

@@ -80,4 +80,59 @@ describe('src/components/ui/Modal', () => {
 
     expect(triggerButton).toHaveFocus();
   });
+
+  it('falls back to the main landmark when the opening element has unmounted', () => {
+    const onClose = vi.fn();
+    const main = document.createElement('main');
+    main.id = 'main-content';
+    main.setAttribute('tabindex', '-1');
+    document.body.appendChild(main);
+
+    try {
+      function Trigger() {
+        return <button type="button">Row action</button>;
+      }
+
+      const { rerender } = render(
+        <div>
+          <Trigger />
+          <Modal isOpen={false} title="Confirm delete" onClose={onClose}>
+            <ModalContent />
+          </Modal>
+        </div>,
+      );
+
+      screen.getByRole('button', { name: 'Row action' }).focus();
+
+      rerender(
+        <div>
+          <Trigger />
+          <Modal isOpen title="Confirm delete" onClose={onClose}>
+            <ModalContent />
+          </Modal>
+        </div>,
+      );
+
+      // The trigger leaves the DOM while the dialog is open.
+      rerender(
+        <div>
+          <Modal isOpen title="Confirm delete" onClose={onClose}>
+            <ModalContent />
+          </Modal>
+        </div>,
+      );
+
+      rerender(
+        <div>
+          <Modal isOpen={false} title="Confirm delete" onClose={onClose}>
+            <ModalContent />
+          </Modal>
+        </div>,
+      );
+
+      expect(main).toHaveFocus();
+    } finally {
+      document.body.removeChild(main);
+    }
+  });
 });

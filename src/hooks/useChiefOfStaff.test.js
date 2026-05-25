@@ -383,6 +383,42 @@ describe('useChiefOfStaff', () => {
     expect(createContentItem).toHaveBeenCalledTimes(1);
     expect(createWeeklyItem).toHaveBeenCalledTimes(2);
     expect(result.current.feedback).toBe('Add all complete: 4 saved, 0 skipped, 0 failed.');
+    expect(result.current.feedbackKind).toBe('result');
     expect(result.current.isAcceptingAll).toBe(false);
   });
+
+  it('autosave timer cannot paint over a durable error message', async () => {
+    // Force the generation flow to fail so the hook surfaces an error-kind
+    // feedback that should survive the autosave timer.
+    generateChiefOfStaffResponse.mockRejectedValueOnce(new Error('boom'));
+    createChiefSession.mockResolvedValueOnce({ id: 'session-x' });
+
+    const { result } = renderHook(() => useChiefOfStaff());
+
+    await waitFor(() => {
+      expect(loadChiefWorkspace).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      result.current.setNotes('Some founder notes');
+    });
+
+    await act(async () => {
+      await result.current.handleAction('plan');
+    });
+
+    // After the failure, the error should be surfaced as a durable kind.
+    expect(result.current.feedback).toBe('Unable to generate output right now. Try again in a moment.');
+    expect(result.current.feedbackKind).toBe('error');
+
+    // Wait past the 2.5s autosave threshold — used to clobber the error with
+    // "Notes saved. Pick an action when you are ready." Now the durable kind
+    // blocks the soft update.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2700));
+    });
+
+    expect(result.current.feedback).toBe('Unable to generate output right now. Try again in a moment.');
+    expect(result.current.feedbackKind).toBe('error');
+  }, 10000);
 });

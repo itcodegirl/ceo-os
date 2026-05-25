@@ -40,16 +40,20 @@
   line-height: 1.2;
 }
 
+/* Text color uses the theme-aware --success / --danger foreground tokens
+ * directly rather than mixing toward white. Mixing with white made the chip
+ * text lighter in light theme, which dropped contrast against the pale chip
+ * background; the foreground tokens already invert appropriately per theme. */
 .status-chip--success {
   border-color: color-mix(in oklab, var(--success) 38%, transparent);
   background: color-mix(in oklab, var(--success) 14%, transparent);
-  color: color-mix(in oklab, var(--success) 72%, white);
+  color: var(--success);
 }
 
 .status-chip--danger {
   border-color: color-mix(in oklab, var(--danger) 40%, transparent);
   background: color-mix(in oklab, var(--danger) 12%, transparent);
-  color: color-mix(in oklab, var(--danger) 70%, white);
+  color: var(--danger);
 }
 
 @media (max-width: 640px) {

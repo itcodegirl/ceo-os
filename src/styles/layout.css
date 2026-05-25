@@ -366,6 +366,27 @@ button.sync-status-pill--retry:focus-visible {
 	}
 }
 
+/* Light-theme retuning for the sync-status pill dot rings — mirrors the
+ * weekly autosave dot fix. The dark-theme rings are white-on-dark and
+ * colored-translucent, which disappear (white) or wash out (cyan/amber)
+ * against the warm-paper surface. Swap them for ink-on-paper halos. */
+:root[data-theme="light"] .sync-status-pill__dot {
+	box-shadow: 0 0 0 2px rgba(11, 30, 56, 0.06);
+}
+
+:root[data-theme="light"] .sync-status-pill--ok .sync-status-pill__dot {
+	box-shadow: 0 0 0 2px rgba(43, 167, 132, 0.2);
+}
+
+:root[data-theme="light"] .sync-status-pill--local .sync-status-pill__dot {
+	box-shadow: 0 0 0 2px rgba(204, 130, 28, 0.22);
+}
+
+:root[data-theme="light"] .sync-status-pill--offline .sync-status-pill__dot,
+:root[data-theme="light"] .sync-status-pill--error .sync-status-pill__dot {
+	box-shadow: 0 0 0 2px rgba(177, 69, 69, 0.22);
+}
+
 .save-status-pill {
 	display: inline-flex;
 	align-items: center;
@@ -504,7 +525,7 @@ button.sync-status-pill--retry:focus-visible {
 }
 
 .system-pulse__node--warning .system-pulse__node-value {
-	color: var(--warning-soft);
+	color: var(--warning);
 }
 
 .system-pulse__node--positive .system-pulse__node-value {
@@ -580,7 +601,9 @@ button.sync-status-pill--retry:focus-visible {
 		padding-top: 0;
 		border-top: 0;
 		pointer-events: none;
-		transition: max-height 0.25s ease, opacity 0.2s ease, margin-top 0.2s ease;
+		transition: max-height var(--duration-deliberate, 280ms) var(--easing-standard, ease),
+			opacity var(--duration-base, 200ms) var(--easing-standard, ease),
+			margin-top var(--duration-base, 200ms) var(--easing-standard, ease);
 	}
 
 	.sidebar__nav--open {

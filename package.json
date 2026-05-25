@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "verify": "npm run lint && npm run typecheck && npm run test:run && npm run build",
     "test:integration:telemetry": "vitest run server/appErrorTelemetryIngest.integration.test.js",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",

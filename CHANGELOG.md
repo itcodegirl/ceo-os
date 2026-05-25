@@ -2,6 +2,120 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-05-24 - Architecture & code-quality audit follow-up
+
+Branch `improve/ceo-os-architecture-audit-2026-05`. A senior-architect pass
+over folder structure, component architecture, state management, data flow,
+error/empty states, naming, and scalability. The codebase was already mature
+(prior audit cycles closed most gaps), so this pass deliberately targets the
+*remaining* real defects and avoids churn. Full write-up:
+[docs/audits/ceo-os-architecture-audit-2026-05-24.md](docs/audits/ceo-os-architecture-audit-2026-05-24.md).
+
+Trust & reliability:
+
+- The `StorageQuotaBanner` recovery CTA now deep-links to
+  `/settings#workspace-data` (its docstring already promised this) and Settings
+  scrolls + focuses the Workspace Data section on that hash — reduced-motion
+  aware and guarded for environments without `scrollIntoView`. A storage-full
+  user lands directly on the Export-backup / Clear-demo-data controls.
+
+Accessibility & mobile:
+
+- 44px `(pointer: coarse)` touch targets added for the Chief "accept" / "Add
+  all" buttons and the storage corruption/quota recovery banner actions,
+  matching the existing Focus Home reminder pattern.
+
+Architecture cleanup (no behavior change):
+
+- Removed the orphaned `ChiefRecentOutputs` component, its test, and its
+  `chief-recent-*` CSS — superseded by `ChiefHistoryList`, imported nowhere,
+  and a source of "which renders Recent outputs?" confusion.
+- Hoisted the thrice-duplicated `expectedUpdatedAtToIso` into
+  `staleRecordError.js` beside its inverse `readUpdatedAtMs`.
+- `PrioritiesSection` now uses the shared `WeeklyTextList` (deleting the
+  52-line `WeeklyPriorities` clone the Wins/Blockers sections already avoided).
+- Finished the `useSilentRefresh` migration: `useFocusHomeSignals` and
+  `useWeeklyBrief` no longer hand-roll the four-listener + coalesce wiring,
+  making the existing "all four hooks share it" comment true. ~70 lines of
+  duplicated subscription plumbing removed; behavior preserved.
+- Tokenized the last hardcoded Chief AI-fallback tint into a per-theme
+  `--danger-tint-rgb`; alphas preserved, so no visual change.
+
+## 2026-05-12 - Product-readiness pass
+
+Branch `improve/ceo-os-product-readiness`.
+
+Reliability — green baseline restored:
+
+- `src/hooks/useChiefOfStaff.js` and `src/pages/ChiefOfStaff.test.jsx`
+  carried unresolved merge fragments that broke `npm run build`,
+  `npm run lint`, and `npm run typecheck` on `main`: a dangling `? :`
+  pair after a completed `return` in `getDefaultFeedback()`, and a
+  split-apart empty-state assertion that referenced a non-existent
+  "Ready to generate" string. Both are repaired; build, lint, typecheck,
+  and the 676-test Vitest suite are green again.
+
+UX clarity:
+
+- The Chief of Staff notes autosave confirmation no longer says
+  "Draft pipeline ready" (there is no pipeline) and no longer overwrites
+  a "Created: …" or error message 2.5s after a keystroke — it now shows
+  a plain "Notes saved. Pick an action when you are ready." and yields to
+  result/error messages the user still needs to read.
+
+## 2026-05-12 - Chief of Staff product depth
+
+Branch `improve/chief-of-staff-product-depth` (follow-on to the
+product-readiness pass above).
+
+Tooling:
+
+- Added `npm run verify` (`lint → typecheck → test:run → build`) as a
+  one-command local pre-push gate mirroring CI. README quickstart points
+  at it.
+
+Feature — output catalogue:
+
+- `shared/chiefActions.js` is now the single source of truth for ten
+  output types — decision brief, blocker analysis, action plan, priority
+  list, action list (next 72h), weekly update, founder memo, meeting
+  summary, content idea, opportunity follow-up — each with a picker
+  label, group, one-line "best when…" hint, model instruction, and a
+  deterministic fallback template. The server proxy derives its
+  `getAllowedActionKeys()` allow-list from this config.
+- Replaced the five verb buttons with a `ChiefOutputPicker`: a grouped
+  "Make a…" dropdown (Decide / Plan / Communicate / Pipeline), a hint
+  line for the current selection, and a "Generate …" CTA that names the
+  selected artifact.
+
+Feature — output history & safe reset:
+
+- New `ChiefHistoryList` "Recent outputs" panel lists the saved
+  generations (the repository already keeps the last 30); selecting one
+  re-renders it in the output panel behind a read-only banner with a
+  "Back to latest" control, and a fresh generation auto-snaps forward.
+- "Reset Workspace" now opens a `ConfirmModal` that spells out exactly
+  what is cleared (notes + saved outputs) and what is not (items already
+  routed into Weekly Brief / Opportunities / Content OS).
+
+Trust — acceptance routing:
+
+- Each structured section carries a one-line destination note, and every
+  item shows its specific target beside the accept button
+  ("→ Opportunities · New", "→ Content OS · Drafting", "→ Weekly Brief
+  priority"), flipping to an "In …" confirmation once accepted.
+
+Budgets:
+
+- ChiefOfStaff static route budget bumped (JS 42 → 52 KB raw / 12.5 → 16
+  KB gzip, CSS 4 → 6 KB raw) with a justification comment for the picker,
+  history panel, confirm dialog, and richer action config.
+
+Verification: `npm run verify` green; `npm run check:route-budgets`
+green; Vitest 677 passing / 1 skipped. (`check:route-budgets:trend` is
+pre-existing-red on `main` against the frozen 2026-05-01 baseline — out
+of scope here; tracked for the next release baseline refresh.)
+
 ## 2026-05-11 - Audit priority fixes (Phases 1–6)
 
 Companion branch to the product-readiness audit at
@@ -132,31 +246,37 @@ Verification: `npm run lint`, `npm run typecheck`, `npm run test:run` (647 passe
 ## 2026-05-05 - Audit cycle 2: trust, error surfaces, dead code, mobile, and perf
 
 Stability:
+
 - `useOfflineQueueDrain` now catches storage-layer rejections and surfaces them as a synthetic drain failure rather than letting them escape as unhandled rejections on every reconnect.
 - Capture's `sortedNotes` comparator coerces invalid `updatedAt` to 0 instead of producing NaN comparisons.
 - Settings guards the saved-at timestamp before calling `toISOString` so a corrupted legacy value cannot crash the page.
 - OpsReliability wraps its stat cards and snapshot table in panel-level `ErrorBoundary` blocks so a malformed Supabase row only takes down its panel, not the whole route.
 
 Reliability:
+
 - `useDashboardData` exposes `loadError` so consumers can distinguish "empty workspace" from "fetch failed". The `onLoadError` callback is wrapped so a thrown `showToast` (post-unmount) cannot escape.
 - WeeklyBrief and OpsReliability stat cards render `—` instead of `0` when load fails — no more "Active Priorities: 0" next to a "couldn't load" notice.
 - `useChiefOfStaff` and `useChiefTelemetryHealth` replace `void refresh()` fire-and-forget calls with `.catch(() => {})` so unexpected rejects cannot escape the hook boundary.
 
 Architecture:
+
 - Deleted `useDashboardInsights` (389-line hook + 228-line test, **617 lines** of dead code with zero importers).
 - Consolidated four hand-rolled `useRef(true)` mount/teardown blocks onto the existing `useIsMountedRef` helper across `useDashboardData`, `useChiefOfStaff`, `useSystemPulse`, and `useWeeklyBrief`.
 
 UX & Mobile:
+
 - `.action-button--small` raised from a fixed `2rem` height to `min-height: 2.25rem` so every sticky action, modal close, retry button, and reminder action meets the 36px touch-target floor on phones.
 - OpsReliability snapshot table now collapses on phones via the `data-label` stacked-card pattern already used by `.crm-table` — no more horizontal scroll.
 - Settings replaces its sr-only loading announcement with a visible `Loading settings...` helper text + `aria-busy` on the form so sighted users see the page is still hydrating.
 
 Performance:
+
 - `useFocusHomeSignals` gates `setCaptureNotes` / `setJournalEntry` / `setReminders` on shallow equality. Without these guards every focus, visibility, and storage event swapped to a fresh reference and invalidated Dashboard's `nextMoveQueue` / `suggestions` / `mainFocus` memos on every tab switch.
 - `OpportunityCrudPage` and `ContentCrudPage` now read `source` from a `useState` initializer instead of calling the resolver in render — the page re-renders often (modal open, form keystroke), and the resolver hits localStorage each time.
 - `Capture` and `RemindersPanel` collapse their two-pass filters into single-pass `useMemo` blocks.
 
 Coverage:
+
 - 491 unit/integration tests, lint, build, and route-budget checks all pass.
 
 ## 2026-05-05 - Audit cycle: stability, schema validation, and UX polish

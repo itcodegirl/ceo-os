@@ -16,6 +16,7 @@ import {
   listOpportunities,
   updateOpportunity,
 } from '../../lib/opportunitiesRepository';
+import { buildOpportunitySignature } from '../../lib/recordIdentity';
 import { buildSourceNotice } from '../../lib/uiCopy';
 import { parseOpportunityPayload } from '../../lib/opportunityPayloadSchema';
 import { useCrudPage } from '../../hooks/useCrudPage';
@@ -39,6 +40,29 @@ function mapOpportunityToFormValues(item) {
     stage: item.stage || 'New',
     nextStep: item.nextStep || '',
   };
+}
+
+function hasDuplicateOpportunityPayload(payload, items = [], selectedItem = null) {
+  const nextSignature = buildOpportunitySignature(payload);
+  if (!nextSignature) {
+    return false;
+  }
+
+  return items.some((item) => {
+    if (selectedItem?.id && String(item.id) === String(selectedItem.id)) {
+      return false;
+    }
+
+    return buildOpportunitySignature(item) === nextSignature;
+  });
+}
+
+function validateOpportunityPayload(payload, context = {}) {
+  if (hasDuplicateOpportunityPayload(payload, context.items, context.selectedItem)) {
+    return 'This opportunity already exists for that company.';
+  }
+
+  return '';
 }
 
 function OpportunityCrudPage() {
@@ -72,11 +96,15 @@ function OpportunityCrudPage() {
     updatedEventName: OPPORTUNITIES_UPDATED_EVENT,
     mapItemToFormValues: mapOpportunityToFormValues,
     parsePayload: parseOpportunityPayload,
+    validate: validateOpportunityPayload,
     getDeleteLabel: (item) => item.name,
     messages: {
       load: 'Unable to load opportunities right now.',
       save: 'Unable to save opportunity right now. Refresh and try again if this record changed elsewhere.',
       delete: 'Unable to delete opportunity right now. Refresh and try again if this record changed elsewhere.',
+      createSuccess: 'Opportunity added to the pipeline.',
+      updateSuccess: 'Opportunity updated.',
+      deleteSuccess: 'Opportunity deleted.',
     },
     logPrefix: 'opportunities',
   });
@@ -136,6 +164,7 @@ function OpportunityCrudPage() {
         description: 'Track partnerships, roles, and outreach as an executive-grade pipeline.',
       }}
       status={{
+        source,
         sourceNote: buildSourceNotice(source, { supabasePrefix: '' }),
         sourceNoteClassName: 'opportunities-source-note',
         loadError,
@@ -182,8 +211,8 @@ function OpportunityCrudPage() {
           isEmpty: opportunityItems.length === 0,
           emptyState: {
             icon: <Icon name="opportunities" size={20} />,
-            title: 'No opportunities yet',
-            description: 'Add your first opportunity to start tracking outreach and next steps.',
+            title: 'Nothing in the pipeline yet',
+            description: 'Add the first thing you’re tracking — a partner, a hire, an intro — and the next step stays in front of you.',
             action: (
               <Button onClick={handleOpenCreateModal} icon={{ name: 'add', size: 14 }}>
                 Add Opportunity

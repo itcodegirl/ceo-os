@@ -72,13 +72,26 @@ function Modal({ isOpen, title, onClose, children }) {
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    requestAnimationFrame(requestInitialFocus);
+    const initialFocusFrame = requestAnimationFrame(requestInitialFocus);
 
     return () => {
+      cancelAnimationFrame(initialFocusFrame);
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousBodyOverflow || '';
-      if (focusReturnRef.current && focusReturnRef.current.focus) {
-        focusReturnRef.current.focus();
+
+      const focusTarget = focusReturnRef.current;
+      if (focusTarget && typeof focusTarget.focus === 'function' && focusTarget.isConnected) {
+        focusTarget.focus();
+        return;
+      }
+
+      // The element that opened the dialog left the DOM while the dialog was
+      // open (a common case — e.g. a row action button whose row re-rendered).
+      // Don't strand keyboard focus on <body>; hand it back to the main
+      // landmark, which is focusable via tabIndex="-1".
+      if (typeof document !== 'undefined') {
+        const mainContent = document.getElementById('main-content');
+        mainContent?.focus?.();
       }
     };
   }, [isOpen, onClose]);

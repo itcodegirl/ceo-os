@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useCrudPage } from './useCrudPage';
 import { StaleRecordError } from '../lib/staleRecordError';
+import { createDuplicateRecordError } from '../lib/repositoryErrors';
 
 function createSubmitEvent() {
   return {
@@ -225,6 +226,42 @@ describe('useCrudPage', () => {
     expect(result.current.items).toEqual([]);
   });
 
+  it('surfaces repository duplicate errors instead of generic save copy', async () => {
+    const listItems = vi.fn(() => Promise.resolve([]));
+    const createItem = vi.fn(() => Promise.reject(
+      createDuplicateRecordError('This opportunity already exists for that company.'),
+    ));
+
+    const { result } = renderHook(() => useCrudPage({
+      listItems,
+      createItem,
+      updateItem: () => Promise.resolve({ id: '1', name: 'Valid' }),
+      deleteItem: () => Promise.resolve({ id: '1' }),
+      defaultFormValues: { name: '' },
+      mapFormValuesToPayload: (values) => values,
+      validatePayload: () => '',
+      messages: {
+        save: 'Unable to save this record right now.',
+      },
+    }));
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    act(() => {
+      result.current.handleOpenCreateModal();
+      result.current.handleFormChange('name', 'Duplicate lead');
+    });
+
+    await act(async () => {
+      await result.current.handleFormSubmit(createSubmitEvent());
+    });
+
+    expect(result.current.formError).toBe('This opportunity already exists for that company.');
+    expect(result.current.isFormOpen).toBe(true);
+  });
+
   it('ignores duplicate save submissions while a create is in flight', async () => {
     let resolveCreate;
     const listItems = vi.fn(() => Promise.resolve([]));
@@ -408,6 +445,44 @@ describe('useCrudPage', () => {
     });
 
     expect(createItem).toHaveBeenCalledWith({ name: 'Opportunity B' });
+  });
+
+  it('runs secondary payload validation after parsePayload succeeds', async () => {
+    const listItems = vi.fn(() => Promise.resolve([{ id: '1', name: 'Existing' }]));
+    const createItem = vi.fn((payload) => Promise.resolve({ id: '2', ...payload }));
+    const validatePayload = vi.fn((payload, context) => (
+      context.items.some((item) => item.name === payload.name)
+        ? 'Name already exists.'
+        : ''
+    ));
+
+    const { result } = renderHook(() => useCrudPage({
+      listItems,
+      createItem,
+      updateItem: vi.fn(),
+      deleteItem: () => Promise.resolve(),
+      defaultFormValues: { name: '' },
+      parsePayload: (values) => ({ payload: { name: values.name.trim() }, error: '' }),
+      validatePayload,
+    }));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    act(() => {
+      result.current.handleOpenCreateModal();
+      result.current.handleFormChange('name', 'Existing');
+    });
+
+    await act(async () => {
+      await result.current.handleFormSubmit(createSubmitEvent());
+    });
+
+    expect(validatePayload).toHaveBeenCalledWith(
+      { name: 'Existing' },
+      expect.objectContaining({ items: [{ id: '1', name: 'Existing' }] }),
+    );
+    expect(result.current.formError).toBe('Name already exists.');
+    expect(createItem).not.toHaveBeenCalled();
   });
 
   it('blocks submit when validation fails', async () => {

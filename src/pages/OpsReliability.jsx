@@ -3,6 +3,7 @@ import ErrorBoundary from '../components/ui/ErrorBoundary';
 import PageHeader from '../components/ui/PageHeader';
 import SectionCard from '../components/ui/SectionCard';
 import SourceStatusNotice from '../components/ui/SourceStatusNotice';
+import PageLoading from '../components/ui/PageLoading';
 import StatCard from '../components/ui/StatCard';
 import { useOpsSloTrend } from '../hooks/useOpsSloTrend';
 import { buildSourceNotice } from '../lib/uiCopy';
@@ -196,7 +197,7 @@ export default function OpsReliability() {
       >
         <SectionCard title="SLO Snapshot Trend" iconName="trend">
           {isLoading ? (
-            <p className="helper-text">Loading reliability snapshots...</p>
+            <PageLoading visible label="Loading reliability snapshots" />
           ) : snapshots.length ? (
             <div className="ops-table-wrapper">
               <table className="ops-table">

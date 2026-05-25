@@ -111,14 +111,13 @@ describe('useWeeklySectionEditor', () => {
 
     act(() => {
       result.current.handleFormChange('title', ' ');
-      result.current.handleFormChange('owner', ' ');
     });
 
     act(() => {
       result.current.handleEditorSubmit(makeSubmitEvent());
     });
 
-    expect(result.current.formError).toBe('Title and owner are required.');
+    expect(result.current.formError).toBe('Add a title for this priority.');
     expect(getItems()).toEqual([]);
   });
 

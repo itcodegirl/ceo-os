@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ContentCrudPage from './ContentCrudPage';
+import ToastProvider from '../ui/ToastProvider';
 
 vi.mock('../../lib/contentRepository', () => ({
   CONTENT_ITEMS_UPDATED_EVENT: 'ceo-os:content-items-updated',
@@ -21,7 +22,11 @@ import {
 } from '../../lib/contentRepository';
 
 function renderWithRouter(ui) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <ToastProvider>{ui}</ToastProvider>
+    </MemoryRouter>,
+  );
 }
 
 describe('ContentCrudPage integration', () => {
@@ -29,6 +34,7 @@ describe('ContentCrudPage integration', () => {
   let idCounter = 2;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     records = [
       {
         id: 'content-1',
@@ -64,7 +70,7 @@ describe('ContentCrudPage integration', () => {
       expect(screen.getByText('Founder Weekly Brief')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create a new content item' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a content idea or draft' }));
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Founder Strategy Update' } });
     fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'Newsletter' } });
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'Editing' } });
@@ -74,6 +80,7 @@ describe('ContentCrudPage integration', () => {
       expect(screen.getByText('Founder Strategy Update')).toBeInTheDocument();
       expect(screen.getByText('Newsletter')).toBeInTheDocument();
     });
+    expect(screen.getByText('Content item added to the workflow.')).toBeInTheDocument();
     expect(createContentItem).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByText('Founder Strategy Update'));
@@ -109,7 +116,7 @@ describe('ContentCrudPage integration', () => {
       expect(screen.getByText('Founder Weekly Brief')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create a new content item' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a content idea or draft' }));
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Retry Content Item' } });
     fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'Newsletter' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create content item' }));
@@ -199,5 +206,23 @@ describe('ContentCrudPage integration', () => {
       'Unable to delete content item right now. Refresh and try again if this record changed elsewhere.',
     )).not.toBeInTheDocument();
     expect(deleteContentItem.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('blocks duplicate content items before writing', async () => {
+    renderWithRouter(<ContentCrudPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Founder Weekly Brief')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a content idea or draft' }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: ' founder weekly brief ' } });
+    fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'linkedin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create content item' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This content item already exists for that platform.',
+    );
+    expect(createContentItem).not.toHaveBeenCalled();
   });
 });

@@ -1,11 +1,19 @@
 import {
+  BLOCKER_NEEDS,
   BLOCKER_SEVERITY_OPTIONS,
   getDefaultFormValues as getDefaultFormValuesByType,
   PRIORITY_STATUS_OPTIONS,
   WIN_CATEGORY_OPTIONS,
 } from './weeklyData';
 import { buildCreateId } from './utils';
-export { BLOCKER_SEVERITY_OPTIONS, PRIORITY_STATUS_OPTIONS, WIN_CATEGORY_OPTIONS };
+export {
+  BLOCKER_NEEDS,
+  BLOCKER_SEVERITY_OPTIONS,
+  PRIORITY_STATUS_OPTIONS,
+  WIN_CATEGORY_OPTIONS,
+};
+
+const DEFAULT_BLOCKER_NEED = BLOCKER_SEVERITY_OPTIONS[0];
 
 export const DEFAULT_EDITOR_STATE = {
   type: '',
@@ -19,7 +27,7 @@ const EDITOR_STRATEGIES = {
     getDefaultFormValues: () => ({ ...getDefaultFormValuesByType('priority') }),
     getFormValuesForEdit: (item) => ({
       title: item.title || '',
-      owner: item.owner || 'Team Member',
+      owner: item.owner || '',
       status: item.status || 'Planned',
     }),
     createPayload: (formValues, existingId) => {
@@ -27,8 +35,8 @@ const EDITOR_STRATEGIES = {
       const owner = (formValues.owner || '').trim();
       const status = formValues.status || 'Planned';
 
-      if (!title || !owner) {
-        return { error: 'Title and owner are required.' };
+      if (!title) {
+        return { error: 'Add a title for this priority.' };
       }
 
       return {
@@ -47,14 +55,14 @@ const EDITOR_STRATEGIES = {
     getDefaultFormValues: () => ({ ...getDefaultFormValuesByType('win') }),
     getFormValuesForEdit: (item) => ({
       text: item.text || '',
-      category: item.category || 'Execution',
+      category: item.category || 'Product',
     }),
     createPayload: (formValues, existingId) => {
       const text = (formValues.text || '').trim();
-      const category = (formValues.category || '').trim() || 'Execution';
+      const category = (formValues.category || '').trim() || 'Product';
 
       if (!text) {
-        return { error: 'Win text is required.' };
+        return { error: 'Add a few words for this win.' };
       }
 
       return {
@@ -72,14 +80,14 @@ const EDITOR_STRATEGIES = {
     getDefaultFormValues: () => ({ ...getDefaultFormValuesByType('blocker') }),
     getFormValuesForEdit: (item) => ({
       text: item.text || '',
-      severity: item.severity || 'warning',
+      severity: item.severity || DEFAULT_BLOCKER_NEED,
     }),
     createPayload: (formValues, existingId) => {
       const text = (formValues.text || '').trim();
-      const severity = formValues.severity || 'warning';
+      const severity = formValues.severity || DEFAULT_BLOCKER_NEED;
 
       if (!text) {
-        return { error: 'Blocker text is required.' };
+        return { error: 'Add a few words about what\'s in the way.' };
       }
 
       return {

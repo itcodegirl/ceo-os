@@ -1,4 +1,4 @@
-﻿import ChiefSummaryCard from "./ChiefSummaryCard";
+import ChiefSummaryCard from "./ChiefSummaryCard";
 import ChiefPriorityList from "./ChiefPriorityList";
 import ChiefOpportunityList from "./ChiefOpportunityList";
 import ChiefContentList from "./ChiefContentList";

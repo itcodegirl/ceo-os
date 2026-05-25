@@ -13,6 +13,7 @@ import {
   STORAGE_DOMAINS,
   createVersionedStorageEnvelope,
 } from './dataSchema';
+import { DUPLICATE_RECORD_CODE } from './repositoryErrors';
 
 describe('src/lib/contentRepository', () => {
   beforeEach(() => {
@@ -82,6 +83,61 @@ describe('src/lib/contentRepository', () => {
 
     expect(updated.updatedAt).toBeGreaterThan(created.updatedAt);
     expect(updated.title).toBe('Founder note (revised)');
+  });
+
+  it('rejects duplicate local content creates without emitting an update event', async () => {
+    saveWorkspaceSetupMode('blank');
+    await createContentItem({
+      title: 'Launch recap',
+      platform: 'LinkedIn',
+      status: 'Drafting',
+    });
+    const updateListener = vi.fn();
+    window.addEventListener(CONTENT_ITEMS_UPDATED_EVENT, updateListener);
+
+    try {
+      await expect(createContentItem({
+        title: ' launch recap ',
+        platform: 'linkedin',
+        status: 'Idea',
+      })).rejects.toMatchObject({
+        code: DUPLICATE_RECORD_CODE,
+        message: 'This content item already exists for that platform.',
+      });
+    } finally {
+      window.removeEventListener(CONTENT_ITEMS_UPDATED_EVENT, updateListener);
+    }
+
+    await expect(listContentItems()).resolves.toHaveLength(1);
+    expect(updateListener).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate local content updates without replacing either record', async () => {
+    saveWorkspaceSetupMode('blank');
+    const existing = await createContentItem({
+      title: 'Newsletter plan',
+      platform: 'Email',
+      status: 'Drafting',
+    });
+    const next = await createContentItem({
+      title: 'Founder reel',
+      platform: 'Instagram',
+      status: 'Idea',
+    });
+
+    await expect(updateContentItem(next.id, {
+      ...next,
+      title: existing.title,
+      platform: existing.platform,
+    }, { expectedUpdatedAt: next.updatedAt })).rejects.toMatchObject({
+      code: DUPLICATE_RECORD_CODE,
+    });
+
+    const items = await listContentItems();
+    expect(items.find((item) => item.id === next.id)).toMatchObject({
+      title: 'Founder reel',
+      platform: 'Instagram',
+    });
   });
 
   it('persists content items in a versioned schema envelope', async () => {

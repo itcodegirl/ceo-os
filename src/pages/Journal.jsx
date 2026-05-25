@@ -212,7 +212,7 @@ function Journal() {
               No perfect writing needed. A few honest lines are enough.
             </p>
             <p className="helper-text journal-panel__local-only-notice">
-              Journal entries stay on this device and are never synced — even when signed in.
+              Private to this device — never synced.
             </p>
           </div>
           <label className="journal-panel__date">

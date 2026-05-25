@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import OpportunityCrudPage from './OpportunityCrudPage';
+import ToastProvider from '../ui/ToastProvider';
 
 vi.mock('../../lib/opportunitiesRepository', () => ({
   OPPORTUNITIES_UPDATED_EVENT: 'ceo-os:opportunities-updated',
@@ -21,7 +22,11 @@ import {
 } from '../../lib/opportunitiesRepository';
 
 function renderWithRouter(ui) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <ToastProvider>{ui}</ToastProvider>
+    </MemoryRouter>,
+  );
 }
 
 describe('OpportunityCrudPage integration', () => {
@@ -29,6 +34,7 @@ describe('OpportunityCrudPage integration', () => {
   let idCounter = 2;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     records = [
       {
         id: 'opp-1',
@@ -78,6 +84,7 @@ describe('OpportunityCrudPage integration', () => {
       expect(screen.getByText('Women in Product Media')).toBeInTheDocument();
       expect(screen.getByText('Women in Product')).toBeInTheDocument();
     });
+    expect(screen.getByText('Opportunity added to the pipeline.')).toBeInTheDocument();
     expect(createOpportunity).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByText('Women in Product Media'));
@@ -207,5 +214,24 @@ describe('OpportunityCrudPage integration', () => {
       'Unable to delete opportunity right now. Refresh and try again if this record changed elsewhere.',
     )).not.toBeInTheDocument();
     expect(deleteOpportunity.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('blocks duplicate opportunities before writing', async () => {
+    renderWithRouter(<OpportunityCrudPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Advisory Partnership')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create a new opportunity' }));
+    fireEvent.change(screen.getByLabelText('Opportunity'), { target: { value: ' advisory partnership ' } });
+    fireEvent.change(screen.getByLabelText('Company'), { target: { value: 'studio north' } });
+    fireEvent.change(screen.getByLabelText('Next Step'), { target: { value: 'Send another proposal' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create opportunity' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This opportunity already exists for that company.',
+    );
+    expect(createOpportunity).not.toHaveBeenCalled();
   });
 });

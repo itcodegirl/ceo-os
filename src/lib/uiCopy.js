@@ -6,6 +6,8 @@ export const SOURCE_NOTICE_LOCAL_ONLY = 'This workspace is stored on this device
 export const SOURCE_NOTICE_DEMO_DATA = 'Demo data is active on this device. It is not synced.';
 export const SOURCE_NOTICE_BLANK_LOCAL = 'Blank local workspace is active on this device.';
 export const SOURCE_NOTICE_SAMPLE_DATA = SOURCE_NOTICE_DEMO_DATA;
+export const SOURCE_STATE_OFFLINE = 'Offline';
+export const SOURCE_NOTICE_OFFLINE = `Data source: ${SOURCE_STATE_OFFLINE}. No cloud replay queue is active.`;
 export const AUTOSAVE_PAUSED_COPY = 'Autosave is paused until this workspace saves successfully again.';
 
 // Capture, Journal, and Reminders are deliberately local-only — they have no
@@ -33,7 +35,14 @@ export function buildSourceNotice(source, options = {}) {
     localPrefix = '',
     localMode,
     localText = '',
+    offlinePrefix = 'Data source: ',
+    hasError = false,
+    isOnline = true,
   } = options;
+
+  if (isOnline === false || (source === 'supabase' && hasError)) {
+    return `${offlinePrefix}${SOURCE_STATE_OFFLINE}. No cloud replay queue is active.`;
+  }
 
   if (source === 'supabase') {
     return `${supabasePrefix}${SOURCE_LABEL_SUPABASE}`;

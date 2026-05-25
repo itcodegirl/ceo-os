@@ -5,7 +5,7 @@
 
 .capture-page h2 {
 	margin: 0;
-	font-size: 1.02rem;
+	font-size: var(--fs-body);
 }
 
 .capture-composer {
@@ -98,7 +98,7 @@
 	color: var(--text-muted);
 	padding: 0.3rem 0.7rem;
 	border-radius: var(--radius-action, 12px);
-	font-size: 0.78rem;
+	font-size: var(--fs-caption);
 	cursor: pointer;
 	margin-bottom: 0.5rem;
 	align-self: flex-start;
@@ -115,7 +115,7 @@
 }
 
 .sticky-note__promoted-tag {
-	font-size: 0.7rem;
+	font-size: var(--fs-tag);
 	font-weight: 600;
 	letter-spacing: 0.02em;
 	text-transform: uppercase;

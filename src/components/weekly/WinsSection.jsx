@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import SectionCard from '../ui/SectionCard';
 import ConfirmModal from '../ui/ConfirmModal';
+import EmptyHint from '../ui/EmptyHint';
 import WeeklyTextList from './WeeklyTextList';
 import WeeklyEditorModal from './WeeklyEditorModal';
 import { useWeeklySectionEditor } from '../../hooks/useWeeklySectionEditor';
@@ -41,7 +42,7 @@ function WinsSection({ items, setItems, defaultItems }) {
   return (
     <>
       <SectionCard
-        title="Wins / Momentum"
+        title="Wins worth keeping"
         iconName="weekly"
         actionText="Add Win"
         onAction={openCreateEditor}
@@ -53,12 +54,14 @@ function WinsSection({ items, setItems, defaultItems }) {
             itemTypeLabel="win"
             getDotClassName={() => 'weekly-list__dot--success'}
             getPrimaryText={(item) => item.text}
-            getSecondaryText={(item) => `Category: ${item.category}`}
+            getSecondaryText={(item) => (item.category ? `Category: ${item.category}` : '')}
             onEditItem={openEditEditor}
             onDeleteItem={requestDelete}
           />
         ) : (
-          <p className="helper-text">No wins captured yet. Add one to preserve momentum context.</p>
+          <EmptyHint>
+            No wins logged. Start with one &mdash; momentum compounds when you write it down.
+          </EmptyHint>
         )}
         {impactMessage ? <p className="helper-text weekly-impact-copy" role="status">{impactMessage}</p> : null}
       </SectionCard>

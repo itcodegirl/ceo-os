@@ -2,6 +2,16 @@ import Modal from '../ui/Modal';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import { contentStatusTone } from '../../lib/statusMaps';
+import { formatPublishDate } from '../../lib/contentFormatting';
+
+function DetailRow({ label, children }) {
+  return (
+    <p className="helper-text content-modal-detail">
+      <span className="content-modal-detail__label">{label}</span>
+      <span className="content-modal-detail__value">{children}</span>
+    </p>
+  );
+}
 
 function ContentItemModal({
   selectedItem,
@@ -10,6 +20,8 @@ function ContentItemModal({
   onEdit,
   onDelete,
 }) {
+  const publishLabel = selectedItem ? formatPublishDate(selectedItem.scheduledFor) : '';
+
   return (
     <Modal
       isOpen={Boolean(selectedItem)}
@@ -18,10 +30,17 @@ function ContentItemModal({
     >
       {selectedItem ? (
         <div className="content-modal-content">
-          <p className="helper-text">Platform: {selectedItem.platform}</p>
-          <p className="helper-text">
-            Status: <Badge label={selectedItem.status} tone={contentStatusTone[selectedItem.status] || 'default'} />
-          </p>
+          <DetailRow label="Stage">
+            <Badge label={selectedItem.status} tone={contentStatusTone[selectedItem.status] || 'default'} />
+          </DetailRow>
+          <DetailRow label="Type">{selectedItem.contentType || 'Post'}</DetailRow>
+          <DetailRow label="Platform">{selectedItem.platform || 'Not set'}</DetailRow>
+          <DetailRow label="Publish date">
+            {publishLabel || (selectedItem.status === 'Published' ? 'Already published' : 'Not scheduled')}
+          </DetailRow>
+          {selectedItem.purpose ? <DetailRow label="Purpose">{selectedItem.purpose}</DetailRow> : null}
+          {selectedItem.notes ? <DetailRow label="Repurposing & notes">{selectedItem.notes}</DetailRow> : null}
+
           <div className="content-modal-actions">
             <Button
               type="button"

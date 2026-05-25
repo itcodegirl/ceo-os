@@ -1,4 +1,4 @@
-import { getChiefActionConfig } from '../shared/chiefActions.js';
+import { getChiefActionConfig, getChiefActionKeys } from '../shared/chiefActions.js';
 import { MAX_NOTES_LENGTH } from '../shared/chiefConfig.js';
 import { extractStructuredPayloadIfPresent } from '../shared/chiefStructuredPayload.js';
 
@@ -120,7 +120,9 @@ function isRateLimited(headers) {
 }
 
 function getAllowedActionKeys() {
-  return new Set(['plan', 'summarize', 'draft', 'actions', 'priorities']);
+  // Single source of truth: whatever output types the shared config
+  // declares are exactly the ones the proxy will honour.
+  return new Set(getChiefActionKeys());
 }
 
 function normalizeBody(body) {

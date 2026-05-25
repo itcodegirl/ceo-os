@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { createOpportunity, listOpportunities } from '../lib/opportunitiesRepository';
 import { createContentItem, listContentItems } from '../lib/contentRepository';
 import { createWeeklyItem, getCurrentWeekStart, getWeeklyBriefByWeek } from '../lib/weeklyRepository';
+import { FEEDBACK_KIND } from '../lib/chiefFeedback';
 import { buildCreateId } from '../lib/utils';
 
 const ACCEPTANCE_STATUS = {
@@ -140,7 +141,9 @@ function buildItemSignature(descriptor, item) {
 
 export function useChiefStructuredAcceptance({
   responses = [],
-  setFeedback,
+  // (kind, text) — see src/lib/chiefFeedback.js. Each call site here is
+  // tagged with the kind that matches the user-facing outcome.
+  pushFeedback,
   setLoadError,
   trackTelemetry,
   isMountedRef,
@@ -255,11 +258,11 @@ export function useChiefStructuredAcceptance({
     return new Set();
   }, [getContentSignatures, getOpportunitySignatures, getWeeklyPrioritySignatures]);
 
-  const setFeedbackIfAllowed = useCallback((message, suppressFeedback = false) => {
-    if (!suppressFeedback && typeof setFeedback === 'function') {
-      setFeedback(message);
+  const pushFeedbackIfAllowed = useCallback((kind, message, suppressFeedback = false) => {
+    if (!suppressFeedback && typeof pushFeedback === 'function') {
+      pushFeedback(kind, message);
     }
-  }, [setFeedback]);
+  }, [pushFeedback]);
 
   const hydrateAcceptedStructuredItems = useCallback(async (workspaceResponses) => {
     const responseEntries = Array.isArray(workspaceResponses) ? workspaceResponses : [];
@@ -328,7 +331,7 @@ export function useChiefStructuredAcceptance({
     const itemKey = buildItemKey(sectionKey, itemValue);
 
     if (!itemKey) {
-      setFeedbackIfAllowed('This item is missing required details and cannot be saved yet.', suppressFeedback);
+      pushFeedbackIfAllowed(FEEDBACK_KIND.error, 'This item is missing required details and cannot be saved yet.', suppressFeedback);
       notifyTelemetry('accept_item_skipped', {
         section: sectionKey || 'unknown',
         reason: 'missing_required_details',
@@ -337,7 +340,7 @@ export function useChiefStructuredAcceptance({
     }
 
     if (!descriptor) {
-      setFeedbackIfAllowed('This structured item type is not supported yet.', suppressFeedback);
+      pushFeedbackIfAllowed(FEEDBACK_KIND.error, 'This structured item type is not supported yet.', suppressFeedback);
       notifyTelemetry('accept_item_skipped', {
         section: sectionKey || 'unknown',
         reason: 'unsupported_section',
@@ -346,7 +349,10 @@ export function useChiefStructuredAcceptance({
     }
 
     if (acceptedStructuredItemMapRef.current[itemKey]) {
-      setFeedbackIfAllowed('This structured item was already added.', suppressFeedback);
+      // The item is already accepted in this session — that's a positive
+      // outcome (no action needed), not an error. Treat it as `result` so the
+      // autosave timer can't paint over it.
+      pushFeedbackIfAllowed(FEEDBACK_KIND.result, 'This structured item was already added.', suppressFeedback);
       notifyTelemetry('accept_item_skipped', {
         section: sectionKey,
         reason: 'already_accepted',
@@ -374,7 +380,7 @@ export function useChiefStructuredAcceptance({
         : { title: resolveStructuredText(itemValue) };
       const primaryText = pickFirstString(itemAsObject, descriptor.primaryFields);
       if (!primaryText) {
-        setFeedbackIfAllowed(descriptor.missingTextMessage, suppressFeedback);
+        pushFeedbackIfAllowed(FEEDBACK_KIND.error, descriptor.missingTextMessage, suppressFeedback);
         notifyTelemetry('accept_item_skipped', {
           section: sectionKey,
           reason: descriptor.missingTextReason,
@@ -393,7 +399,9 @@ export function useChiefStructuredAcceptance({
           ...current,
           [itemKey]: true,
         }));
-        setFeedbackIfAllowed(descriptor.duplicateMessage, suppressFeedback);
+        // Underlying repo already has the item — that's a positive outcome
+        // the user should be able to read without it being overwritten.
+        pushFeedbackIfAllowed(FEEDBACK_KIND.result, descriptor.duplicateMessage, suppressFeedback);
         notifyTelemetry('accept_item_skipped', {
           section: sectionKey,
           reason: 'already_exists',
@@ -414,14 +422,14 @@ export function useChiefStructuredAcceptance({
         ...current,
         [itemKey]: true,
       }));
-      setFeedbackIfAllowed(descriptor.successMessage, suppressFeedback);
+      pushFeedbackIfAllowed(FEEDBACK_KIND.result, descriptor.successMessage, suppressFeedback);
       notifyTelemetry('accept_item_saved', { section: sectionKey });
       return ACCEPTANCE_STATUS.SAVED;
     } catch (error) {
       if (typeof setLoadError === 'function') {
         setLoadError('Unable to accept this structured AI item right now.');
       }
-      setFeedbackIfAllowed('Unable to save this item right now. Try again.', suppressFeedback);
+      pushFeedbackIfAllowed(FEEDBACK_KIND.error, 'Unable to save this item right now. Try again.', suppressFeedback);
       if (import.meta.env.DEV) {
         console.error('Failed to accept structured AI item', error);
       }
@@ -447,7 +455,7 @@ export function useChiefStructuredAcceptance({
     isMountedRef,
     loadSignatures,
     notifyTelemetry,
-    setFeedbackIfAllowed,
+    pushFeedbackIfAllowed,
     setLoadError,
     updateAcceptedStructuredItemMap,
     updateAcceptingStructuredItemMap,
@@ -459,16 +467,16 @@ export function useChiefStructuredAcceptance({
       : responses[0]?.structuredPayload;
 
     if (!effectivePayload || typeof effectivePayload !== 'object') {
-      if (typeof setFeedback === 'function') {
-        setFeedback('No structured items are available to add.');
+      if (typeof pushFeedback === 'function') {
+        pushFeedback(FEEDBACK_KIND.info, 'No structured items are available to add.');
       }
       notifyTelemetry('accept_all_skipped', { reason: 'no_payload' });
       return false;
     }
 
     if (acceptingAllRef.current) {
-      if (typeof setFeedback === 'function') {
-        setFeedback('Add all is already running.');
+      if (typeof pushFeedback === 'function') {
+        pushFeedback(FEEDBACK_KIND.info, 'Add all is already running.');
       }
       notifyTelemetry('accept_all_skipped', { reason: 'already_running' });
       return false;
@@ -492,8 +500,8 @@ export function useChiefStructuredAcceptance({
       });
 
       if (!queue.length) {
-        if (typeof setFeedback === 'function') {
-          setFeedback('No valid structured items found to add.');
+        if (typeof pushFeedback === 'function') {
+          pushFeedback(FEEDBACK_KIND.info, 'No valid structured items found to add.');
         }
         notifyTelemetry('accept_all_skipped', { reason: 'no_valid_items' });
         return false;
@@ -511,8 +519,8 @@ export function useChiefStructuredAcceptance({
         }
       }
 
-      if (typeof setFeedback === 'function') {
-        setFeedback(`Add all complete: ${saved} saved, ${skipped} skipped, ${failed} failed.`);
+      if (typeof pushFeedback === 'function') {
+        pushFeedback(FEEDBACK_KIND.result, `Add all complete: ${saved} saved, ${skipped} skipped, ${failed} failed.`);
       }
       notifyTelemetry('accept_all_completed', {
         saved,
@@ -526,7 +534,7 @@ export function useChiefStructuredAcceptance({
         setIsAcceptingAll(false);
       }
     }
-  }, [acceptStructuredItem, isMountedRef, notifyTelemetry, responses, setFeedback]);
+  }, [acceptStructuredItem, isMountedRef, notifyTelemetry, pushFeedback, responses]);
 
   const isStructuredItemAccepted = useCallback(
     (section, item) => {

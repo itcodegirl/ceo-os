@@ -3,6 +3,7 @@ import {
   SOURCE_NOTICE_BLANK_LOCAL,
   SOURCE_NOTICE_DEMO_DATA,
   SOURCE_NOTICE_LOCAL_ONLY,
+  SOURCE_NOTICE_OFFLINE,
   SOURCE_LABEL_SUPABASE,
   SOURCE_NOTICE_SUPABASE,
   AUTOSAVE_PAUSED_COPY,
@@ -18,6 +19,7 @@ describe('src/lib/uiCopy', () => {
     expect(SOURCE_NOTICE_LOCAL_ONLY).toBe('This workspace is stored on this device only.');
     expect(SOURCE_NOTICE_DEMO_DATA).toBe('Demo data is active on this device. It is not synced.');
     expect(SOURCE_NOTICE_BLANK_LOCAL).toBe('Blank local workspace is active on this device.');
+    expect(SOURCE_NOTICE_OFFLINE).toBe('Data source: Offline. No cloud replay queue is active.');
     expect(AUTOSAVE_PAUSED_COPY).toBe('Autosave is paused until this workspace saves successfully again.');
   });
 
@@ -38,6 +40,10 @@ describe('src/lib/uiCopy', () => {
       .toBe('Weekly data source: Demo data is active on this device. It is not synced.');
     expect(buildSourceNotice('local', { localMode: 'blank' }))
       .toBe('Blank local workspace is active on this device.');
+    expect(buildSourceNotice('supabase', { isOnline: false }))
+      .toBe('Data source: Offline. No cloud replay queue is active.');
+    expect(buildSourceNotice('supabase', { hasError: true, offlinePrefix: 'Weekly data source: ' }))
+      .toBe('Weekly data source: Offline. No cloud replay queue is active.');
     expect(resolveLocalSourceNotice('unknown')).toBe('This workspace is stored on this device only.');
   });
 

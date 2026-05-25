@@ -5,6 +5,7 @@ import Topbar from '../components/ui/Topbar';
 import SystemPulse from '../components/ui/SystemPulse';
 import ErrorBoundary from '../components/ui/ErrorBoundary';
 import StorageCorruptionBanner from '../components/ui/StorageCorruptionBanner';
+import StorageQuotaBanner from '../components/ui/StorageQuotaBanner';
 import LocalOnlyNotice from '../components/ui/LocalOnlyNotice';
 import ToastProvider from '../components/ui/ToastProvider';
 import { useSettings } from '../hooks/useSettings';
@@ -79,7 +80,12 @@ function AppShellInner() {
 
   const showSystemPulse = useMemo(() => {
     const path = location.pathname || '/';
-    return path !== '/settings' && path !== '/ops-reliability';
+    // Focus Home already surfaces the "next move" + open-loops signal in its
+    // own panels, so the System Pulse strip there is duplicate chrome that
+    // works against the calm-OS thesis. Settings and Ops Reliability are
+    // configuration/diagnostic surfaces that don't need the cross-system
+    // signal at all.
+    return path !== '/' && path !== '/settings' && path !== '/ops-reliability';
   }, [location.pathname]);
 
   usePageMeta(appName);
@@ -111,6 +117,7 @@ function AppShellInner() {
       <div className="app-main">
         <Topbar pageTitle={currentPageTitle} />
         <StorageCorruptionBanner />
+        <StorageQuotaBanner />
         <LocalOnlyNotice />
         {showSystemPulse ? <SystemPulse /> : null}
         <main className="app-content" id="main-content" tabIndex="-1" ref={mainRef}>

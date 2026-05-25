@@ -193,7 +193,7 @@ function Capture() {
           Drop the thought here. Keep it messy now, organize later.
         </p>
         <p className="helper-text capture-composer__local-only-notice">
-          Capture stays on this device — it is not synced to the workspace, even when you are signed in. Promote a note to make it part of the synced surfaces.
+          Stays on this device. Promote a note when you want it in your synced workspace.
         </p>
         <form onSubmit={createNote} className="capture-composer__form">
           <label htmlFor="capture-note-text" className="helper-text">Note</label>
@@ -275,7 +275,7 @@ function Capture() {
           <EmptyState
             icon={<Icon name="capture" size={20} />}
             title="No sticky notes yet"
-            description="Start with one idea or one tiny task to clear mental load."
+            description="Drop the first thing rattling around — an idea, a task, a worry. Keep it messy now; sort it later."
           />
         )}
       </section>

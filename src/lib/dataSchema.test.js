@@ -35,7 +35,8 @@ describe('dataSchema', () => {
       updatedAt: 'number',
     });
     expect(DOMAIN_MODELS.CaptureNote.category).toBe('idea|task|content|opportunity|journal');
-    expect(DOMAIN_MODELS.ContentItem.status).toBe('Drafting|Editing|Scheduled');
+    expect(DOMAIN_MODELS.ContentItem.status).toBe('Idea|Drafting|Editing|Ready|Scheduled|Published');
+    expect(DOMAIN_MODELS.ContentItem.contentType).toBe('Post|Article|Newsletter|Video|Thread|Talk|Other');
     expect(DOMAIN_MODELS.WeeklyBrief).toMatchObject({
       priorities: 'WeeklyPriority[]',
       wins: 'WeeklyWin[]',

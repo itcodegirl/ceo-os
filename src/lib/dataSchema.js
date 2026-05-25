@@ -39,7 +39,11 @@ export const DOMAIN_MODELS = Object.freeze({
     id: 'string',
     title: 'string',
     platform: 'string',
-    status: 'Drafting|Editing|Scheduled',
+    contentType: 'Post|Article|Newsletter|Video|Thread|Talk|Other',
+    status: 'Idea|Drafting|Editing|Ready|Scheduled|Published',
+    purpose: 'string',
+    scheduledFor: 'YYYY-MM-DD|empty',
+    notes: 'string',
     updatedAt: 'number',
   }),
   JournalEntry: Object.freeze({

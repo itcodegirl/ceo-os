@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { aiConfig } from '../lib/openai';
 import { emitChiefTelemetry } from '../lib/chiefTelemetry';
+import { FEEDBACK_KIND, buildFeedback, isDurableFeedbackKind } from '../lib/chiefFeedback';
 import { useChiefGeneration } from './useChiefGeneration';
 import { useChiefStructuredAcceptance } from './useChiefStructuredAcceptance';
 import { useChiefWorkspace } from './useChiefWorkspace';
@@ -10,11 +11,10 @@ function getDefaultFeedback() {
   // Don't surface env-var names in user-facing feedback. The proxy-config
   // hint stays in README / Settings; here we only need a calm starting
   // message regardless of deployment state.
-  return aiConfig.hasProxyEndpoint
-    ? 'Paste notes when you have them. Then choose an action to turn them into a structured plan.'
+  const text = aiConfig.hasProxyEndpoint
+    ? 'Paste notes when you have them, then choose an action to turn them into a structured plan.'
     : 'Running in local mode. Drafts use a deterministic fallback until an AI proxy is configured.';
-    ? 'Paste your notes, then choose an action to turn them into executive-ready output.'
-    : 'AI is not configured on this build — actions will return a deterministic local template instead. The structured workflow still works for review.';
+  return buildFeedback(FEEDBACK_KIND.info, text);
 }
 
 function resolveNotes(nextNotes) {
@@ -22,7 +22,25 @@ function resolveNotes(nextNotes) {
 }
 
 export function useChiefOfStaff() {
-  const [feedback, setFeedback] = useState(getDefaultFeedback);
+  const [feedbackState, setFeedbackState] = useState(getDefaultFeedback);
+
+  const pushFeedback = useCallback((kind, text) => {
+    setFeedbackState(buildFeedback(kind, text));
+  }, []);
+
+  // The autosave timer skips its info-level "Notes saved" message when the
+  // user still needs to read a durable result or error — read through the
+  // functional setter so we don't have to thread the latest kind through
+  // the effect closure.
+  const softUpdateFeedback = useCallback((kind, text) => {
+    setFeedbackState((current) => {
+      if (isDurableFeedbackKind(current.kind)) {
+        return current;
+      }
+      return buildFeedback(kind, text);
+    });
+  }, []);
+
   const isMountedRef = useIsMountedRef();
 
   const {
@@ -58,7 +76,7 @@ export function useChiefOfStaff() {
     resetAcceptanceState,
   } = useChiefStructuredAcceptance({
     responses,
-    setFeedback,
+    pushFeedback,
     setLoadError,
     trackTelemetry,
     isMountedRef,
@@ -82,7 +100,7 @@ export function useChiefOfStaff() {
     canGenerate: hasNotes,
     hasNotes,
     notesText,
-    setFeedback,
+    pushFeedback,
     setLoadError,
     setResponses,
     trackTelemetry,
@@ -114,13 +132,15 @@ export function useChiefOfStaff() {
     }
 
     const timer = window.setTimeout(() => {
-      setFeedback('Draft pipeline ready. Continue refining as needed.');
+      // Quietly confirm the autosave without clobbering a generation result
+      // or error message that the user still needs to read.
+      softUpdateFeedback(FEEDBACK_KIND.info, 'Notes saved. Pick an action when you are ready.');
     }, 2500);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isGenerating, notesText]);
+  }, [isGenerating, notesText, softUpdateFeedback]);
 
   const handleClearWorkspace = useCallback(async () => {
     const didClear = await clearWorkspace();
@@ -128,7 +148,7 @@ export function useChiefOfStaff() {
       return;
     }
 
-    setFeedback(getDefaultFeedback());
+    setFeedbackState(getDefaultFeedback());
     resetAcceptanceState();
     resetAcceptanceCaches();
   }, [clearWorkspace, isMountedRef, resetAcceptanceCaches, resetAcceptanceState]);
@@ -137,7 +157,12 @@ export function useChiefOfStaff() {
     () => ({
       notes: notesText,
       responses,
-      feedback,
+      // Surface the bare text on `feedback` (keeps the long-standing public
+      // shape that callers and tests rely on) and the structural metadata on
+      // `feedbackKind`, so callers that want to style result vs. error can
+      // opt in without parsing the string.
+      feedback: feedbackState.text,
+      feedbackKind: feedbackState.kind,
       source,
       isLoading,
       isGenerating,
@@ -158,7 +183,8 @@ export function useChiefOfStaff() {
     [
       notesText,
       responses,
-      feedback,
+      feedbackState.text,
+      feedbackState.kind,
       source,
       isLoading,
       isGenerating,

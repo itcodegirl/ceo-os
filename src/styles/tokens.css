@@ -108,6 +108,10 @@
   --danger-input-border: rgba(255, 150, 150, 0.72);
   --danger-input-ring: rgba(255, 150, 150, 0.2);
   --danger-surface: rgba(255, 123, 123, 0.11);
+  /* RGB triplet for the Chief AI-fallback tint (badge + warning surfaces),
+   * consumed as rgba(var(--danger-tint-rgb), <alpha>) so the per-surface
+   * alphas live at the call site and the hue lives here. */
+  --danger-tint-rgb: 248, 162, 180;
 
   /* Dark-theme pill backgrounds: bumped from the previous 0.20-0.22 range
    * to 0.30-0.32 so the colored text reads at AA contrast on the dark
@@ -162,6 +166,15 @@
   --fw-topbar-title: 600;
   --fs-meta: 0.92rem;
   --fs-helper: 0.92rem;
+  /* Small-text ladder added by the May 2026 audit Phase 5 typography
+   * consolidation. dashboard.css had drifted into 16 distinct font-sizes
+   * in a 16% range; these four tokens collapse the cluster into a clean
+   * 4-step scale (tag → caption → body-sm → body). Other files may
+   * adopt incrementally; existing literals continue to render. */
+  --fs-tag: 0.7rem;
+  --fs-caption: 0.78rem;
+  --fs-body-sm: 0.86rem;
+  --fs-body: 1rem;
 
   --space-card-padding: 1.25rem;
   --space-card-inner-gap: 1rem;
@@ -178,6 +191,10 @@
   --glow-primary: rgba(62, 189, 255, 0.33);
   --glow-secondary: rgba(114, 146, 255, 0.22);
   --glow-soft: rgba(116, 213, 255, 0.14);
+
+  /* Signal-node gradient (the blueprint dot in the system diagram). Kept as
+   * a token so a future brand refresh can update both themes in one place. */
+  --gradient-signal: linear-gradient(180deg, #8de8ff, #35baff);
 
   /* Motion tokens — keep transitions on a calm, consistent rhythm */
   --duration-fast: 120ms;
@@ -196,11 +213,15 @@
   --text: #15243a;
   --text-strong: #0a182d;
   --text-muted: #4a607c;
-  --text-soft: #607a98;
+  /* --text-soft and --text-sidebar-muted darkened from #607a98/#5d7a96 so
+   * they clear WCAG AA (4.5:1) on the warm-paper --bg. The previous values
+   * landed at ~4.1:1 in light theme — the contrast regression test
+   * (tokens.contrast.test.js) catches any future drift. */
+  --text-soft: #52708f;
   --text-soft-strong: #2c4264;
   --text-inverse: #ffffff;
   --text-sidebar: #34526f;
-  --text-sidebar-muted: #5d7a96;
+  --text-sidebar-muted: #506a86;
   --text-sidebar-hover: #1c3854;
   --text-meta: #4a607c;
   --text-status: #1f3a5d;
@@ -295,6 +316,9 @@
   --danger-input-border: rgba(177, 69, 69, 0.6);
   --danger-input-ring: rgba(177, 69, 69, 0.18);
   --danger-surface: rgba(177, 69, 69, 0.08);
+  /* Light theme uses a deeper red than the dark pink; the alphas at each
+   * call site stay the same and read correctly because this hue is darker. */
+  --danger-tint-rgb: 177, 69, 69;
 
   --checkbox-border: rgba(46, 99, 158, 0.42);
   --checkbox-border-hover: rgba(31, 127, 198, 0.6);
@@ -314,5 +338,7 @@
 
   --bg-chief-badge: rgba(31, 127, 198, 0.12);
   --bg-count-badge: rgba(31, 127, 198, 0.18);
+
+  --gradient-signal: linear-gradient(180deg, #5fa8d8, #1f7fc6);
 }
 

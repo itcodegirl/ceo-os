@@ -14,6 +14,7 @@ import {
   STORAGE_DOMAINS,
   createVersionedStorageEnvelope,
 } from './dataSchema';
+import { DUPLICATE_RECORD_CODE } from './repositoryErrors';
 
 describe('src/lib/opportunitiesRepository', () => {
   beforeEach(() => {
@@ -72,6 +73,69 @@ describe('src/lib/opportunitiesRepository', () => {
 
     expect(updated.updatedAt).toBeGreaterThan(created.updatedAt);
     expect(updated.nextStep).toBe('Send revised brief');
+  });
+
+  it('rejects duplicate local opportunity creates without emitting an update event', async () => {
+    saveWorkspaceSetupMode('blank');
+    await createOpportunity({
+      name: 'Advisory lead',
+      company: 'Studio North',
+      priority: 'High',
+      stage: 'New',
+      nextStep: 'Send deck',
+    });
+    const updateListener = vi.fn();
+    window.addEventListener(OPPORTUNITIES_UPDATED_EVENT, updateListener);
+
+    try {
+      await expect(createOpportunity({
+        name: ' advisory lead ',
+        company: 'studio north',
+        priority: 'Low',
+        stage: 'New',
+        nextStep: 'Follow up',
+      })).rejects.toMatchObject({
+        code: DUPLICATE_RECORD_CODE,
+        message: 'This opportunity already exists for that company.',
+      });
+    } finally {
+      window.removeEventListener(OPPORTUNITIES_UPDATED_EVENT, updateListener);
+    }
+
+    await expect(listOpportunities()).resolves.toHaveLength(1);
+    expect(updateListener).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate local opportunity updates without replacing either record', async () => {
+    saveWorkspaceSetupMode('blank');
+    const existing = await createOpportunity({
+      name: 'Workshop sponsor',
+      company: 'CodeHerWay',
+      priority: 'High',
+      stage: 'In Progress',
+      nextStep: 'Send proposal',
+    });
+    const next = await createOpportunity({
+      name: 'Podcast guest',
+      company: 'Founder Studio',
+      priority: 'Medium',
+      stage: 'New',
+      nextStep: 'Draft intro',
+    });
+
+    await expect(updateOpportunity(next.id, {
+      ...next,
+      name: existing.name,
+      company: existing.company,
+    }, { expectedUpdatedAt: next.updatedAt })).rejects.toMatchObject({
+      code: DUPLICATE_RECORD_CODE,
+    });
+
+    const items = await listOpportunities();
+    expect(items.find((item) => item.id === next.id)).toMatchObject({
+      name: 'Podcast guest',
+      company: 'Founder Studio',
+    });
   });
 
   it('persists opportunities in a versioned schema envelope', async () => {

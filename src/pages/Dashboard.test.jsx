@@ -86,11 +86,10 @@ describe('src/pages/Dashboard', () => {
     );
 
     expect(screen.getByRole('heading', { level: 1, name: 'Focus Home' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: "Today's Main Focus" })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: 'Next Smallest Action' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: 'Open Loops' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: 'Blockers' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: "Today's Focus" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Needs Your Attention' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Reminders' })).toBeInTheDocument();
+    expect(screen.getByText('Next step')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Current Operating Step' })).toBeInTheDocument();
     expect(screen.getByText('Start Day > Execute > Capture > Reset > Shutdown')).toBeInTheDocument();
     // The active step's action varies by time of day — the strip now shows
@@ -138,8 +137,8 @@ describe('src/pages/Dashboard', () => {
     const cta = screen.getByRole('button', { name: 'Tell me what to do next' });
     fireEvent.click(cta);
 
-    const nextMovePanel = screen.getByRole('heading', { name: 'Next Smallest Action' }).closest('.focus-panel');
-    expect(nextMovePanel).toHaveTextContent(/Spend 20 focused minutes|Send one unblock message|Draft a concise follow-up/i);
+    const heroPanel = screen.getByRole('heading', { name: "Today's Focus" }).closest('.focus-panel');
+    expect(heroPanel).toHaveTextContent(/Spend 20 focused minutes|Send one unblock message|Draft a concise follow-up/i);
   });
 
   it('replaces a selected next move when the underlying focus data changes', () => {
@@ -167,8 +166,8 @@ describe('src/pages/Dashboard', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Tell me what to do next' }));
-    const nextMovePanel = screen.getByRole('heading', { name: 'Next Smallest Action' }).closest('.focus-panel');
-    expect(nextMovePanel).toHaveTextContent('Send one unblock message for "Blocked Launch".');
+    const heroPanel = screen.getByRole('heading', { name: "Today's Focus" }).closest('.focus-panel');
+    expect(heroPanel).toHaveTextContent('Send one unblock message for "Blocked Launch".');
 
     useWeeklyBrief.mockReturnValue({
       priorities: [
@@ -188,8 +187,8 @@ describe('src/pages/Dashboard', () => {
       </MemoryRouter>,
     );
 
-    expect(nextMovePanel).toHaveTextContent('Spend 20 focused minutes on "Current Focus".');
-    expect(nextMovePanel).not.toHaveTextContent('Blocked Launch');
+    expect(heroPanel).toHaveTextContent('Spend 20 focused minutes on "Current Focus".');
+    expect(heroPanel).not.toHaveTextContent('Blocked Launch');
   });
 
   it('switches to overwhelmed mode, auto-opens the focus tools drawer, and shows reset guidance', () => {

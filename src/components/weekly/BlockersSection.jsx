@@ -4,6 +4,7 @@ import ConfirmModal from '../ui/ConfirmModal';
 import WeeklyTextList from './WeeklyTextList';
 import WeeklyEditorModal from './WeeklyEditorModal';
 import { useWeeklySectionEditor } from '../../hooks/useWeeklySectionEditor';
+import { blockerNeedTone, describeBlockerNeed } from '../../lib/weeklyData';
 
 function BlockersSection({ items, setItems, defaultItems }) {
   const blockerItems = Array.isArray(items) ? items : defaultItems;
@@ -37,7 +38,7 @@ function BlockersSection({ items, setItems, defaultItems }) {
   return (
     <>
       <SectionCard
-        title="Top Blockers"
+        title="What's in the way"
         iconName="weekly"
         actionText="Add Blocker"
         onAction={openCreateEditor}
@@ -47,13 +48,14 @@ function BlockersSection({ items, setItems, defaultItems }) {
           <WeeklyTextList
             items={blockerItems}
             itemTypeLabel="blocker"
-            getDotClassName={(item) => `weekly-list__dot--${item.severity}`}
+            getDotClassName={(item) => `weekly-list__dot--${blockerNeedTone(item.severity)}`}
             getPrimaryText={(item) => item.text}
+            getSecondaryText={(item) => describeBlockerNeed(item.severity)}
             onEditItem={openEditEditor}
             onDeleteItem={requestDelete}
           />
         ) : (
-          <p className="helper-text">No blockers logged. Add blockers to keep risk visible.</p>
+          <p className="helper-text">Clear runway. If something&apos;s nagging you, name it here so it stops taking up headspace.</p>
         )}
         {impactMessage ? <p className="helper-text weekly-impact-copy" role="status">{impactMessage}</p> : null}
       </SectionCard>

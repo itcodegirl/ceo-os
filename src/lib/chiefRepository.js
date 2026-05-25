@@ -1,9 +1,12 @@
-import { buildCreateId, requireLocalStorageSetItem } from './utils';
+import { buildCreateId } from './utils';
 import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
-import { parseJsonOrPreserveCorruption } from './storageCorruption';
+import { STORAGE_DOMAINS, readVersionedStoragePayload } from './dataSchema';
+import {
+  getVersionedStorageKey,
+  readVersionedLocalStorage,
+  writeVersionedLocalStorage,
+} from './versionedStorage';
 
-const CHIEF_NOTES_STORAGE_KEY = 'ceo-os-chief-notes';
-const CHIEF_RESPONSES_STORAGE_KEY = 'ceo-os-chief-responses';
 const MAX_CHIEF_RESPONSES = 30;
 
 function normalizeChiefResponse(item) {
@@ -22,48 +25,81 @@ function normalizeChiefResponse(item) {
   };
 }
 
+function getBrowserLocalStorage() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return null;
+  }
+  return window.localStorage;
+}
+
+// Chief notes are persisted as a plain string. The rest of the storage layer
+// uses the versioned-envelope pattern (see src/lib/dataSchema.js), so we
+// also wrap notes in an envelope going forward. Older installs already have
+// the bare string at the same key — we read that path explicitly so we do
+// NOT trigger storage-corruption preservation on the JSON.parse failure
+// that a bare string would otherwise produce. The first envelope write
+// upgrades the entry for that user.
 function readLocalChiefNotes() {
-  if (typeof window === 'undefined') {
+  const storage = getBrowserLocalStorage();
+  if (!storage) {
     return '';
   }
 
+  let raw;
   try {
-    const raw = window.localStorage.getItem(CHIEF_NOTES_STORAGE_KEY);
-    return typeof raw === 'string' ? raw : '';
+    raw = storage.getItem(getVersionedStorageKey(STORAGE_DOMAINS.chiefNotes));
   } catch {
     return '';
   }
+
+  if (typeof raw !== 'string' || raw.length === 0) {
+    return '';
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Legacy bare-string write — not JSON. Use it directly.
+    return raw;
+  }
+
+  const { data, isDomainMismatch } = readVersionedStoragePayload(STORAGE_DOMAINS.chiefNotes, parsed);
+  if (isDomainMismatch) {
+    return '';
+  }
+
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  // Pre-envelope writes that happened to be valid JSON (e.g. the string
+  // `"\"hi\""` because someone double-stringified) end up here. Treat as
+  // empty rather than risk surfacing the wrong text.
+  return '';
 }
 
 function writeLocalChiefNotes(notes) {
-  requireLocalStorageSetItem(
-    CHIEF_NOTES_STORAGE_KEY,
-    notes,
+  writeVersionedLocalStorage(
+    STORAGE_DOMAINS.chiefNotes,
+    typeof notes === 'string' ? notes : '',
     'Failed to persist chief notes to localStorage',
   );
 }
 
 function readLocalChiefResponses() {
-  if (typeof window === 'undefined') {
-    return [];
+  const fallback = [];
+  const parsed = readVersionedLocalStorage(STORAGE_DOMAINS.chiefResponses, fallback);
+  if (!Array.isArray(parsed)) {
+    return fallback;
   }
-
-  try {
-    const raw = window.localStorage.getItem(CHIEF_RESPONSES_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = parseJsonOrPreserveCorruption(CHIEF_RESPONSES_STORAGE_KEY, raw, null);
-    return Array.isArray(parsed) ? parsed.map(normalizeChiefResponse) : [];
-  } catch {
-    return [];
-  }
+  return parsed.map(normalizeChiefResponse);
 }
 
 function writeLocalChiefResponses(responses) {
-  requireLocalStorageSetItem(
-    CHIEF_RESPONSES_STORAGE_KEY,
-    JSON.stringify(responses),
+  writeVersionedLocalStorage(
+    STORAGE_DOMAINS.chiefResponses,
+    Array.isArray(responses) ? responses : [],
     'Failed to persist chief responses to localStorage',
   );
 }
@@ -104,7 +140,19 @@ async function writeLatestSupabaseChiefNotes({
 
   const sessionId = normalizeSupabaseId(latestSession?.id);
   if (!sessionId) {
-    return false;
+    const { error: insertError } = await supabaseClient
+      .from('chief_sessions')
+      .insert({
+        user_id: userId,
+        action_key: 'draft',
+        notes,
+      });
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    return true;
   }
 
   const { error: updateError } = await supabaseClient
@@ -342,12 +390,17 @@ export async function resetChiefWorkspace() {
       }
     },
     () => {
-      if (typeof window === 'undefined') {
+      const storage = getBrowserLocalStorage();
+      if (!storage) {
         return;
       }
 
-      window.localStorage.removeItem(CHIEF_NOTES_STORAGE_KEY);
-      window.localStorage.removeItem(CHIEF_RESPONSES_STORAGE_KEY);
+      try {
+        storage.removeItem(getVersionedStorageKey(STORAGE_DOMAINS.chiefNotes));
+        storage.removeItem(getVersionedStorageKey(STORAGE_DOMAINS.chiefResponses));
+      } catch {
+        // best-effort: a failed remove on one key shouldn't crash the reset.
+      }
     },
   );
 }

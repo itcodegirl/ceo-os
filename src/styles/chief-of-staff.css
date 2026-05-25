@@ -69,8 +69,8 @@
 }
 
 .chief-source-badge--fallback {
-  background: rgba(248, 162, 180, 0.14);
-  border-color: rgba(248, 162, 180, 0.45);
+  background: rgba(var(--danger-tint-rgb), 0.14);
+  border-color: rgba(var(--danger-tint-rgb), 0.45);
 }
 
 .chief-output-warning {
@@ -79,13 +79,13 @@
   margin-top: 0.95rem;
   padding: 0.75rem 0.85rem;
   border-radius: 0.8rem;
-  border: 1px solid rgba(248, 162, 180, 0.42);
-  background: rgba(248, 162, 180, 0.1);
+  border: 1px solid rgba(var(--danger-tint-rgb), 0.42);
+  background: rgba(var(--danger-tint-rgb), 0.1);
 }
 
 .chief-output-warning strong,
 .chief-output-warning small {
-  font-size: 0.82rem;
+  font-size: var(--fs-caption);
 }
 
 .chief-output-warning small {
@@ -102,7 +102,7 @@
 
 .chief-acceptance-summary p {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: var(--fs-body-sm);
   line-height: 1.45;
 }
 
@@ -118,33 +118,57 @@
   color: inherit;
 }
 
-.chief-action-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.55rem;
+.chief-make-shell {
   margin-top: 1rem;
 }
 
-.chief-action-grid__primary {
-  grid-column: 1 / -1;
+.chief-make-shell--disabled {
+  opacity: 0.6;
 }
 
-.chief-action-grid__secondary {
+.chief-make {
   display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border-chief-soft);
+  background: var(--surface-overlay-1);
 }
 
-@media (max-width: 540px) {
-  .chief-action-grid__secondary {
-    grid-template-columns: 1fr;
-  }
+.chief-make__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.chief-make__label {
+  font-size: var(--fs-body-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chief-make__select {
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.6rem;
+  background: var(--surface-chief-input);
+  border: 1px solid var(--border-chief-input);
+  color: inherit;
+  font: inherit;
+}
+
+.chief-make__hint {
+  margin: 0;
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+  opacity: 0.82;
 }
 
 .chief-notes-meta {
   margin: 0.55rem 0 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-caption);
   opacity: 0.78;
   text-align: right;
 }
@@ -156,16 +180,11 @@
   opacity: 1;
 }
 
-.chief-action-grid--disabled {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
 .chief-feedback-text {
   margin-top: 0.75rem;
   min-height: 1.2rem;
   opacity: 0.84;
-  font-size: 0.88rem;
+  font-size: var(--fs-body-sm);
 }
 
 .chief-output-panel {
@@ -196,6 +215,38 @@
   margin: 0 0 0.35rem;
 }
 
+.chief-item-action {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.chief-item-destination,
+.chief-section-destination {
+  margin: 0;
+  font-size: 0.74rem;
+  opacity: 0.7;
+}
+
+.chief-item-destination {
+  text-align: right;
+}
+
+.chief-section-heading {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.chief-section-heading h3 {
+  margin: 0;
+}
+
+.chief-section-destination {
+  font-size: var(--fs-caption);
+}
+
 .chief-count-badge {
   display: inline-grid;
   place-items: center;
@@ -206,19 +257,96 @@
   background: var(--bg-count-badge);
 }
 
-.chief-empty-state,
-.chief-loading-state {
+.chief-empty-state {
   min-height: 240px;
   display: grid;
   align-content: start;
   gap: 0.75rem;
 }
 
-.chief-loading-steps {
+.chief-history-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--surface-overlay-1);
+}
+
+.chief-history-notice p {
   margin: 0;
-  padding-left: 1.1rem;
+  font-size: var(--fs-body-sm);
+  opacity: 0.9;
+}
+
+.chief-history-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
   display: grid;
   gap: 0.4rem;
+}
+
+.chief-history-item {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-chief-soft);
+  background: var(--surface-overlay-1);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.chief-history-item:hover {
+  border-color: var(--border-strong);
+}
+
+.chief-history-item--active {
+  border-color: var(--border-strong);
+  background: var(--surface-overlay-2, var(--surface-overlay-1));
+}
+
+.chief-history-item__title {
+  font-weight: 600;
+  font-size: var(--fs-helper);
+}
+
+.chief-history-item__meta {
+  font-size: 0.74rem;
+  opacity: 0.7;
+}
+
+.chief-loading-steps {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scroll-snap-type: x mandatory;
+}
+
+/* Calm skeleton: matches the real summary + section card structure so the
+   page does not visually jump when generation completes. */
+.chief-loading-state {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.chief-loading-stack {
+  display: grid;
+  gap: 0.55rem;
+}
+
+/* Honor reduced-motion: the shimmer is decorative — show static bars instead
+   of the animated gradient when the user has asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .chief-loading-state .skeleton-line {
+    animation: none;
+  }
 }
 
 @media (max-width: 980px) {
@@ -239,18 +367,37 @@
   .chief-item button {
     width: 100%;
   }
+
+  .chief-item-action {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .chief-item-destination {
+    text-align: left;
+  }
+}
+
+/* Touch devices: 44px accept targets, matching the Focus Home reminder
+   pattern. Width-based queries miss wide touch screens (tablets), so this
+   keys off pointer capability rather than breakpoint. */
+@media (pointer: coarse) {
+  .chief-accept-all-btn,
+  .chief-item button {
+    min-height: 2.75rem;
+  }
 }
 
 /* Light-theme retuning for the Chief fallback semantic surfaces. */
 :root[data-theme="light"] .chief-source-badge--fallback {
-  background: rgba(177, 69, 69, 0.08);
-  border-color: rgba(177, 69, 69, 0.4);
+  background: rgba(var(--danger-tint-rgb), 0.08);
+  border-color: rgba(var(--danger-tint-rgb), 0.4);
   color: var(--danger-text);
 }
 
 :root[data-theme="light"] .chief-output-warning {
-  background: rgba(177, 69, 69, 0.06);
-  border-color: rgba(177, 69, 69, 0.32);
+  background: rgba(var(--danger-tint-rgb), 0.06);
+  border-color: rgba(var(--danger-tint-rgb), 0.32);
 }
 
 :root[data-theme="light"] .chief-output-warning strong {

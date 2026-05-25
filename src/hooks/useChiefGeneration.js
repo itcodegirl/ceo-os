@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { generateChiefOfStaffResponse, getChiefActionTitle } from '../lib/openai';
 import { createChiefSession, saveChiefOutput } from '../lib/chiefRepository';
+import { FEEDBACK_KIND } from '../lib/chiefFeedback';
 import { buildCreateId } from '../lib/utils';
 
 export function useChiefGeneration({
@@ -8,7 +9,10 @@ export function useChiefGeneration({
   canGenerate,
   hasNotes,
   notesText,
-  setFeedback,
+  // (kind, text) — see src/lib/chiefFeedback.js for the kind taxonomy.
+  // 'result' / 'error' messages are durable so transient hints can't paint
+  // over them. The parent hook owns the actual state.
+  pushFeedback,
   setLoadError,
   setResponses,
   trackTelemetry,
@@ -27,14 +31,14 @@ export function useChiefGeneration({
 
     if (!canGenerate) {
       if (!hasNotes) {
-        setFeedback('Paste notes first so we can produce a relevant draft or recommendation.');
+        pushFeedback(FEEDBACK_KIND.info, 'Paste notes first so we can produce a relevant draft or recommendation.');
         trackTelemetry('generate_blocked_no_notes', { actionKey });
       }
       return;
     }
 
     setIsGenerating(true);
-    setFeedback('Generating a new draft for your current notes.');
+    pushFeedback(FEEDBACK_KIND.progress, 'Generating a new draft for your current notes.');
     setLoadError('');
     const correlationId = buildCreateId();
     trackTelemetry('generate_started', {
@@ -60,7 +64,7 @@ export function useChiefGeneration({
       }
 
       if (!nextResponse.content) {
-        setFeedback('No output generated. Add more context and try again.');
+        pushFeedback(FEEDBACK_KIND.error, 'No output generated. Add more context and try again.');
         trackTelemetry('generate_completed_empty', {
           actionKey,
           source: nextResponse.source || 'unknown',
@@ -105,9 +109,9 @@ export function useChiefGeneration({
         return;
       }
       if (nextResponse.source === 'proxy') {
-        setFeedback(`Created: ${savedOutput.title}. Review and edit before sending.`);
+        pushFeedback(FEEDBACK_KIND.result, `Created: ${savedOutput.title}. Review and edit before sending.`);
       } else {
-        setFeedback(`AI unavailable. Saved local fallback: ${savedOutput.title}. Review before using.`);
+        pushFeedback(FEEDBACK_KIND.error, `AI unavailable. Saved local fallback: ${savedOutput.title}. Review before using.`);
       }
 
       trackTelemetry('generate_completed', {
@@ -135,7 +139,7 @@ export function useChiefGeneration({
         return;
       }
 
-      setFeedback('Unable to generate output right now. Try again in a moment.');
+      pushFeedback(FEEDBACK_KIND.error, 'Unable to generate output right now. Try again in a moment.');
       setLoadError('Unable to generate chief output right now.');
       if (import.meta.env.DEV) {
         console.error('Chief workflow action failed', error);
@@ -156,7 +160,7 @@ export function useChiefGeneration({
     isGenerating,
     notesText,
     onAfterResponseSaved,
-    setFeedback,
+    pushFeedback,
     setLoadError,
     setResponses,
     trackTelemetry,

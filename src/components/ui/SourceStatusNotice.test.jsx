@@ -1,9 +1,23 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { SOURCE_NOTICE_LOCAL_ONLY } from '../../lib/uiCopy';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SOURCE_NOTICE_LOCAL_ONLY, SOURCE_NOTICE_OFFLINE } from '../../lib/uiCopy';
 import SourceStatusNotice from './SourceStatusNotice';
 
+const originalNavigatorOnline = window.navigator.onLine;
+
+function setNavigatorOnline(isOnline) {
+  Object.defineProperty(window.navigator, 'onLine', {
+    configurable: true,
+    value: isOnline,
+  });
+}
+
 describe('SourceStatusNotice', () => {
+  afterEach(() => {
+    setNavigatorOnline(originalNavigatorOnline);
+    vi.restoreAllMocks();
+  });
+
   it('renders local source copy by default', () => {
     render(<SourceStatusNotice />);
 
@@ -42,7 +56,7 @@ describe('SourceStatusNotice', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a supabase recovery cue when live sync is unavailable', () => {
+  it('shows an offline recovery cue when Supabase state cannot be confirmed', () => {
     render(
       <SourceStatusNotice
         source="supabase"
@@ -50,10 +64,25 @@ describe('SourceStatusNotice', () => {
       />,
     );
 
+    expect(screen.getByRole('status')).toHaveTextContent(SOURCE_NOTICE_OFFLINE);
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to refresh live workspace data.');
     expect(
-      screen.getByText('Showing the latest workspace snapshot available while live sync reconnects.'),
+      screen.getByText('Showing the latest available workspace data. Retry when the network or Supabase is available; changes are not replayed automatically.'),
     ).toBeInTheDocument();
+  });
+
+  it('updates the visible state when the browser goes offline', () => {
+    setNavigatorOnline(true);
+    render(<SourceStatusNotice source="supabase" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Data source: Workspace sync is active.');
+
+    act(() => {
+      setNavigatorOnline(false);
+      window.dispatchEvent(new Event('offline'));
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent(SOURCE_NOTICE_OFFLINE);
   });
 
   it('hides retry action when no retry callback is provided', () => {

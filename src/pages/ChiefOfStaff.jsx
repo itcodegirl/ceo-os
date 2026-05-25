@@ -1,10 +1,14 @@
-import { lazy, Suspense, useCallback, useMemo } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import ChiefOutputPanel from "../components/chief/ChiefOutputPanel";
+import ChiefOutputPicker from "../components/chief/ChiefOutputPicker";
+import ChiefHistoryList from "../components/chief/ChiefHistoryList";
+import { getChiefResponseId } from "../components/chief/chiefHistory";
 import Button from "../components/ui/Button";
+import ConfirmModal from "../components/ui/ConfirmModal";
 import SourceStatusNotice from "../components/ui/SourceStatusNotice";
 import { useChiefOfStaff } from "../hooks/useChiefOfStaff";
 import { useMetaMode } from "../hooks/useMetaMode";
-import { normalizeChiefOutput } from "../lib/normalizeChiefOutput";
+import { toPanelResult } from "../lib/chiefPanelResult";
 import { buildSourceNotice } from "../lib/uiCopy";
 import { MAX_NOTES_LENGTH } from "../../shared/chiefConfig.js";
 import "../styles/chief-of-staff.css";
@@ -12,42 +16,6 @@ import "../styles/chief-of-staff.css";
 const ChiefTelemetryDiagnosticsPanel = lazy(() =>
   import("../components/chief/ChiefTelemetryDiagnosticsPanel")
 );
-
-function parseStructuredText(value) {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function toPanelResult(entry) {
-  if (!entry || typeof entry !== "object") {
-    return null;
-  }
-
-  const parsedContent = parseStructuredText(entry.content);
-
-  return normalizeChiefOutput({
-    title: parsedContent?.title || entry.title || "Executive Action Plan",
-    summary: parsedContent?.summary || entry.content || "",
-    source: entry.source || "proxy",
-    fallbackReason: entry.fallbackReason || "",
-    errorCode: entry.errorCode || "",
-    errorMessage: entry.errorMessage || "",
-    structured: entry.structuredPayload || parsedContent?.structured || {}
-  });
-}
 
 export default function ChiefOfStaff() {
   const {
@@ -69,12 +37,49 @@ export default function ChiefOfStaff() {
     refreshWorkspace
   } = useChiefOfStaff();
   const isMetaMode = useMetaMode();
+  const responseList = useMemo(() => (Array.isArray(responses) ? responses : []), [responses]);
+  const latestResponseId = responseList.length ? getChiefResponseId(responseList[0], 0) : null;
 
-  const latestResponse = Array.isArray(responses) && responses.length ? responses[0] : null;
+  const [selectedActionKey, setSelectedActionKey] = useState("plan");
+  const [selectedResponseId, setSelectedResponseId] = useState(null);
+  const [trackedLatestId, setTrackedLatestId] = useState(latestResponseId);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  // A new generation (or a workspace reload) puts a different output at the
+  // front of the list; when that happens, snap the view back to the newest
+  // one instead of whichever history entry was being inspected. Adjusting
+  // state during render (rather than in an effect) keeps this synchronous
+  // and avoids a flash of the stale selection.
+  if (trackedLatestId !== latestResponseId) {
+    setTrackedLatestId(latestResponseId);
+    setSelectedResponseId(null);
+  }
+
+  const selectedResponse = useMemo(() => {
+    if (!responseList.length) {
+      return null;
+    }
+    if (selectedResponseId) {
+      const match = responseList.find(
+        (entry, index) => getChiefResponseId(entry, index) === selectedResponseId,
+      );
+      if (match) {
+        return match;
+      }
+    }
+    return responseList[0];
+  }, [responseList, selectedResponseId]);
+
+  const isViewingEarlierOutput = Boolean(
+    selectedResponse && responseList.length && selectedResponse !== responseList[0],
+  );
+
   // Memoize the parsed/normalized panel result so the structured payload
   // tree (often several KB) is not rebuilt on every notes keystroke. Keyed
-  // on the response identity which only changes after a successful save.
-  const result = useMemo(() => toPanelResult(latestResponse), [latestResponse]);
+  // on the response identity which only changes after a successful save or
+  // a history selection.
+  const result = useMemo(() => toPanelResult(selectedResponse), [selectedResponse]);
   const notesLength = typeof notes === "string" ? notes.length : 0;
   const notesLimitReached = notesLength >= MAX_NOTES_LENGTH;
 
@@ -82,10 +87,46 @@ export default function ChiefOfStaff() {
     ? "Review the workspace status above, then retry when ready."
     : feedback;
   const actionHint = notesLimitReached
-    ? "Notes reached the current limit. Trim them before generating a new action plan."
+    ? "Notes reached the current limit. Trim them before generating again."
     : notes.trim()
       ? "Your notes stay editable. Review every recommendation before using it."
-      : "Add a few founder notes to generate an action plan.";
+      : "Add a few founder notes, then choose what to make.";
+
+  const canGenerate = Boolean(notes.trim()) && !isGenerating && !notesLimitReached;
+
+  const handleGenerate = useCallback(() => {
+    handleAction(selectedActionKey);
+  }, [handleAction, selectedActionKey]);
+
+  const handleSelectResponse = useCallback((id) => {
+    setSelectedResponseId(id || null);
+  }, []);
+
+  const handleViewLatest = useCallback(() => {
+    setSelectedResponseId(null);
+  }, []);
+
+  const handleRequestReset = useCallback(() => {
+    setIsResetConfirmOpen(true);
+  }, []);
+
+  const handleCancelReset = useCallback(() => {
+    if (isResetting) {
+      return;
+    }
+    setIsResetConfirmOpen(false);
+  }, [isResetting]);
+
+  const handleConfirmReset = useCallback(async () => {
+    setIsResetting(true);
+    try {
+      await clearWorkspace();
+      setSelectedResponseId(null);
+      setIsResetConfirmOpen(false);
+    } finally {
+      setIsResetting(false);
+    }
+  }, [clearWorkspace]);
 
   // Stable callback references so ChiefOutputPanel children don't re-render
   // on every parent paint.
@@ -114,7 +155,7 @@ export default function ChiefOfStaff() {
               <h2>Turn founder notes into action</h2>
             </div>
 
-            <Button type="button" variant="ghost" size="small" onClick={clearWorkspace} disabled={isGenerating}>
+            <Button type="button" variant="ghost" size="small" onClick={handleRequestReset} disabled={isGenerating}>
               Reset Workspace
             </Button>
           </div>
@@ -160,59 +201,16 @@ export default function ChiefOfStaff() {
           </p>
 
           <div
-            className={`chief-action-grid ${isGenerating ? "chief-action-grid--disabled" : ""}`.trim()}
+            className={`chief-make-shell ${isGenerating ? "chief-make-shell--disabled" : ""}`.trim()}
             aria-busy={isGenerating}
-            role="group"
-            aria-label="Chief of Staff actions"
           >
-            <div className="chief-action-grid__primary">
-              <Button
-                type="button"
-                onClick={() => handleAction("plan")}
-                disabled={!notes.trim() || isGenerating || notesLimitReached}
-                icon={{ name: "weekly", size: 14 }}
-              >
-                {isGenerating ? "Building Action Plan..." : "Build Action Plan"}
-              </Button>
-            </div>
-            <div className="chief-action-grid__secondary">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => handleAction("summarize")}
-                disabled={!notes.trim() || isGenerating || notesLimitReached}
-                icon={{ name: "section", size: 14 }}
-              >
-                Summarize This Week
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => handleAction("draft")}
-                disabled={!notes.trim() || isGenerating || notesLimitReached}
-                icon={{ name: "content", size: 14 }}
-              >
-                Draft LinkedIn Post
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => handleAction("actions")}
-                disabled={!notes.trim() || isGenerating || notesLimitReached}
-                icon={{ name: "action", size: 14 }}
-              >
-                Convert to Action Items
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => handleAction("priorities")}
-                disabled={!notes.trim() || isGenerating || notesLimitReached}
-                icon={{ name: "check", size: 14 }}
-              >
-                Suggest Next Priorities
-              </Button>
-            </div>
+            <ChiefOutputPicker
+              value={selectedActionKey}
+              onChange={setSelectedActionKey}
+              onGenerate={handleGenerate}
+              disabled={!canGenerate}
+              isGenerating={isGenerating}
+            />
           </div>
           <p id="chief-action-hint" className="chief-helper-text" role="status" aria-live="polite">
             {actionHint}
@@ -241,6 +239,15 @@ export default function ChiefOfStaff() {
       </div>
 
       <div className="chief-right-column">
+        {isViewingEarlierOutput ? (
+          <div className="chief-card chief-history-notice" role="status">
+            <p>You're viewing an earlier output. It's read-only history — generating a new one won't change it.</p>
+            <Button type="button" variant="ghost" size="small" onClick={handleViewLatest}>
+              Back to latest
+            </Button>
+          </div>
+        ) : null}
+
         <ChiefOutputPanel
           isGenerating={isGenerating}
           result={result}
@@ -259,7 +266,26 @@ export default function ChiefOfStaff() {
           isTaskAccepted={isTaskAccepted}
           isTaskAccepting={isTaskAccepting}
         />
+
+        <ChiefHistoryList
+          items={responseList}
+          selectedId={selectedResponseId}
+          onSelect={handleSelectResponse}
+        />
       </div>
+
+      <ConfirmModal
+        isOpen={isResetConfirmOpen}
+        title="Clear the Chief of Staff workspace?"
+        message="This removes your saved notes and every generated output on this workspace. Items you already accepted into Weekly Brief, Opportunities, or Content OS stay where they are. This can't be undone."
+        cancelLabel="Keep workspace"
+        confirmLabel={isResetting ? "Clearing..." : "Clear workspace"}
+        confirmAriaLabel="Clear chief of staff workspace"
+        cancelAriaLabel="Keep chief of staff workspace"
+        isConfirming={isResetting}
+        onCancel={handleCancelReset}
+        onConfirm={handleConfirmReset}
+      />
     </section>
   );
 }

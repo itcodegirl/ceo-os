@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useConfirmDelete } from './useConfirmDelete';
 import { useIsMountedRef } from './useIsMountedRef';
+import { useToast } from './useToast';
+import { getRepositoryErrorMessage } from '../lib/repositoryErrors';
 import { isStaleRecordError } from '../lib/staleRecordError';
 
 const STALE_RECORD_FORM_MESSAGE =
@@ -40,6 +42,10 @@ export function useCrudPage(config) {
   const loadErrorMessage = messages.load || 'Unable to load items right now.';
   const saveErrorMessage = messages.save || 'Unable to save item right now.';
   const deleteErrorMessage = messages.delete || 'Unable to delete item right now.';
+  const createSuccessMessage = messages.createSuccess || 'Item created.';
+  const updateSuccessMessage = messages.updateSuccess || 'Item updated.';
+  const deleteSuccessMessage = messages.deleteSuccess || 'Item deleted.';
+  const { showToast, hideToast } = useToast();
   const resolveDeleteMessage = useCallback((itemToDelete) => {
     if (!itemToDelete) {
       return 'Delete this item? This cannot be undone.';
@@ -91,6 +97,7 @@ export function useCrudPage(config) {
         }
         setItems((current) => current.filter((item) => item.id !== itemToDelete.id));
         setSelectedItemState(null);
+        showToast(deleteSuccessMessage);
       } catch (error) {
         if (isMountedRef.current) {
           setLoadError(deleteErrorMessage);
@@ -204,10 +211,11 @@ export function useCrudPage(config) {
   }, [defaultFormValuesResolved]);
 
   const handleOpenCreateModal = useCallback(() => {
+    hideToast();
     setSelectedItem(null);
     resetForm();
     setIsFormOpen(true);
-  }, [resetForm, setSelectedItem]);
+  }, [hideToast, resetForm, setSelectedItem]);
 
   const handleOpenEditModal = useCallback(() => {
     if (!selectedItem || !mapItemToFormValues) {
@@ -216,9 +224,10 @@ export function useCrudPage(config) {
 
     setFormValues(mapItemToFormValues(selectedItem));
     setFormError('');
+    hideToast();
     closeDeleteConfirm();
     setIsFormOpen(true);
-  }, [closeDeleteConfirm, mapItemToFormValues, selectedItem]);
+  }, [closeDeleteConfirm, hideToast, mapItemToFormValues, selectedItem]);
 
   const handleCloseFormModal = useCallback(() => {
     if (isSaving) {
@@ -263,9 +272,12 @@ export function useCrudPage(config) {
       const parsed = parsePayload(formValues);
       payload = parsed?.payload;
       validationError = parsed?.error || '';
+      if (!validationError) {
+        validationError = validatePayloadFn(payload, { items, selectedItem });
+      }
     } else {
       payload = mapFormValuesToPayload ? mapFormValuesToPayload(formValues) : formValues;
-      validationError = validatePayloadFn(payload);
+      validationError = validatePayloadFn(payload, { items, selectedItem });
     }
 
     if (validationError) {
@@ -302,6 +314,7 @@ export function useCrudPage(config) {
         setItems((current) =>
           current.map((item) => (item.id === updated.id ? updated : item)));
         setSelectedItemState(updated);
+        showToast(updateSuccessMessage);
       } else {
         const created = await createItem(payload);
         if (!isMountedRef.current) {
@@ -311,6 +324,7 @@ export function useCrudPage(config) {
           throw new Error('Create operation returned an invalid item shape.');
         }
         setItems((current) => [created, ...current]);
+        showToast(createSuccessMessage);
       }
 
       setIsFormOpen(false);
@@ -318,7 +332,7 @@ export function useCrudPage(config) {
     } catch (error) {
       const isStale = isStaleRecordError(error);
       if (isMountedRef.current) {
-        setFormError(isStale ? STALE_RECORD_FORM_MESSAGE : saveErrorMessage);
+        setFormError(isStale ? STALE_RECORD_FORM_MESSAGE : getRepositoryErrorMessage(error, saveErrorMessage));
       }
       if (isStale) {
         // Pull the latest snapshot so closing the modal shows the up-to-date row.
@@ -335,7 +349,9 @@ export function useCrudPage(config) {
     }
   }, [
     createItem,
+    createSuccessMessage,
     formValues,
+    items,
     isMountedRef,
     logPrefix,
     mapFormValuesToPayload,
@@ -344,6 +360,8 @@ export function useCrudPage(config) {
     saveErrorMessage,
     resetForm,
     selectedItem,
+    showToast,
+    updateSuccessMessage,
     updateItem,
     validatePayloadFn,
   ]);

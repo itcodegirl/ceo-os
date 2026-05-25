@@ -70,7 +70,7 @@ describe('ContentCrudPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Content OS' })).toBeInTheDocument();
     expect(screen.getByText('Loading content board data.')).toBeInTheDocument();
-    expect(screen.getByRole('list', { name: 'Publishing workflow cards' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('list', { name: 'Publishing pipeline cards' })).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByText('Demo data is active on this device. It is not synced.')).toBeInTheDocument();
   });
 
@@ -85,10 +85,11 @@ describe('ContentCrudPage', () => {
 
     renderWithRouter(<ContentCrudPage />);
 
-    expect(screen.getByText('Workspace sync is active.')).toBeInTheDocument();
+    expect(screen.getByText('Data source: Offline. No cloud replay queue is active.')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load content items right now.');
-    expect(screen.getByText('No content items yet')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /add content/i }).length).toBeGreaterThan(0);
+    expect(screen.getByText('No content in motion')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Capture your first idea' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a content idea or draft' })).toBeInTheDocument();
   });
 
   it('renders content rows when data is available', () => {
@@ -135,7 +136,7 @@ describe('ContentCrudPage', () => {
 
     renderWithRouter(<ContentCrudPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create a new content item' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a content idea or draft' }));
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Founder Memo Updated' } });
     fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'LinkedIn Carousel' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create content item' }));

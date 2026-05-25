@@ -1,64 +1,64 @@
 {
-  "generatedAt": "2026-05-01",
+  "generatedAt": "2026-05-18",
   "governance": {
     "refreshMode": "release-only",
-    "githubEventName": "local"
+    "githubEventName": "schedule"
   },
   "routes": {
     "Dashboard": {
       "js": {
-        "rawKb": 18.01,
-        "gzipKb": 6.07
+        "rawKb": 22.8,
+        "gzipKb": 7.04
       },
       "css": {
-        "rawKb": 3.81,
-        "gzipKb": 1.21
+        "rawKb": 10.29,
+        "gzipKb": 2.18
       }
     },
     "Opportunities": {
       "js": {
-        "rawKb": 9.42,
-        "gzipKb": 3.01
+        "rawKb": 10.45,
+        "gzipKb": 3.51
       },
       "css": {
-        "rawKb": 2.8,
-        "gzipKb": 0.87
+        "rawKb": 0.77,
+        "gzipKb": 0.35
       }
     },
     "ContentOS": {
       "js": {
-        "rawKb": 7.63,
-        "gzipKb": 2.59
+        "rawKb": 13.31,
+        "gzipKb": 4.51
       },
       "css": {
-        "rawKb": 2.88,
-        "gzipKb": 0.84
+        "rawKb": 3.79,
+        "gzipKb": 1.02
       }
     },
     "WeeklyBrief": {
       "js": {
-        "rawKb": 12.77,
-        "gzipKb": 3.53
+        "rawKb": 17.91,
+        "gzipKb": 5.25
       },
       "css": {
-        "rawKb": 1.66,
-        "gzipKb": 0.57
+        "rawKb": 4.55,
+        "gzipKb": 1.19
       }
     },
     "ChiefOfStaff": {
       "js": {
-        "rawKb": 37.7,
-        "gzipKb": 11.02
+        "rawKb": 52.9,
+        "gzipKb": 15.48
       },
       "css": {
-        "rawKb": 2.76,
-        "gzipKb": 0.94
+        "rawKb": 6.18,
+        "gzipKb": 1.68
       }
     },
     "Settings": {
       "js": {
-        "rawKb": 3.41,
-        "gzipKb": 1.34
+        "rawKb": 19.17,
+        "gzipKb": 6.21
       }
     }
   }

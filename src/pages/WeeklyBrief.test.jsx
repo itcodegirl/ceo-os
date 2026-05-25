@@ -74,7 +74,7 @@ describe('src/pages/WeeklyBrief', () => {
 
       renderWeeklyBrief();
 
-      const textarea = screen.getByLabelText('Close-Of-Week Reflection');
+      const textarea = screen.getByLabelText('What actually happened this week?');
       fireEvent.change(textarea, { target: { value: 'New thought' } });
 
       // Pending state: a keystroke happened but the debounce hasn't fired yet.

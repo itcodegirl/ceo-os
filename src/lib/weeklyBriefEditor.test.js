@@ -11,23 +11,23 @@ describe('weeklyBriefEditor helpers', () => {
   it('returns defaults for each editor type', () => {
     expect(getDefaultFormValues('priority')).toEqual({
       title: '',
-      owner: 'Team Member',
+      owner: '',
       status: 'Planned',
     });
     expect(getDefaultFormValues('win')).toEqual({
       text: '',
-      category: 'Execution',
+      category: 'Product',
     });
     expect(getDefaultFormValues('blocker')).toEqual({
       text: '',
-      severity: 'warning',
+      severity: 'decision',
     });
   });
 
   it('builds form values for edit mode with fallbacks', () => {
     expect(getFormValuesForEdit('priority', {})).toEqual({
       title: '',
-      owner: 'Team Member',
+      owner: '',
       status: 'Planned',
     });
     expect(getFormValuesForEdit('win', { text: 'Shipped', category: 'Product' })).toEqual({
@@ -66,7 +66,7 @@ describe('weeklyBriefEditor helpers', () => {
     expect(winResult.payload.text).toBe('Closed launch post');
 
     expect(buildWeeklyPayload('win', { text: ' ' })).toEqual({
-      error: 'Win text is required.',
+      error: 'Add a few words for this win.',
     });
   });
 

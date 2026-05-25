@@ -4,7 +4,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Textarea from '../ui/Textarea';
 import {
-  BLOCKER_SEVERITY_OPTIONS,
+  BLOCKER_NEEDS,
   PRIORITY_STATUS_OPTIONS,
   WIN_CATEGORY_OPTIONS,
 } from '../../lib/weeklyBriefEditor';
@@ -31,21 +31,22 @@ function WeeklyEditorModal({
               className="form-field"
               value={formValues.title || ''}
               onChange={(event) => onFormChange('title', event.target.value)}
+              placeholder="e.g. Send the partnership proposal and book the follow-up"
               required
             />
 
             <Input
               id="weekly-priority-owner"
-              label="Owner"
+              label="Owner (optional)"
               className="form-field"
               value={formValues.owner || ''}
               onChange={(event) => onFormChange('owner', event.target.value)}
-              required
+              placeholder="You, unless you're handing it off"
             />
 
             <Select
               id="weekly-priority-status"
-              label="Status"
+              label="Where it stands"
               className="form-field"
               labelClassName="form-field__label"
               controlClassName="form-input"
@@ -70,6 +71,7 @@ function WeeklyEditorModal({
               value={formValues.text || ''}
               onChange={(event) => onFormChange('text', event.target.value)}
               rows={3}
+              placeholder="What went well — shipped, decided, learned, or survived. Small counts."
               required
             />
 
@@ -79,7 +81,7 @@ function WeeklyEditorModal({
               className="form-field"
               labelClassName="form-field__label"
               controlClassName="form-input"
-              value={formValues.category || 'Execution'}
+              value={formValues.category || 'Product'}
               onChange={(event) => onFormChange('category', event.target.value)}
             >
               {WIN_CATEGORY_OPTIONS.map((category) => (
@@ -100,21 +102,22 @@ function WeeklyEditorModal({
               value={formValues.text || ''}
               onChange={(event) => onFormChange('text', event.target.value)}
               rows={3}
+              placeholder="What's stuck, and briefly why."
               required
             />
 
             <Select
               id="weekly-blocker-severity"
-              label="Severity"
+              label="What it needs"
               className="form-field"
               labelClassName="form-field__label"
               controlClassName="form-input"
-              value={formValues.severity || 'warning'}
+              value={formValues.severity || BLOCKER_NEEDS[0].value}
               onChange={(event) => onFormChange('severity', event.target.value)}
             >
-              {BLOCKER_SEVERITY_OPTIONS.map((severity) => (
-                <option key={severity} value={severity}>
-                  {severity}
+              {BLOCKER_NEEDS.map((need) => (
+                <option key={need.value} value={need.value}>
+                  {need.label}
                 </option>
               ))}
             </Select>

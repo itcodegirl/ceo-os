@@ -8,6 +8,7 @@ import {
 } from '../../lib/storageCorruption';
 
 const PREVIEW_LIMIT = 140;
+const RECOVERY_PANEL_ID = 'storage-corruption-banner-recovery-list';
 
 function formatSavedAt(iso) {
   if (!iso) return 'unknown time';
@@ -133,9 +134,21 @@ function StorageCorruptionBanner() {
             : null}
         </p>
 
-        {expanded ? (
-          <ul className="storage-corruption-banner__list" aria-label="Preserved backups">
-            {hasBackups
+        {/*
+          Always render the panel (toggling `hidden`) so the recover button's
+          aria-controls reference is stable across collapsed / expanded states
+          — assistive tech can announce the relationship without the target
+          element popping in and out of the DOM. Items are still rendered
+          conditionally to avoid running formatters on the collapsed path.
+        */}
+        <ul
+          id={RECOVERY_PANEL_ID}
+          className="storage-corruption-banner__list"
+          aria-label="Preserved backups"
+          hidden={!expanded}
+        >
+          {expanded
+            ? hasBackups
               ? backups.map((entry) => (
                   <li key={entry.backupKey} className="storage-corruption-banner__item">
                     <div className="storage-corruption-banner__item-head">
@@ -166,9 +179,9 @@ function StorageCorruptionBanner() {
                 <li className="storage-corruption-banner__item storage-corruption-banner__item--empty">
                   No preserved backups available for this key.
                 </li>
-              )}
-          </ul>
-        ) : null}
+              )
+            : null}
+        </ul>
       </div>
 
       <div className="storage-corruption-banner__buttons">
@@ -178,6 +191,7 @@ function StorageCorruptionBanner() {
             className="storage-corruption-banner__dismiss"
             onClick={onToggleRecover}
             aria-expanded={expanded}
+            aria-controls={RECOVERY_PANEL_ID}
           >
             {expanded ? 'Hide backups' : 'Recover data'}
           </button>

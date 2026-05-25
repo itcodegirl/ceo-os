@@ -51,7 +51,7 @@ The path forward beyond pub/sub is a small Zustand or signal-based store wrappin
 
 ## Page boundary discipline
 
-`Dashboard.jsx` and `Settings.jsx` were the two largest files in the repo. Recent work pulled the pure-presentational sections out of Dashboard into co-located components in `src/components/dashboard/` (`TodayFocusPanel`, `OpenLoopsPanel`, `BlockersPanel`, `RemindersPanel`, `FocusModeChips`). The orchestration hooks (`useDashboardData`, `useFocusHomeSignals`, `useReminderActions`, `useWorkspaceSetup`) stay in the page so the test surface is preserved.
+`Dashboard.jsx` and `Settings.jsx` were the two largest files in the repo. Recent work pulled the pure-presentational sections out of Dashboard into co-located components in `src/components/dashboard/` (`TodayFocusPanel`, `NeedsAttentionPanel`, `RemindersPanel`, `FocusModeChips`) and moved the add-reminder form state into `useReminderComposer`. The orchestration hooks (`useDashboardData`, `useFocusHomeSignals`, `useReminderActions`, `useWorkspaceSetup`) stay in the page so the test surface is preserved.
 
 Settings is next; it remains larger because much of it is form orchestration that can't be cleanly split without restructuring the underlying state.
 

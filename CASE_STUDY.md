@@ -50,7 +50,7 @@ The following assets are referenced for portfolio review and should be kept curr
 - **Goal:** preserve usability even without backend credentials.
 - **Implementation:** repositories first attempt local storage fallback, and prefer Supabase when configured.
 - **Evidence:** source-aware flags (`local` / `supabase`) are surfaced to the UI and tests validate fallback behavior.
-- **Visual tie-in:** settings and dashboard captures should include source-status cues to demonstrate local-first transparency.
+- **Visual tie-in:** settings and dashboard captures should show `Local only`, `Offline`, or `Synced` source-status cues without implying queued replay.
 
 ### Decision: AI through a server proxy
 
@@ -206,6 +206,7 @@ A focused cloud-readiness pass that stays inside the current scope boundaries:
   - Account onboarding/recovery, local-to-cloud migration, full offline replay, fuzzy Chief dedup, and export/import backup remain documented next-step work.
 
 ### Tests added in this batch
+
 - 5 cases in `weeklyRepositorySupabase.test.js` — Supabase timestamp load/create/update/delete conflict behavior.
 - 1 case in `weeklyRepository.test.js` — stale local delete rejection by `expectedUpdatedAt`.
 - 3 cases in `weeklyRepository.test.js` — versioned Weekly Brief local storage writes plus legacy/current envelope reads.
@@ -257,6 +258,7 @@ infrastructure plus several smaller correctness wins:
     action don't squeeze each other on small phones.
 
 ### Tests added in this batch
+
 - 2 cases in `usePromotionAction.test.js` — unmount during resolve, unmount during reject.
 - 5 cases in `useCaptureNotePromotions.test.js` — full hook contract.
 - 11 cases in `offlineWriteQueue.test.js` — module behaviors.
@@ -309,6 +311,7 @@ batches and adding genuine product polish:
     carries clear meaning in both themes.
 
 ### Tests added in this batch
+
 - 1 case in `useCrudPage.test.js` — event-driven refresh keeps
   `isLoading` false; no skeleton flash.
 - 4 cases in `staleRecordError.test.js` — `readUpdatedAtMs` covering
@@ -370,6 +373,7 @@ and adds cross-tab list refresh:
     `rgba(255, 255, 255, 0.85)` so the prompts feel like calm paper.
 
 ### Tests added in this batch
+
 - 2 cases in `useCrudPage.test.js` — `updatedEventName` triggers
   refetch; missing config means no event subscription (back-compat).
 - 5 cases in `StickyNoteCard.test.jsx` — the component contract
@@ -431,12 +435,14 @@ batches four:
     so the pulse animation remains legible in light mode.
 
 ### Tests added in this batch
+
 - 6 cases in `usePromotionAction.test.js` — full hook contract.
 - 1 case in `Dashboard.test.jsx` — Promote double-click guard.
 - 1 case in `Capture.test.jsx` — Track-opportunity success path.
 - 1 case in `Capture.test.jsx` — Track-opportunity double-click guard.
 
 ### Budget note
+
 Weekly Brief CSS raw budget bumped from 3.0 kB → 3.5 kB to absorb the
 light-mode autosave-status-dot ring overrides. Gzip ceiling unchanged
 at 1.2 kB (current ship: 0.91 kB).
@@ -488,12 +494,14 @@ quality additions that fell out of recent work:
     Opportunities and Content OS.
 
 ### Tests added in this batch
+
 - 1 case in `useCrudPage.test.js` — stale-record error triggers `refreshItems`.
 - 1 case in `useCrudPage.test.js` — non-stale errors do NOT trigger a refetch.
 - 5 cases in `staleRecordError.test.js` — helper throw/default/exact-match/skip paths.
 - 1 case in `Dashboard.test.jsx` — promotion creates a weekly priority, fires `refreshWeeklyBrief({ silent: true })`, shows toast, leaves the reminder visible.
 
 ### Budget note
+
 Dashboard CSS raw budget bumped from 4.0 kB → 5.0 kB to absorb the
 Reminder → Priority promote button styles and the Focus Home light-theme
 overrides. Gzip ceiling unchanged at 1.5 kB (current ship: 1.32 kB).
@@ -521,6 +529,7 @@ Closing the next four items from the audit's remaining-risks list:
   - Test fails only on `serious` or `critical` impacts so the suite stays a reliable guardrail without flaking on cosmetic minor issues; lighter findings are reported via `console.info` for review.
 
 ### Tests added in this batch
+
 - 3 new cases in `weeklyRepository.test.js` — stamped on create, stale rejection across two simulated tabs, back-compat without `expectedUpdatedAt`.
 - 1 new case in `Capture.test.jsx` — promotion writes a reminder to localStorage and the sticky stays.
 - 9 new Playwright cases in `e2e/a11y-sweep.spec.js` — one axe scan per primary route.
@@ -551,6 +560,7 @@ Closing the highest-value items from the audit's "remaining risks" list:
   - Re-reading `useChiefStructuredAcceptance` showed that exact-match dedup against existing rows already runs at every acceptance branch. A *fuzzy*-match upgrade is real product work that risks blocking legitimate distinct items, so it was reframed as a follow-up rather than a fix.
 
 ### Tests added in this batch
+
 - `themePreference.test.js` (6 tests) — pure helper validation and applied-theme resolution.
 - `useThemePreference.test.js` (5 tests) — initial OS read, attribute application, persistence, invalid-value rejection, OS-change reactivity.
 - `useOnlineStatus.test.js` (3 tests) — initial value, online event, offline event.

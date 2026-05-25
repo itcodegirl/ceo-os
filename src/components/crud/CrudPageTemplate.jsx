@@ -1,6 +1,7 @@
 import PageHeader from '../ui/PageHeader';
 import SectionCard from '../ui/SectionCard';
 import EmptyState from '../ui/EmptyState';
+import SourceStatusNotice from '../ui/SourceStatusNotice';
 
 function CrudPageTemplate({
   pageClassName,
@@ -14,6 +15,7 @@ function CrudPageTemplate({
   } = header;
 
   const {
+    source,
     sourceNote,
     sourceNoteClassName,
     loadError,
@@ -61,13 +63,22 @@ function CrudPageTemplate({
     <section className={pageClassName}>
       <PageHeader title={pageTitle} description={pageDescription} />
 
-      {sourceNote ? (
+      {source ? (
+        <SourceStatusNotice
+          source={source}
+          supabaseText={source === 'supabase' && sourceNote ? sourceNote : undefined}
+          localText={source !== 'supabase' && sourceNote ? sourceNote : undefined}
+          className={sourceNoteClassName}
+          loadError={loadError}
+          errorClassName={loadErrorClassName}
+        />
+      ) : sourceNote ? (
         <p className={`helper-text ${sourceNoteClassName || ''}`.trim()}>
           {sourceNote}
         </p>
       ) : null}
 
-      {loadError ? (
+      {!source && loadError ? (
         <p className={`helper-text ${loadErrorClassName || ''}`.trim()} role="alert">
           {loadError}
         </p>

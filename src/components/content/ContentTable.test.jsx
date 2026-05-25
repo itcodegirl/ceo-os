@@ -19,6 +19,33 @@ describe('ContentTable', () => {
     expect(table).toHaveTextContent('Post draft');
   });
 
+  it('renders content type and publish-date columns', () => {
+    const items = [
+      {
+        id: 'c-a',
+        title: 'Launch story',
+        platform: 'Newsletter',
+        contentType: 'Article',
+        status: 'Scheduled',
+        scheduledFor: '2026-05-14',
+      },
+      {
+        id: 'c-b',
+        title: 'Idea seed',
+        platform: 'Blog',
+        contentType: 'Post',
+        status: 'Idea',
+        scheduledFor: '',
+      },
+    ];
+
+    const { getByText } = render(<ContentTable items={items} />);
+
+    expect(getByText('Article')).toBeInTheDocument();
+    expect(getByText('May 14, 2026')).toBeInTheDocument();
+    expect(getByText('Not scheduled')).toBeInTheDocument();
+  });
+
   it('supports row click and semantic button activation when handler is provided', () => {
     const onOpenItem = vi.fn();
     const items = [
@@ -33,7 +60,7 @@ describe('ContentTable', () => {
     const contentRow = rows[1];
     const openButton = getAllByRole('button', { name: /Open/i })[0];
 
-    expect(getByText('Click any row or press Enter/Space to view details.')).toBeInTheDocument();
+    expect(getByText('Click any row or press Enter/Space to open the piece.')).toBeInTheDocument();
 
     fireEvent.click(contentRow);
     expect(onOpenItem).toHaveBeenCalledWith(items[0]);

@@ -1,12 +1,15 @@
-﻿export default function EmptyOutputState() {
+export default function EmptyOutputState() {
   return (
     <div className="chief-card chief-empty-state">
-      <p className="chief-eyebrow">Action Plan</p>
+      <p className="chief-eyebrow">Your desk</p>
       <h2>Nothing here yet</h2>
       <p>
         When you generate, structured priorities, opportunities, content drafts,
-        and tasks appear here so you can accept them one by one.
-        Paste founder notes in the workspace, then pick one of the actions — Build Action Plan, Summarize This Week, Draft LinkedIn Post, Convert to Action Items, or Suggest Next Priorities.
+        and tasks appear here so you can review and accept them one by one.
+      </p>
+      <p>
+        Paste founder notes in the workspace, then choose what to make — a
+        decision brief, weekly update, action plan, and more.
       </p>
     </div>
   );
