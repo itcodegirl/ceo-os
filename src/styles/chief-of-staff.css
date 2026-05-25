@@ -69,8 +69,8 @@
 }
 
 .chief-source-badge--fallback {
-  background: rgba(248, 162, 180, 0.14);
-  border-color: rgba(248, 162, 180, 0.45);
+  background: rgba(var(--danger-tint-rgb), 0.14);
+  border-color: rgba(var(--danger-tint-rgb), 0.45);
 }
 
 .chief-output-warning {
@@ -79,8 +79,8 @@
   margin-top: 0.95rem;
   padding: 0.75rem 0.85rem;
   border-radius: 0.8rem;
-  border: 1px solid rgba(248, 162, 180, 0.42);
-  background: rgba(248, 162, 180, 0.1);
+  border: 1px solid rgba(var(--danger-tint-rgb), 0.42);
+  background: rgba(var(--danger-tint-rgb), 0.1);
 }
 
 .chief-output-warning strong,
@@ -328,59 +328,6 @@
   scroll-snap-type: x mandatory;
 }
 
-.chief-recent-outputs__item {
-  scroll-snap-align: start;
-  flex: 0 0 auto;
-}
-
-.chief-recent-chip {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.2rem;
-  min-width: 9rem;
-  max-width: 14rem;
-  padding: 0.45rem 0.7rem;
-  border-radius: 0.65rem;
-  border: 1px solid var(--border-chief-soft, var(--border, currentColor));
-  background: var(--surface-chief-card, transparent);
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-  transition: border-color var(--duration-fast, 120ms) var(--easing-standard, ease),
-    background-color var(--duration-fast, 120ms) var(--easing-standard, ease);
-}
-
-.chief-recent-chip:hover {
-  border-color: var(--border, currentColor);
-}
-
-.chief-recent-chip:focus-visible {
-  outline: 2px solid var(--focus-ring, currentColor);
-  outline-offset: 2px;
-}
-
-.chief-recent-chip[aria-pressed="true"],
-.chief-recent-chip--active {
-  border-color: var(--focus-ring, currentColor);
-  background: var(--surface-overlay-bright, transparent);
-}
-
-.chief-recent-chip__title {
-  font-size: var(--fs-body-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.chief-recent-chip__meta {
-  font-size: 0.72rem;
-  color: var(--text-muted, currentColor);
-  opacity: 0.85;
-}
-
 /* Calm skeleton: matches the real summary + section card structure so the
    page does not visually jump when generation completes. */
 .chief-loading-state {
@@ -431,16 +378,26 @@
   }
 }
 
+/* Touch devices: 44px accept targets, matching the Focus Home reminder
+   pattern. Width-based queries miss wide touch screens (tablets), so this
+   keys off pointer capability rather than breakpoint. */
+@media (pointer: coarse) {
+  .chief-accept-all-btn,
+  .chief-item button {
+    min-height: 2.75rem;
+  }
+}
+
 /* Light-theme retuning for the Chief fallback semantic surfaces. */
 :root[data-theme="light"] .chief-source-badge--fallback {
-  background: rgba(177, 69, 69, 0.08);
-  border-color: rgba(177, 69, 69, 0.4);
+  background: rgba(var(--danger-tint-rgb), 0.08);
+  border-color: rgba(var(--danger-tint-rgb), 0.4);
   color: var(--danger-text);
 }
 
 :root[data-theme="light"] .chief-output-warning {
-  background: rgba(177, 69, 69, 0.06);
-  border-color: rgba(177, 69, 69, 0.32);
+  background: rgba(var(--danger-tint-rgb), 0.06);
+  border-color: rgba(var(--danger-tint-rgb), 0.32);
 }
 
 :root[data-theme="light"] .chief-output-warning strong {

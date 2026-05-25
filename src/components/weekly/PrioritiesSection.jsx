@@ -1,9 +1,15 @@
 import { useCallback, useState } from 'react';
 import SectionCard from '../ui/SectionCard';
 import ConfirmModal from '../ui/ConfirmModal';
-import WeeklyPriorities from './WeeklyPriorities';
+import WeeklyTextList from './WeeklyTextList';
 import WeeklyEditorModal from './WeeklyEditorModal';
 import { useWeeklySectionEditor } from '../../hooks/useWeeklySectionEditor';
+
+const PRIORITY_STATUS_DOT_CLASS = {
+  'In Progress': 'weekly-list__dot--success',
+  Planned: '',
+  Blocked: 'weekly-list__dot--warning',
+};
 
 function PrioritiesSection({ items, setItems, defaultItems }) {
   const priorityItems = Array.isArray(items) ? items : defaultItems;
@@ -44,8 +50,12 @@ function PrioritiesSection({ items, setItems, defaultItems }) {
         actionLabel="Add weekly priority"
       >
         {priorityItems.length ? (
-          <WeeklyPriorities
+          <WeeklyTextList
             items={priorityItems}
+            itemTypeLabel="priority"
+            getDotClassName={(item) => PRIORITY_STATUS_DOT_CLASS[item.status] || ''}
+            getPrimaryText={(item) => item.title}
+            getSecondaryText={(item) => `${item.owner ? `Owner: ${item.owner}. ` : ''}Status: ${item.status}`}
             onEditItem={openEditEditor}
             onDeleteItem={requestDelete}
           />

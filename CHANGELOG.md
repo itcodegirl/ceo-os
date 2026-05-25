@@ -2,6 +2,45 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-05-24 - Architecture & code-quality audit follow-up
+
+Branch `improve/ceo-os-architecture-audit-2026-05`. A senior-architect pass
+over folder structure, component architecture, state management, data flow,
+error/empty states, naming, and scalability. The codebase was already mature
+(prior audit cycles closed most gaps), so this pass deliberately targets the
+*remaining* real defects and avoids churn. Full write-up:
+[docs/audits/ceo-os-architecture-audit-2026-05-24.md](docs/audits/ceo-os-architecture-audit-2026-05-24.md).
+
+Trust & reliability:
+
+- The `StorageQuotaBanner` recovery CTA now deep-links to
+  `/settings#workspace-data` (its docstring already promised this) and Settings
+  scrolls + focuses the Workspace Data section on that hash — reduced-motion
+  aware and guarded for environments without `scrollIntoView`. A storage-full
+  user lands directly on the Export-backup / Clear-demo-data controls.
+
+Accessibility & mobile:
+
+- 44px `(pointer: coarse)` touch targets added for the Chief "accept" / "Add
+  all" buttons and the storage corruption/quota recovery banner actions,
+  matching the existing Focus Home reminder pattern.
+
+Architecture cleanup (no behavior change):
+
+- Removed the orphaned `ChiefRecentOutputs` component, its test, and its
+  `chief-recent-*` CSS — superseded by `ChiefHistoryList`, imported nowhere,
+  and a source of "which renders Recent outputs?" confusion.
+- Hoisted the thrice-duplicated `expectedUpdatedAtToIso` into
+  `staleRecordError.js` beside its inverse `readUpdatedAtMs`.
+- `PrioritiesSection` now uses the shared `WeeklyTextList` (deleting the
+  52-line `WeeklyPriorities` clone the Wins/Blockers sections already avoided).
+- Finished the `useSilentRefresh` migration: `useFocusHomeSignals` and
+  `useWeeklyBrief` no longer hand-roll the four-listener + coalesce wiring,
+  making the existing "all four hooks share it" comment true. ~70 lines of
+  duplicated subscription plumbing removed; behavior preserved.
+- Tokenized the last hardcoded Chief AI-fallback tint into a per-theme
+  `--danger-tint-rgb`; alphas preserved, so no visual change.
+
 ## 2026-05-12 - Product-readiness pass
 
 Branch `improve/ceo-os-product-readiness`.

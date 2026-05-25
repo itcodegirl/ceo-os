@@ -2,7 +2,12 @@ import { opportunities as mockOpportunities } from '../data/mockData';
 import { deleteRecordById, replaceRecordById } from './stateUtils';
 import { buildCreateId } from './utils';
 import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
-import { StaleRecordError, assertRecordIsFresh, readUpdatedAtMs } from './staleRecordError';
+import {
+  StaleRecordError,
+  assertRecordIsFresh,
+  expectedUpdatedAtToIso,
+  readUpdatedAtMs,
+} from './staleRecordError';
 import { tryRemoteOrEnqueue } from './offlineWriteQueueIntegration';
 import { isDemoWorkspaceEnabled } from './workspaceSetup';
 import { STORAGE_DOMAINS } from './dataSchema';
@@ -32,14 +37,6 @@ function normalizeOpportunity(item) {
     nextStep: item.nextStep || item.next_step || '',
     updatedAt: readUpdatedAtMs(item),
   };
-}
-
-function expectedUpdatedAtToIso(expectedUpdatedAt) {
-  const expected = Number(expectedUpdatedAt);
-  if (!Number.isFinite(expected) || expected <= 0) {
-    return null;
-  }
-  return new Date(expected).toISOString();
 }
 
 function getSeededLocalItems() {

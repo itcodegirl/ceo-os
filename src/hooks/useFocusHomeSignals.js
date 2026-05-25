@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { CAPTURE_NOTES_UPDATED_EVENT, listCaptureNotes } from '../lib/captureRepository';
 import {
   JOURNAL_ENTRIES_UPDATED_EVENT,
@@ -7,12 +7,19 @@ import {
 } from '../lib/journalRepository';
 import { REMINDERS_UPDATED_EVENT, listReminders } from '../lib/remindersRepository';
 import { shallowEqualRecordArrays, shallowEqualRecords } from '../lib/stateUtils';
+import { useSilentRefresh } from './useSilentRefresh';
 
-const FOCUS_HOME_SIGNAL_STORAGE_KEYS = new Set([
+// Module-scope constants keep useSilentRefresh's subscription deps stable.
+const FOCUS_HOME_SIGNAL_EVENTS = [
+  CAPTURE_NOTES_UPDATED_EVENT,
+  JOURNAL_ENTRIES_UPDATED_EVENT,
+  REMINDERS_UPDATED_EVENT,
+];
+const FOCUS_HOME_SIGNAL_STORAGE_KEYS = [
   'ceo-os-capture-notes',
   'ceo-os-journal-entries',
   'ceo-os-reminders',
-]);
+];
 
 export function useFocusHomeSignals() {
   const [captureNotes, setCaptureNotes] = useState(() => listCaptureNotes());
@@ -51,38 +58,18 @@ export function useFocusHomeSignals() {
     syncReminders();
   }, [syncCaptureNotes, syncJournalEntry, syncReminders]);
 
-  useEffect(() => {
-    const handleStorageChange = (event) => {
-      if (
-        event?.key === null
-        || FOCUS_HOME_SIGNAL_STORAGE_KEYS.has(event?.key)
-      ) {
-        syncAllSignals();
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        syncAllSignals();
-      }
-    };
-
-    window.addEventListener(CAPTURE_NOTES_UPDATED_EVENT, syncCaptureNotes);
-    window.addEventListener(JOURNAL_ENTRIES_UPDATED_EVENT, syncJournalEntry);
-    window.addEventListener(REMINDERS_UPDATED_EVENT, syncReminders);
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('focus', syncAllSignals);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener(CAPTURE_NOTES_UPDATED_EVENT, syncCaptureNotes);
-      window.removeEventListener(JOURNAL_ENTRIES_UPDATED_EVENT, syncJournalEntry);
-      window.removeEventListener(REMINDERS_UPDATED_EVENT, syncReminders);
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', syncAllSignals);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [syncAllSignals, syncCaptureNotes, syncJournalEntry, syncReminders]);
+  // Shared subscription manager (replaces four hand-rolled listeners): refresh
+  // all three signals on any capture/journal/reminder event, on a watched
+  // storage key changing in another tab, or on focus/visibility. A single
+  // event now re-reads all three sources rather than one, but the shallowEqual
+  // guards above make that free of spurious re-renders. coalesceMs:0 preserves
+  // the previous fire-on-every-event timing (the signals are cheap to read).
+  useSilentRefresh({
+    events: FOCUS_HOME_SIGNAL_EVENTS,
+    storageKeys: FOCUS_HOME_SIGNAL_STORAGE_KEYS,
+    onRefresh: syncAllSignals,
+    coalesceMs: 0,
+  });
 
   return {
     captureNotes,

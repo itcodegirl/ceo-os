@@ -2,6 +2,7 @@ import Icon from './Icon';
 import ActionControl from './ActionControl';
 
 function SectionCard({
+  id,
   title,
   children,
   iconName = 'section',
@@ -13,7 +14,7 @@ function SectionCard({
   actionLabel,
 }) {
   return (
-    <section className="section-card">
+    <section className="section-card" id={id}>
       <div className="section-card__header">
         <h2 className="section-card__title">
           <Icon name={iconName} size={16} className="section-card__title-icon" />

@@ -108,6 +108,10 @@
   --danger-input-border: rgba(255, 150, 150, 0.72);
   --danger-input-ring: rgba(255, 150, 150, 0.2);
   --danger-surface: rgba(255, 123, 123, 0.11);
+  /* RGB triplet for the Chief AI-fallback tint (badge + warning surfaces),
+   * consumed as rgba(var(--danger-tint-rgb), <alpha>) so the per-surface
+   * alphas live at the call site and the hue lives here. */
+  --danger-tint-rgb: 248, 162, 180;
 
   /* Dark-theme pill backgrounds: bumped from the previous 0.20-0.22 range
    * to 0.30-0.32 so the colored text reads at AA contrast on the dark
@@ -312,6 +316,9 @@
   --danger-input-border: rgba(177, 69, 69, 0.6);
   --danger-input-ring: rgba(177, 69, 69, 0.18);
   --danger-surface: rgba(177, 69, 69, 0.08);
+  /* Light theme uses a deeper red than the dark pink; the alphas at each
+   * call site stay the same and read correctly because this hue is darker. */
+  --danger-tint-rgb: 177, 69, 69;
 
   --checkbox-border: rgba(46, 99, 158, 0.42);
   --checkbox-border-hover: rgba(31, 127, 198, 0.6);

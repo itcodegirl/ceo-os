@@ -58,7 +58,7 @@ function StorageQuotaBanner() {
         </p>
       </div>
       <div className="storage-quota-banner__buttons">
-        <Link to="/settings" className="storage-quota-banner__action">
+        <Link to="/settings#workspace-data" className="storage-quota-banner__action">
           Open workspace data
         </Link>
         <button
