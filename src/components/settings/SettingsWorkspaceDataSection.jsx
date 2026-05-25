@@ -155,7 +155,7 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
   };
 
   return (
-    <SectionCard title="Workspace Data" iconName="section">
+    <SectionCard id="workspace-data" title="Workspace Data" iconName="section">
       <div className="settings-workspace-setup">
         <p className="helper-text">
           {hasWorkspaceSetupChoice
