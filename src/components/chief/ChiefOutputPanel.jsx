@@ -1,8 +1,5 @@
 import ChiefSummaryCard from "./ChiefSummaryCard";
-import ChiefPriorityList from "./ChiefPriorityList";
-import ChiefOpportunityList from "./ChiefOpportunityList";
-import ChiefContentList from "./ChiefContentList";
-import ChiefTaskList from "./ChiefTaskList";
+import ChiefAcceptList from "./ChiefAcceptList";
 import EmptyOutputState from "./EmptyOutputState";
 import OutputLoadingState from "./OutputLoadingState";
 
@@ -68,25 +65,29 @@ export default function ChiefOutputPanel({
         </p>
       ) : null}
 
-      <ChiefPriorityList
+      <ChiefAcceptList
+        section="priorities"
         items={priorities}
         onAccept={onAcceptPriority}
         isAccepted={isPriorityAccepted}
         isAccepting={isPriorityAccepting}
       />
-      <ChiefOpportunityList
+      <ChiefAcceptList
+        section="opportunities"
         items={opportunities}
         onAccept={onAcceptOpportunity}
         isAccepted={isOpportunityAccepted}
         isAccepting={isOpportunityAccepting}
       />
-      <ChiefContentList
+      <ChiefAcceptList
+        section="contentItems"
         items={contentItems}
         onAccept={onAcceptContent}
         isAccepted={isContentAccepted}
         isAccepting={isContentAccepting}
       />
-      <ChiefTaskList
+      <ChiefAcceptList
+        section="tasks"
         items={tasks}
         onAccept={onAcceptTask}
         isAccepted={isTaskAccepted}
