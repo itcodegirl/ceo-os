@@ -1,4 +1,5 @@
-import { useId, useMemo } from 'react';
+import { useEffect, useId, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import SectionCard from '../components/ui/SectionCard';
 import PageHeader from '../components/ui/PageHeader';
 import Input from '../components/ui/Input';
@@ -33,6 +34,35 @@ function Settings() {
   const timezoneListId = useId();
   const supportedTimezones = useMemo(() => getSupportedTimezones(), []);
   const autoSaveToggleId = useId();
+  const location = useLocation();
+
+  // Deep-link support for /settings#workspace-data — the StorageQuotaBanner
+  // recovery CTA points here so a user who ran out of storage lands directly
+  // on the Export-backup / Clear-demo-data controls instead of the top of the
+  // page. React Router does not scroll to hash fragments on its own, so we do
+  // it here, honoring reduced-motion and moving focus for keyboard / SR users.
+  useEffect(() => {
+    if (location.hash !== '#workspace-data' || typeof document === 'undefined') {
+      return;
+    }
+    const target = document.getElementById('workspace-data');
+    if (!target) {
+      return;
+    }
+    if (typeof target.scrollIntoView === 'function') {
+      const prefersReducedMotion = typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    }
+    target.setAttribute('tabindex', '-1');
+    if (typeof target.focus === 'function') {
+      target.focus({ preventScroll: true });
+    }
+  }, [location.hash]);
 
   const fieldsDisabled = isSaving || isLoading;
   const canPersistSettings = (nextSettings = settings) => Boolean(

@@ -920,6 +920,19 @@ textarea:focus-visible,
   }
 }
 
+/* Touch devices: 44px tap targets on the recovery banners. These appear
+   when storage is corrupt or full, so the recovery actions must be easy to
+   hit on a phone. Mirrors the Focus Home reminder + Chief accept pattern. */
+@media (pointer: coarse) {
+  .storage-corruption-banner__dismiss,
+  .storage-corruption-banner__action,
+  .storage-corruption-banner__action--ghost,
+  .storage-quota-banner__action,
+  .storage-quota-banner__dismiss {
+    min-height: 2.75rem;
+  }
+}
+
 .local-only-notice {
   display: flex;
   align-items: flex-start;

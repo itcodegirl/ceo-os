@@ -38,9 +38,9 @@ function createSettingsState(overrides = {}) {
   };
 }
 
-function renderSettings() {
+function renderSettings({ initialEntries } = {}) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <Settings />
     </MemoryRouter>,
   );
@@ -252,5 +252,18 @@ describe('src/pages/Settings', () => {
     expect(screen.queryByLabelText(/Weekly digest reminders/)).toBeNull();
     expect(screen.queryByLabelText(/Keyboard shortcuts/)).toBeNull();
     expect(screen.getByLabelText('Enable auto-save for drafts and notes')).toBeInTheDocument();
+  });
+
+  it('moves focus to the Workspace Data section when opened via the #workspace-data deep link', () => {
+    // The StorageQuotaBanner recovery CTA links to /settings#workspace-data so
+    // a storage-full user lands directly on the backup/clear controls. React
+    // Router does not scroll/focus the hash target on its own.
+    useSettings.mockReturnValue(createSettingsState());
+
+    renderSettings({ initialEntries: ['/settings#workspace-data'] });
+
+    const target = document.getElementById('workspace-data');
+    expect(target).not.toBeNull();
+    expect(target).toHaveFocus();
   });
 });

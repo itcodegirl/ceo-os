@@ -41,7 +41,7 @@ describe('StorageQuotaBanner', () => {
     expect(screen.getByText(/ceo-os-capture-notes/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open workspace data/i })).toHaveAttribute(
       'href',
-      '/settings',
+      '/settings#workspace-data',
     );
   });
 

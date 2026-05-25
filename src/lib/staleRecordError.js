@@ -48,6 +48,22 @@ export function readUpdatedAtMs(record) {
 }
 
 /**
+ * Converts an epoch-ms `expectedUpdatedAt` into an ISO string for Supabase
+ * conflict checks (timestamptz columns compare as ISO). Returns null for
+ * missing / non-positive values so callers can omit the guard and fall back
+ * to the legacy "skip the check" contract. Inverse of `readUpdatedAtMs` on
+ * the write path; shared by the three optimistic-locking repositories
+ * (opportunities, content, weekly) that used to each inline it.
+ */
+export function expectedUpdatedAtToIso(expectedUpdatedAt) {
+  const expected = Number(expectedUpdatedAt);
+  if (!Number.isFinite(expected) || expected <= 0) {
+    return null;
+  }
+  return new Date(expected).toISOString();
+}
+
+/**
  * Asserts that a persisted record's updatedAt has not drifted from what the
  * caller expected. Used by the local-first repositories (opportunities,
  * content, weekly items) to reject two-tab conflicts before mutating.

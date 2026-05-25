@@ -3,6 +3,7 @@ import {
   STALE_RECORD_ERROR_CODE,
   StaleRecordError,
   assertRecordIsFresh,
+  expectedUpdatedAtToIso,
   isStaleRecordError,
   readUpdatedAtMs,
 } from './staleRecordError';
@@ -91,5 +92,26 @@ describe('readUpdatedAtMs', () => {
     expect(readUpdatedAtMs({ updatedAt: NaN })).toBe(0);
     expect(readUpdatedAtMs(null)).toBe(0);
     expect(readUpdatedAtMs(undefined)).toBe(0);
+  });
+});
+
+describe('expectedUpdatedAtToIso', () => {
+  it('converts a positive epoch-ms value into an ISO string', () => {
+    expect(expectedUpdatedAtToIso(1700000000000)).toBe(
+      new Date(1700000000000).toISOString(),
+    );
+  });
+
+  it('round-trips with readUpdatedAtMs', () => {
+    const iso = expectedUpdatedAtToIso(1700000000000);
+    expect(readUpdatedAtMs({ updatedAt: iso })).toBe(1700000000000);
+  });
+
+  it('returns null for missing, zero, negative, or non-finite inputs', () => {
+    expect(expectedUpdatedAtToIso(undefined)).toBeNull();
+    expect(expectedUpdatedAtToIso(null)).toBeNull();
+    expect(expectedUpdatedAtToIso(0)).toBeNull();
+    expect(expectedUpdatedAtToIso(-5)).toBeNull();
+    expect(expectedUpdatedAtToIso('NaN')).toBeNull();
   });
 });
