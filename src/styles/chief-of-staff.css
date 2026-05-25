@@ -431,6 +431,16 @@
   }
 }
 
+/* Touch devices: 44px accept targets, matching the Focus Home reminder
+   pattern. Width-based queries miss wide touch screens (tablets), so this
+   keys off pointer capability rather than breakpoint. */
+@media (pointer: coarse) {
+  .chief-accept-all-btn,
+  .chief-item button {
+    min-height: 2.75rem;
+  }
+}
+
 /* Light-theme retuning for the Chief fallback semantic surfaces. */
 :root[data-theme="light"] .chief-source-badge--fallback {
   background: rgba(177, 69, 69, 0.08);
