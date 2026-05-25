@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspaceBackup } from './useWorkspaceBackup';
 import {
   buildWorkspaceBackup,
-  buildWorkspaceBackupFileName,
   getLocalWorkspaceDataHealth,
   importWorkspaceBackup,
 } from '../lib/workspacePortability';
