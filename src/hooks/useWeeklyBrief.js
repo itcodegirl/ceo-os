@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIsMountedRef } from './useIsMountedRef';
+import { useSilentRefresh } from './useSilentRefresh';
 import {
   WEEKLY_BRIEF_UPDATED_EVENT,
   createWeeklyItem,
@@ -22,14 +23,15 @@ import { isStaleRecordError } from '../lib/staleRecordError';
 
 const STALE_RECORD_MESSAGE = 'A weekly item was changed in another window. We pulled the latest version. Try your edit again.';
 
-const SILENT_REFRESH_COALESCE_MS = 400;
-const WEEKLY_STORAGE_KEYS = new Set([
+// Module-scope constants keep useSilentRefresh's subscription deps stable.
+const WEEKLY_REFRESH_EVENTS = [WEEKLY_BRIEF_UPDATED_EVENT];
+const WEEKLY_STORAGE_KEYS = [
   'ceo-os-weekly-briefs',
   'ceo-os-weekly-priorities',
   'ceo-os-weekly-wins',
   'ceo-os-weekly-blockers',
   'ceo-os-weekly-review-notes',
-]);
+];
 
 function normalizeCollectionPayload(payload, key) {
   const values = Array.isArray(payload?.[key]) ? payload[key] : [];
@@ -45,7 +47,6 @@ export function useWeeklyBrief() {
   const weekStartRef = useRef(weekStart);
   const isMountedRef = useIsMountedRef();
   const requestIdRef = useRef(0);
-  const lastSilentRefreshAtRef = useRef(0);
   const [source, setSource] = useState(resolveWeeklySource());
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -144,49 +145,27 @@ export function useWeeklyBrief() {
     };
   }, [loadWeeklyBrief]);
 
-  useEffect(() => {
-    const requestSilentRefresh = () => {
-      const now = Date.now();
-      if (now - lastSilentRefreshAtRef.current < SILENT_REFRESH_COALESCE_MS) {
-        return;
-      }
-
-      lastSilentRefreshAtRef.current = now;
-      void loadWeeklyBrief({ silent: true });
-    };
-
-    const handleWeeklyUpdate = (event) => {
-      const updatedWeekStart = event?.detail?.weekStart;
-      if (updatedWeekStart && updatedWeekStart !== weekStartRef.current) {
-        return;
-      }
-
-      requestSilentRefresh();
-    };
-
-    const handleStorageChange = (event) => {
-      if (event?.key === null || WEEKLY_STORAGE_KEYS.has(event?.key)) {
-        requestSilentRefresh();
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        requestSilentRefresh();
-      }
-    };
-
-    window.addEventListener(WEEKLY_BRIEF_UPDATED_EVENT, handleWeeklyUpdate);
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('focus', requestSilentRefresh);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      window.removeEventListener(WEEKLY_BRIEF_UPDATED_EVENT, handleWeeklyUpdate);
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', requestSilentRefresh);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+  const handleSilentRefresh = useCallback(() => {
+    void loadWeeklyBrief({ silent: true });
   }, [loadWeeklyBrief]);
+
+  // Skip weekly-brief events aimed at a different week than the one we're
+  // showing; storage / focus / visibility refreshes always apply. Reads the
+  // ref so the filter stays stable across week rollovers.
+  const matchesCurrentWeek = useCallback((event) => {
+    const updatedWeekStart = event?.detail?.weekStart;
+    return !updatedWeekStart || updatedWeekStart === weekStartRef.current;
+  }, []);
+
+  // Shared subscription manager (replaces four hand-rolled listeners + a
+  // manual 400ms coalesce). useSilentRefresh's default coalesce window matches
+  // the previous SILENT_REFRESH_COALESCE_MS.
+  useSilentRefresh({
+    events: WEEKLY_REFRESH_EVENTS,
+    storageKeys: WEEKLY_STORAGE_KEYS,
+    eventFilter: matchesCurrentWeek,
+    onRefresh: handleSilentRefresh,
+  });
 
   const recoverAfterPersistenceFailure = useCallback((message, logLabel, error) => {
     setLoadError(message);
