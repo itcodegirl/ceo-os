@@ -64,6 +64,10 @@ new capability; it is making this one action excellent and obviously trustworthy
   that produced it, and a one-line "what we sent" disclosure.
 - "Add to workspace" is per-item and reversible (writes through the existing
   repository layer with undo/archive).
+- Each suggested item can show **which lines of the notes it came from** (even
+  crude substring matching is enough): a small "from your notes" affordance that
+  highlights the source text. This is the strongest single trust multiplier —
+  the user can *see* nothing was invented. See §4 (`sourceSpans`).
 - Works offline via the existing deterministic fallback, clearly labeled
   "Offline draft — generated locally from your notes."
 
@@ -106,7 +110,7 @@ Do **not** build these — they break the product's character:
 Each AI action follows the same five-stage pipeline. This mirrors and formalizes
 what `chiefOfStaffProxyCore.js` already does.
 
-```
+```text
 [1] Collect      → user-authored text + chosen action key (plan|summarize|draft|actions|priorities|blockers|followup)
 [2] Validate     → trim, enforce MAX_NOTES_LENGTH, reject empty; client + server agree via shared/chiefConfig
 [3] Compose      → system prompt (role + bounds + output schema) + action instruction (from CHIEF_ACTIONS) + user text
@@ -117,7 +121,7 @@ what `chiefOfStaffProxyCore.js` already does.
 
 **System prompt skeleton (shared across actions):**
 
-```
+```text
 You are the Chief of Staff inside CodeHerWay CEO OS, an operating system for a
 solo founder. Your only job is to reorganize the founder's own notes into the
 requested structure. Rules:
@@ -139,9 +143,25 @@ words each").
 response leaves the proxy. The client never trusts raw model text — it runs it
 through `normalizeChiefOutput` and renders only known fields.
 
+**Item-level provenance (`sourceSpans`).** Each structured item may carry an
+optional `sourceSpans: [{ start, end }]` array — character offsets into the
+submitted notes that the item is derived from. The model is asked to include
+them; the server verifies the spans actually exist in the notes and drops any
+that don't (never trust offsets blindly). The UI uses them for the "from your
+notes" highlight (§2, §7). If absent or unverifiable, the item still renders —
+provenance degrades gracefully, it's never a hard requirement.
+
+**Prompt & schema versioning.** Action instructions and output schemas live in
+`shared/chiefActions.js` and will change. Version them — `plan@v3`,
+`summarize@v1` — and stamp the version onto every generated output (and onto
+anything the user accepts into the workspace), so an old accepted draft stays
+explainable and prompt changes can be A/B'd and tied to evaluation runs (§12).
+A version bump is a deliberate, reviewed change, not an incidental edit.
+
 **Token discipline:** truncate notes to `MAX_NOTES_LENGTH` (12000), cap output
-items per section (`MAX_STRUCTURED_ITEMS_PER_SECTION = 12`) and per-item text
-(`MAX_STRUCTURED_TEXT_LENGTH = 280`) — all already enforced; keep enforcing.
+items per section (`MAX_STRUCTURED_ITEMS_PER_SECTION = 12`), per-item text
+(`MAX_STRUCTURED_TEXT_LENGTH = 280`), and `max_output_tokens` server-side (§13)
+— keep enforcing all of these.
 
 ---
 
@@ -190,8 +210,17 @@ What the user must always be able to see and control:
     telemetry design, which is content-free.)
 - **No surprise persistence.** AI drafts that aren't accepted are ephemeral
   (session-only). Don't quietly write them to storage.
+- **A "forget this" path.** The user can clear AI draft history from the current
+  session in one click, and Settings states plainly what happens to an output
+  that was accepted and then deleted (it's removed from workspace storage like
+  any other item; CEO OS holds no separate copy). See §13.
 - **Boundedness made visible.** The action menu *is* the boundary. There is no
   free-text "ask anything" — the user can see the full list of what AI can do.
+- **A spending ceiling, not just a rate limit.** Per-minute throttling protects
+  latency, not cost. A per-workspace daily/monthly action budget protects the
+  bill and is itself a trust signal ("AI won't run away with itself"). When the
+  budget is reached the user gets a calm "you've used your AI drafts for today —
+  here's a local draft" state. See §13.
 - **Fail-closed on the server.** `CHIEF_STAFF_REQUIRE_TOKEN` defaults to on;
   rate limit defaults to 10/min/client; 10s request timeout. Document these in
   `docs/CONFIGURATION.md` (already partly there).
@@ -206,7 +235,7 @@ What the user must always be able to see and control:
 Build on the existing `src/components/chief/*` + `src/hooks/useChiefOfStaff.js`
 structure. No new framework, no global AI context.
 
-```
+```text
 src/
   features/ai/                    # new home for AI-shared pieces (or keep under components/chief)
     aiActions.js                  # client mirror of action keys + labels + descriptions
@@ -239,6 +268,28 @@ Rules:
   normalization.
 - **Telemetry on the client stays content-free** (action name, source, latency,
   error code) — reuse `app-error-telemetry`.
+- **Provenance highlight.** When an item has verified `sourceSpans` (§4), render
+  a subtle "from your notes" control that highlights the matching range in the
+  notes textarea. Quiet by default; never the dominant visual.
+
+**Accessibility & streaming.**
+
+- **Announce state transitions.** The idle → loading → result/fallback change is
+  announced to screen readers via a polite live region ("Generating draft…",
+  then "Draft ready, N priorities" / "Couldn't reach the AI service — showing a
+  local draft"). Don't rely on visual-only spinners.
+- **Don't trap or steal focus** during the call. Keep the notes textarea usable;
+  move focus to the result panel heading only after the result renders, not
+  before.
+- **Decide streaming explicitly: don't stream tokens.** Streaming feels faster
+  but fights the "render only normalized, schema-validated fields" rule and
+  makes provenance/clamping awkward. Show the calm loading skeleton, then render
+  the validated object in one step. (Revisit only if a real latency complaint
+  shows up — and even then, stream a status, not raw text.)
+- **Respect `prefers-reduced-motion`** for the loading skeleton.
+- Keyboard: every per-item "Add to workspace" / "from your notes" control is a
+  real focusable button with a clear label (the existing accept-button label
+  helper is the pattern).
 
 ---
 
@@ -249,9 +300,11 @@ actions share. Do **not** spread model calls across the app.
 
 - **Single endpoint** `/api/chief-of-staff` (keep the name for now; or
   `/api/ai-action`) → `handleAiProxy({ method, body, headers })`.
-- **Request contract:** `{ action: <known key>, notes: <string ≤ MAX_NOTES_LENGTH>, correlationId? }`.
-  Reject unknown actions (the allow-list already exists), reject oversized notes,
-  reject empty.
+- **Request contract:** `{ actionKey: <known key>, notes: <string ≤ MAX_NOTES_LENGTH>, correlationId? }`.
+  (The field is named `actionKey` in `server/chiefOfStaffProxyCore.js`; the
+  proxy currently falls back to `summarize` if it's missing or unknown — keep
+  that behaviour explicit, and reject genuinely unknown keys client-side too.)
+  Reject oversized notes, reject empty.
 - **Auth:** Bearer token / `X-Chief-Staff-Token`, fail-closed via
   `CHIEF_STAFF_REQUIRE_TOKEN`. Per-client rate limit
   (`CHIEF_STAFF_RATE_LIMIT_PER_MINUTE`, default 10).
@@ -259,16 +312,20 @@ actions share. Do **not** spread model calls across the app.
   default `gpt-4.1-mini`), `REQUEST_TIMEOUT_MS = 10000`, abort on timeout.
 - **Response normalization server-side:** parse to the action's schema, clamp
   counts/lengths, strip anything unexpected, stamp `source`, `fallbackReason`,
-  `errorCode`, `correlationId`. The browser receives only the normalized object.
+  `errorCode`, `correlationId`, and the prompt/schema version (§4). Verify any
+  `sourceSpans` against the submitted notes and drop unverifiable ones. The
+  browser receives only the normalized object.
 - **Deterministic fallback in the proxy** for every action (extend
   `CHIEF_ACTIONS[key].fallback`): if the key is missing, the call fails, times
   out, or returns garbage → return the local fallback with
   `source: "fallback"` and a human `fallbackReason`.
 - **Environment handling is a precondition, not a feature:** if `OPENAI_API_KEY`
   is unset, the proxy must return a clean `{ source: "fallback", fallbackReason:
-  "AI provider not configured" }` — never 500, never leak which var is missing
-  (the `phase 1: trust copy` commit already removed an env-var leak; keep it
-  that way).
+  "AI provider not configured" }` — never 500, never leak which var is missing.
+  **Current state:** the proxy returns `500` with
+  `error_code: "OPENAI_API_KEY_MISSING"` and the variable name in the message
+  (`server/chiefOfStaffProxyCore.js`). This is a Phase 0 fix — see the
+  appendix checklist and the Codex prompt §11 deliverable #4.
 - **Observability:** structured logs with `requestId` + `correlationId` +
   `action` + outcome + latency. No note content in logs. Reuse the existing
   `appErrorTelemetryIngest` path for client-visible error reporting.
@@ -277,9 +334,13 @@ actions share. Do **not** spread model calls across the app.
   heavyweight SDK layer.
 
 **Hard gate before any of this calls a paid API in production:** env-var
-handling ✅ (exists), error states ✅ (exist), loading states ✅ (exist), privacy
-copy ⬜ (needs the disclosure + retention paragraph from §6), fallback behavior
-✅ (exists). Ship the privacy copy first.
+*reading* ✅ (exists), env-var *graceful fallback* ⬜ (proxy still 500s on
+missing `OPENAI_API_KEY`), error states ✅ (exist), loading states ✅ (exist),
+privacy copy ⬜ (needs the disclosure + retention paragraph from §6), fallback
+behavior for runtime failures ✅ (exists), an evaluation gate ⬜ (§12), a spend
+ceiling ⬜ (§13). Ship the env-var fallback, privacy copy, and spend ceiling
+first; stand up the evaluation gate before turning on a new model or changing a
+prompt.
 
 ---
 
@@ -318,13 +379,37 @@ Rules:
 ## 10. Phase-Based AI Roadmap
 
 ### Phase 0 — Trust & boundaries (prereq, do this first)
-- Add the AI on/off toggle in Settings (`useAiEnabled`).
-- Add the "what we send" disclosure + the privacy/retention paragraph (§6).
-- Audit copy: remove any "your AI Chief of Staff" / magic phrasing; standardize
-  source badges.
-- Document proxy config & guarantees in `docs/CONFIGURATION.md`.
-- **Exit criteria:** every box in the §8 hard gate is checked. *Only then* is a
-  paid model call appropriate in production.
+
+Acceptance criteria (rough sizing: XS ≈ <½ day, S ≈ ~1 day, M ≈ 2–3 days):
+
+- [ ] **AI on/off toggle** in Settings, persisted via the workspace repository;
+  `useAiEnabled` gates all proxy calls; OFF renders offline drafts only with a
+  Settings link. — *S*
+- [ ] **"What we send" disclosure** component: static one-liner + expandable
+  showing the exact `{ action, notes }` payload. — *S*
+- [ ] **Privacy/retention paragraph** in Settings and `docs/CONFIGURATION.md`
+  (per-request send, not training data, outputs saved only on accept, telemetry
+  is content-free). — *XS*
+- [ ] **Source badges everywhere**: every output card shows "AI draft" vs
+  "Offline draft (generated locally)" + `fallbackReason` when present. — *S*
+- [ ] **Copy audit**: remove "your AI Chief of Staff" / "magic" / "automatically"
+  phrasing; standardize on "AI-assisted drafting". — *XS* (partly done)
+- [ ] **Spend ceiling + kill switch** (§13): per-workspace daily soft cap +
+  monthly hard cap, `max_output_tokens` cap, one env var that disables all paid
+  calls. — *M*
+- [ ] **Evaluation gate** (§12): `npm run eval:ai` with ~10–15 fixtures and the
+  heuristic checks; runs the fallback path in CI, the live path when
+  `OPENAI_API_KEY` is set; `docs/AI_EVAL.md` records pass rate. — *M*
+- [ ] **"Forget this" control** (§6/§13): one-click clear of session AI drafts;
+  Settings explains what deletion of an accepted output means. — *XS*
+- [ ] **Proxy config documented** in `docs/CONFIGURATION.md` (token fail-closed,
+  rate-limit default, 10s timeout, fallback-on-failure). — *XS*
+- [ ] **Tests** for the above (toggle gating, disclosure payload, four-state
+  rendering, proxy-without-key returns a fallback not a 500). — *S*
+
+**Exit criteria:** every box above is checked and every row in the §8 hard gate
+/ Appendix checklist is ✅. *Only then* is a paid model call appropriate in
+production. Rough total: ~2 weeks of focused work for one engineer.
 
 ### Phase 1 — Best first feature: hardened "notes → structured plan"
 - Make `plan` the dominant Chief of Staff action; per-item editable + accept via
@@ -364,6 +449,15 @@ Rules:
 Chat UI, autonomous agents, predictive scores presented as fact, proactive
 notifications, sentiment coaching, client-side keys, model/temperature sliders.
 
+**If conversational UI is ever revisited** (it isn't planned, and founders *will*
+ask): the boundary, decided in advance, is — only ever scoped to a *single
+document the user is already looking at* ("ask about this memo"), never
+workspace-wide; never agentic (it answers and drafts, it never takes actions);
+same provenance, same fallback, same spend ceiling as every other AI surface;
+and it ships only after Phases 0–3 are done and trusted. Anything broader is a
+different product. This statement exists so the "no" is principled, not just a
+current preference.
+
 ---
 
 ## 11. Codex-Ready Implementation Prompt — "Safe First AI-Ready Version"
@@ -374,7 +468,7 @@ notifications, sentiment coaching, client-side keys, model/temperature sliders.
 > stays as-is; this work wraps it in user control, disclosure, and clean
 > fallbacks.
 
-```
+```text
 TASK: Make CodeHerWay CEO OS "AI-ready" — add user-facing controls, disclosure,
 and consistent fallback behavior around the existing Chief of Staff AI proxy.
 Do NOT add new model providers, new paid API calls, or any client-side API key.
@@ -405,7 +499,7 @@ DELIVERABLES:
        "This sends the notes you typed above to our AI provider to generate a
         draft. Nothing else from your workspace is included."
      - Expandable "See what we send" showing the exact request payload
-       ({ action, notes }) — read-only, monospace.
+       ({ actionKey, notes }) — read-only, monospace.
    - Add a short retention/privacy paragraph to Settings AND to
      docs/CONFIGURATION.md, stating: typed notes are sent per-request to the
      model provider and not stored by CEO OS as training data; AI outputs are
@@ -442,7 +536,7 @@ DELIVERABLES:
 
 6. Tests (Vitest + existing patterns)
    - useAiEnabled: ON/OFF behavior; OFF prevents proxy calls.
-   - AiDisclosure: renders the static line; expandable shows the { action, notes }
+   - AiDisclosure: renders the static line; expandable shows the { actionKey, notes }
      payload and nothing else.
    - ChiefOfStaff page: renders all four states; AI-OFF state hides the network
      action and shows the Settings link; fallback results show the offline badge
@@ -475,11 +569,83 @@ auto-apply of AI output, agents, predictive scoring, proactive notifications.
 
 ---
 
+## 12. Evaluation & Quality Gate
+
+"Trustworthy" needs a definition you can test. Right now there is none — this is
+the single biggest gap before enabling a new model or changing a prompt.
+
+**Fixtures.** Keep ~10–15 realistic "scattered notes" inputs in
+`shared/__fixtures__/aiNotes/` (anonymised, hand-written — meeting residue,
+half-thoughts, mixed topics). Each fixture has expected *structure*, not
+expected *exact text*: e.g. "produces ≥1 priority", "every task references
+something present in the notes", "no section is padded past what the notes
+support".
+
+**Checks (the things that actually erode trust):**
+
+- **No invented facts.** Every named person, date, metric, or commitment in the
+  output appears in (or is trivially derivable from) the input. Approximate via
+  substring/entity overlap; flag misses for human review.
+- **No padding.** A thin note → mostly-empty sections, not 12 invented bullets.
+- **Schema conformance.** Output parses to the action's fixed schema; item
+  counts/lengths within `MAX_STRUCTURED_ITEMS_PER_SECTION` /
+  `MAX_STRUCTURED_TEXT_LENGTH`.
+- **Tone.** No "as an AI", no hype words, no flattery (simple word-list check).
+- **Fallback parity.** The offline fallback for each action also passes schema +
+  tone checks, so degrading never produces something embarrassing.
+
+**Where it runs:**
+
+- `npm run eval:ai` — runs fixtures against the *fallback* path always (no
+  network, runs in CI on every PR) and against the *live model* path only when
+  `OPENAI_API_KEY` is present (manual / pre-release).
+- A short `docs/AI_EVAL.md` records the current pass rate and any known-weak
+  fixtures. Treat a regression here like a failing test.
+
+**Versioned together with prompts** (see §4 / §8): when a prompt or model
+changes, re-run the gate; record the result against the new prompt version.
+
+This is cheap to start (a script + fixtures + a couple of heuristics) and is the
+thing that lets you say "we have a regression gate" instead of "we hope it's
+good".
+
+---
+
+## 13. Cost & Abuse Controls
+
+Rate limiting (`CHIEF_STAFF_RATE_LIMIT_PER_MINUTE`, default 10/min/client)
+protects latency. It does **not** protect the bill or bound a single workspace's
+spend. Add, server-side:
+
+- **Per-workspace action budget.** A soft daily cap and a hard monthly cap on AI
+  actions per workspace (env-configurable, sensible defaults). When the soft cap
+  is hit, the proxy returns `{ source: "fallback", fallbackReason: "Daily AI
+  limit reached" }` and the UI shows the calm "you've used your AI drafts for
+  today — here's a local draft" state. The hard monthly cap behaves the same and
+  is logged.
+- **Max output size.** Cap model `max_output_tokens` server-side (in addition to
+  the existing per-section/per-item clamps) so a single call can't balloon.
+- **Idempotent retry only.** The one Retry affordance (§9) must not multiply
+  spend — no auto-retry loops, no retry storms.
+- **Spend observability.** Log per-request: action, latency, model, approx
+  token usage, outcome (`proxy` / `fallback` / error code), workspace id hash.
+  No note content. This feeds a simple daily spend rollup.
+- **A documented kill switch.** A single env var (or the existing
+  `CHIEF_STAFF_REQUIRE_TOKEN` fail-closed behaviour plus an explicit
+  `disable` flag) that turns off all paid model calls instantly and falls the
+  whole app back to offline drafts — no deploy required.
+
+Budgets are also user-facing trust: "AI is bounded and won't run away with
+itself" is part of the calm promise.
+
+---
+
 ### Appendix — current-state checklist (what already exists vs. what Phase 0 adds)
 
 | Requirement before paid API calls | Status |
 |---|---|
-| Server-side env var handling (`OPENAI_API_KEY`, proxy) | ✅ exists |
+| Server-side env var reading (`OPENAI_API_KEY`, proxy) | ✅ exists |
+| Graceful fallback when `OPENAI_API_KEY` is unset (no 500, no var-name leak) | ⬜ Phase 0 |
 | Fail-closed auth + rate limiting + request timeout | ✅ exists |
 | Loading states | ✅ exists (`OutputLoadingState`) |
 | Error states | ✅ exists (`PanelErrorFallback`, `loadError`) |
@@ -490,6 +656,9 @@ auto-apply of AI output, agents, predictive scoring, proactive notifications.
 | "What we send" disclosure | ⬜ Phase 0 |
 | Privacy/retention copy | ⬜ Phase 0 |
 | Copy audit for magic/autonomy phrasing | ⬜ Phase 0 (partly done) |
+| Per-workspace spend ceiling + kill switch (§13) | ⬜ Phase 0 |
+| Evaluation gate (`npm run eval:ai`, fixtures) (§12) | ⬜ Phase 0 |
+| "Forget this" / clear-drafts control (§6, §13) | ⬜ Phase 0 |
 
 When the ⬜ items are done, paid model calls are appropriate to enable in
 production. Until then, the offline fallback is the safe default.
