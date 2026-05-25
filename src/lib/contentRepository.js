@@ -2,7 +2,12 @@ import { contentItems as mockContentItems } from '../data/mockData';
 import { deleteRecordById, replaceRecordById } from './stateUtils';
 import { buildCreateId } from './utils';
 import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
-import { StaleRecordError, assertRecordIsFresh, readUpdatedAtMs } from './staleRecordError';
+import {
+  StaleRecordError,
+  assertRecordIsFresh,
+  expectedUpdatedAtToIso,
+  readUpdatedAtMs,
+} from './staleRecordError';
 import { tryRemoteOrEnqueue } from './offlineWriteQueueIntegration';
 import { isDemoWorkspaceEnabled } from './workspaceSetup';
 import { STORAGE_DOMAINS } from './dataSchema';
@@ -18,14 +23,6 @@ export const CONTENT_QUEUE_KIND_CREATE = 'content:create';
 export const CONTENT_QUEUE_KIND_UPDATE = 'content:update';
 export const CONTENT_QUEUE_KIND_DELETE = 'content:delete';
 const DUPLICATE_CONTENT_MESSAGE = 'This content item already exists for that platform.';
-
-function expectedUpdatedAtToIso(expectedUpdatedAt) {
-  const expected = Number(expectedUpdatedAt);
-  if (!Number.isFinite(expected) || expected <= 0) {
-    return null;
-  }
-  return new Date(expected).toISOString();
-}
 
 export const CONTENT_ITEMS_UPDATED_EVENT = 'ceo-os:content-items-updated';
 const DEMO_CONTENT_ITEM_IDS = new Set(mockContentItems.map((item) => String(item.id)));

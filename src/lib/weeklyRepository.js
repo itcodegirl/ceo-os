@@ -6,7 +6,12 @@ import {
 } from './weeklyData';
 import { buildCreateId } from './utils';
 import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
-import { StaleRecordError, assertRecordIsFresh, readUpdatedAtMs } from './staleRecordError';
+import {
+  StaleRecordError,
+  assertRecordIsFresh,
+  expectedUpdatedAtToIso,
+  readUpdatedAtMs,
+} from './staleRecordError';
 import { archiveStorageValue, parseJsonOrPreserveCorruption } from './storageCorruption';
 import { STORAGE_DOMAINS } from './dataSchema';
 import { readVersionedLocalStorage, writeVersionedLocalStorage } from './versionedStorage';
@@ -104,14 +109,6 @@ const ITEM_DESCRIPTOR_LIST = [
   ITEM_DESCRIPTORS[WEEKLY_ITEM_TYPES.win],
   ITEM_DESCRIPTORS[WEEKLY_ITEM_TYPES.blocker],
 ];
-
-function expectedUpdatedAtToIso(expectedUpdatedAt) {
-  const expected = Number(expectedUpdatedAt);
-  if (!Number.isFinite(expected) || expected <= 0) {
-    return null;
-  }
-  return new Date(expected).toISOString();
-}
 
 function getDescriptor(type) {
   return ITEM_DESCRIPTORS[type] || ITEM_DESCRIPTORS[WEEKLY_ITEM_TYPES.blocker];
