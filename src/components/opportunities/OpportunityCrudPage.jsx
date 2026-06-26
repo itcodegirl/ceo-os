@@ -16,7 +16,7 @@ import {
   listOpportunities,
   updateOpportunity,
 } from '../../lib/opportunitiesRepository';
-import { buildOpportunitySignature } from '../../lib/recordIdentity';
+import { buildOpportunitySignature, makeDuplicateValidator } from '../../lib/recordIdentity';
 import { buildSourceNotice } from '../../lib/uiCopy';
 import { parseOpportunityPayload } from '../../lib/opportunityPayloadSchema';
 import { useCrudPage } from '../../hooks/useCrudPage';
@@ -42,28 +42,10 @@ function mapOpportunityToFormValues(item) {
   };
 }
 
-function hasDuplicateOpportunityPayload(payload, items = [], selectedItem = null) {
-  const nextSignature = buildOpportunitySignature(payload);
-  if (!nextSignature) {
-    return false;
-  }
-
-  return items.some((item) => {
-    if (selectedItem?.id && String(item.id) === String(selectedItem.id)) {
-      return false;
-    }
-
-    return buildOpportunitySignature(item) === nextSignature;
-  });
-}
-
-function validateOpportunityPayload(payload, context = {}) {
-  if (hasDuplicateOpportunityPayload(payload, context.items, context.selectedItem)) {
-    return 'This opportunity already exists for that company.';
-  }
-
-  return '';
-}
+const validateOpportunityPayload = makeDuplicateValidator(
+  buildOpportunitySignature,
+  'This opportunity already exists for that company.',
+);
 
 function OpportunityCrudPage() {
   const {
