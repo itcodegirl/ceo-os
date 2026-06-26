@@ -21,7 +21,7 @@ import {
   DEFAULT_CONTENT_TYPE,
 } from '../../lib/contentPayloadSchema';
 import { findNextScheduledItem, formatPublishDate } from '../../lib/contentFormatting';
-import { buildContentSignature } from '../../lib/recordIdentity';
+import { buildContentSignature, makeDuplicateValidator } from '../../lib/recordIdentity';
 import { buildSourceNotice } from '../../lib/uiCopy';
 import { parseContentPayload } from '../../lib/contentPayloadSchema';
 import { useCrudPage } from '../../hooks/useCrudPage';
@@ -68,28 +68,10 @@ function buildScheduledDescription(items, readyAndScheduledCount) {
   return 'Nothing queued yet';
 }
 
-function hasDuplicateContentPayload(payload, items = [], selectedItem = null) {
-  const nextSignature = buildContentSignature(payload);
-  if (!nextSignature) {
-    return false;
-  }
-
-  return items.some((item) => {
-    if (selectedItem?.id && String(item.id) === String(selectedItem.id)) {
-      return false;
-    }
-
-    return buildContentSignature(item) === nextSignature;
-  });
-}
-
-function validateContentPayload(payload, context = {}) {
-  if (hasDuplicateContentPayload(payload, context.items, context.selectedItem)) {
-    return 'This content item already exists for that platform.';
-  }
-
-  return '';
-}
+const validateContentPayload = makeDuplicateValidator(
+  buildContentSignature,
+  'This content item already exists for that platform.',
+);
 
 function ContentCrudPage() {
   const {

@@ -47,11 +47,27 @@ The May 24, 2026 architecture & code-quality audit closed these on
 - ✅ **Touch targets on Chief + recovery banners.** 44px `(pointer: coarse)` targets for the Chief accept / "Add all" buttons and the corruption/quota banner actions.
 - ✅ **Chief fallback tint tokenized.** The last hardcoded `rgba()` on the AI-fallback badge/warning moved to a per-theme `--danger-tint-rgb`; alphas preserved, no visual change.
 
-Still deferred after that pass (each its own PR): the telemetry/KMS
-`experimental/` quarantine, a `useWorkspaceBackup` extraction from
-`SettingsWorkspaceDataSection`, moving `useWeeklyBrief`'s persistence calls out
-of its `setState` updaters, and `makeDuplicateValidator` / `ChiefAcceptList`
-consolidation.
+A 2026-06-26 follow-up (`claude/portfolio-audit-recommendations-ilzpfw`) then
+closed the three bounded refactors from that deferred list:
+
+- ✅ **`makeDuplicateValidator` extracted.** The Opportunity and Content CRUD
+  pages shared a byte-for-byte duplicate-detection validator; it now lives as a
+  `makeDuplicateValidator(buildSignature, message)` factory in
+  `recordIdentity.js` with its own unit test. Duplicate messages unchanged.
+- ✅ **`ChiefAcceptList` consolidation.** The four near-identical `Chief*List`
+  components now share one scaffold and reduce to thin per-section configs;
+  rendered markup and accept-button aria labels are preserved.
+- ✅ **`useWorkspaceBackup` extracted.** The backup export/import file-IO moved
+  out of `SettingsWorkspaceDataSection` into a hook so the
+  `Blob`/`createObjectURL`/`FileReader` paths are unit-testable apart from the
+  markup.
+
+Still deferred after that follow-up (each genuinely its own PR): the
+telemetry/KMS `experimental/` quarantine (large rename), moving
+`useWeeklyBrief`'s persistence calls out of its `setState` updaters (needs a
+ref-based current-value tracker plus a careful optimistic-locking re-test), and
+subscribing the Chief acceptance signature caches to repository update events
+(bounded today by the post-generation reset).
 
 The May 8, 2026 senior audit pass closed these gaps on `improve/ceo-os-audit-fixes`:
 
