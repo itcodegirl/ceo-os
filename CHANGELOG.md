@@ -2,6 +2,36 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-06-26 - Architecture audit deferred-item cleanup
+
+Branch `claude/portfolio-audit-recommendations-ilzpfw`. Closes the three
+bounded refactors the 2026-05-24 architecture audit deferred "each its own PR
+to keep the change reviewable." No behavior, copy, or DOM changes — each is a
+structural dedup covered by existing tests plus new focused unit tests.
+
+Architecture cleanup (no behavior change):
+
+- Consolidated the byte-for-byte-duplicated duplicate-detection validators in
+  `OpportunityCrudPage` and `ContentCrudPage` into a single
+  `makeDuplicateValidator(buildSignature, message)` factory in
+  `recordIdentity.js`. Adds `recordIdentity.test.js` (audit §6).
+- Collapsed the four near-identical `Chief*List` components
+  (`ChiefOpportunityList`/`ChiefContentList`/`ChiefPriorityList`/`ChiefTaskList`)
+  onto a shared `ChiefAcceptList` scaffold; each list is now a thin config
+  (section, title, destination note, ready label, key, render props). Rendered
+  markup and accept-button aria labels are preserved (audit §6).
+- Extracted the backup export/import file-IO from `SettingsWorkspaceDataSection`
+  into a `useWorkspaceBackup` hook so the `Blob`/`createObjectURL`/`FileReader`
+  paths are unit-testable apart from the markup; the section is ~80 lines
+  lighter. Adds `useWorkspaceBackup.test.js` (audit §5).
+
+Still deferred (each genuinely its own PR per the audit): the telemetry/KMS
+`experimental/` quarantine (large rename), moving `useWeeklyBrief`'s
+persistence calls out of its `setState` updaters (needs a ref-based
+current-value tracker + a careful optimistic-locking re-test), and subscribing
+the Chief acceptance signature caches to repository update events (bounded
+today by the post-generation reset).
+
 ## 2026-05-24 - Architecture & code-quality audit follow-up
 
 Branch `improve/ceo-os-architecture-audit-2026-05`. A senior-architect pass
