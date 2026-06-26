@@ -1,20 +1,10 @@
-import { useId, useRef, useState } from 'react';
+import { useId } from 'react';
 import SectionCard from '../ui/SectionCard';
 import Button from '../ui/Button';
 import { useWorkspaceSetup } from '../../hooks/useWorkspaceSetup';
 import { useOfflineWriteQueueSize } from '../../hooks/useOfflineWriteQueue';
+import { formatCount, useWorkspaceBackup } from '../../hooks/useWorkspaceBackup';
 import { SOURCE_NOTICE_DEMO_DATA } from '../../lib/uiCopy';
-import {
-  buildWorkspaceBackup,
-  buildWorkspaceBackupFileName,
-  getLocalWorkspaceDataHealth,
-  importWorkspaceBackup,
-} from '../../lib/workspacePortability';
-
-function formatCount(count, singular, plural = `${singular}s`) {
-  const normalized = Number(count) || 0;
-  return `${normalized} ${normalized === 1 ? singular : plural}`;
-}
 
 function formatSavedAt(savedAt) {
   const timestamp = Number(savedAt);
@@ -30,31 +20,13 @@ function formatSavedAt(savedAt) {
   return `Last local settings save: ${date.toLocaleString()}.`;
 }
 
-function readFileAsText(file) {
-  if (file && typeof file.text === 'function') {
-    return file.text();
-  }
-
-  return new Promise((resolve, reject) => {
-    if (typeof FileReader !== 'function') {
-      reject(new Error('Backup import is not available in this browser.'));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Backup file could not be read.'));
-    reader.readAsText(file);
-  });
-}
-
 /**
  * Workspace data section — local setup choice, demo data, data health
- * summary, and backup export/import. Owns its own workspace-setup hook,
- * portability status, and data-health refresh counter. The parent passes
- * the `source` from useSettings and an `onRefreshSettings` callback so that
- * importing a backup can re-load settings without lifting all the state
- * back into Settings.jsx.
+ * summary, and backup export/import. The backup file-IO, portability status,
+ * and data-health refresh live in `useWorkspaceBackup` so this component stays
+ * focused on markup. The parent passes the `source` from useSettings and an
+ * `onRefreshSettings` callback so that importing a backup can re-load settings
+ * without lifting all the state back into Settings.jsx.
  */
 function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
   const {
@@ -65,12 +37,16 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
     clearDemoData,
   } = useWorkspaceSetup();
   const pendingSyncCount = useOfflineWriteQueueSize();
-  const [, setDataHealthRefreshKey] = useState(0);
-  const [portabilityStatus, setPortabilityStatus] = useState({ tone: '', message: '' });
+  const {
+    dataHealth,
+    portabilityStatus,
+    importInputRef,
+    handleExportBackup,
+    handleImportClick,
+    handleImportBackup,
+  } = useWorkspaceBackup({ onRefreshSettings });
   const importInputId = useId();
-  const importInputRef = useRef(null);
 
-  const dataHealth = getLocalWorkspaceDataHealth();
   const backupScopeCopy = source === 'supabase'
     ? 'Backups cover this browser\'s local fallback data. Synced Supabase records stay in Supabase.'
     : 'Backups cover the local workspace data stored in this browser.';
@@ -80,79 +56,6 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
   const pendingSyncCopy = pendingSyncCount > 0
     ? `${formatCount(pendingSyncCount, 'supported write')} waiting to sync.`
     : 'No supported writes waiting to sync.';
-
-  const handleExportBackup = () => {
-    try {
-      const backup = buildWorkspaceBackup();
-      if (
-        typeof Blob !== 'function'
-        || typeof window === 'undefined'
-        || !window.URL
-        || typeof window.URL.createObjectURL !== 'function'
-      ) {
-        setPortabilityStatus({
-          tone: 'error',
-          message: 'Backup export is not available in this browser.',
-        });
-        return;
-      }
-
-      const backupContent = JSON.stringify(backup, null, 2);
-      const blob = new Blob([backupContent], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = buildWorkspaceBackupFileName(backup.exportedAt);
-      link.rel = 'noopener';
-      link.click();
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 0);
-
-      setDataHealthRefreshKey((current) => current + 1);
-      setPortabilityStatus({
-        tone: 'success',
-        message: `${formatCount(backup.summary.includedStoreCount, 'local store')} exported. Pending sync is reported in the file, not replayed from backups.`,
-      });
-    } catch (error) {
-      setPortabilityStatus({
-        tone: 'error',
-        message: error?.message || 'Backup export failed.',
-      });
-    }
-  };
-
-  const handleImportClick = () => {
-    importInputRef.current?.click();
-  };
-
-  const handleImportBackup = async (event) => {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    try {
-      const backupText = await readFileAsText(file);
-      const result = importWorkspaceBackup(backupText);
-      setDataHealthRefreshKey((current) => current + 1);
-      if (typeof onRefreshSettings === 'function') {
-        await onRefreshSettings();
-      }
-      setPortabilityStatus({
-        tone: 'success',
-        message: `${formatCount(result.importedStoreCount, 'local store')} imported. Matching local stores were replaced; Supabase data was not changed.`,
-      });
-    } catch (error) {
-      setPortabilityStatus({
-        tone: 'error',
-        message: error?.message || 'Backup import failed.',
-      });
-    } finally {
-      input.value = '';
-    }
-  };
 
   return (
     <SectionCard id="workspace-data" title="Workspace Data" iconName="section">
