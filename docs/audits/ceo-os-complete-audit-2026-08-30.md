@@ -1498,3 +1498,198 @@ landed**.
 | D-07 | P3 | CONFIRMED | DOCUMENTATION DRIFT | Point-in-time PR-voice documents are presented as living docs: `FINAL_ROADMAP.md` contains a "Current PR Scope Note" naming no PR; `PR_SUMMARY_TEMPLATE.md` is a frozen April summary with 35 hardcoded commit hashes; the two `docs/tracking/` PR summaries contradict each other on export/import when read as current; `RELEASE_CHECKLIST.md` is stamped April 30 and predates the surfaces it should smoke-test |
 | D-08 | P3 | CONFIRMED | TECHNICAL DEBT | `docs/git-course/module-01-mental-model.md` is an unrelated, unreferenced Git tutorial that promises a Module 02 which does not exist. A Next.js curriculum is arriving on other branches (PR #46) into this product repository |
 | D-09 | P3 | CONFIRMED | PORTFOLIO GAP | No `LICENSE` (default: all rights reserved — reviewers cannot legally run or reuse it), no `CONTRIBUTING.md`, no `CLAUDE.md`/`AGENTS.md`, and **no declared canonical-document hierarchy** — which is the root cause that let D-01, D-02 and D-03 happen: three documents each believed they owned the same fact |
+
+---
+
+## 33. Historical Audit Reconciliation
+
+CEO OS has five prior audits (`docs/audits/`) plus a detailed closure ledger in `KNOWN_LIMITATIONS.md` and
+a date-anchored CHANGELOG. This audit read all of them before forming findings, and spot-checked claimed
+fixes against current code. The distribution across the mandated categories, over 159 findings:
+
+| Category | Count | Meaning |
+| --- | --- | --- |
+| **A** — previously found and fixed | 4 | Only reopened where current code shows a regression |
+| **B** — previously found, still open | 16 | Revalidated against current implementation |
+| **C** — intentionally deferred | 11 | Documented boundaries, **not** characterised as neglect |
+| **D** — newly discovered | 128 | Not captured by any prior audit |
+
+### A. Previously found and confirmed fixed — verified, not reopened
+
+The repository's closure claims are, in the main, **true**. Spot-checks that passed include: the ten-type
+Chief action catalogue; `chiefRepository` writing versioned envelopes; `saveStatusBus` firing from CRUD
+writes; the Content OS lifecycle rebuild; the `useSilentRefresh` migration; the removal of the orphaned
+`ChiefRecentOutputs` and the `WeeklyPriorities` clone; the 2026-06-26 refactor trio
+(`makeDuplicateValidator`, `ChiefAcceptList` consolidation, `useWorkspaceBackup`); the storage-quota
+deep link; the `--danger-tint-rgb` tokenisation; and the 44px coarse-pointer targets. The CRUD
+slots-migration is genuinely complete — its guard script passes at runtime. **This is a strong result and
+the repository deserves credit for it.**
+
+Four items are reopened **with regression evidence**:
+
+| Item | Was closed as | Regression evidence |
+| --- | --- | --- |
+| Blank-mode seeding (F-02) | "Blank mode stops automatic sample seeding for Opportunities, Content OS, **and Weekly Brief**" (`KNOWN_LIMITATIONS.md:95`) | The weekly half was implemented as a one-week imperative clear, never as the read-time gate the other two received. Verified: `weeklyRepository` has no `isDemoWorkspaceEnabled` reference |
+| Honest screenshot status (D-01) | Added by commit `6499631` | Removed by commit `fb5c48a`; README and `KNOWN_LIMITATIONS.md:7` now contradict each other |
+| Env reference split-out (D-02) | "Split the env-variable reference out of README into docs/CONFIGURATION.md" (CHANGELOG) | Re-inlined by `fb5c48a`; `CONFIGURATION.md` is now linked from nowhere in the README, and the duplicate has drifted on the fail-closed default |
+| Envelope discipline (F-75, D-03) | Documented as still outstanding | Inverse drift: the **code** shipped envelopes for Capture, Journal and reminders; the doc never caught up |
+
+### B. Previously found and still open — revalidated
+
+Sixteen findings. The most significant: the weekly-brief UX audit's Phases 2–5 (week navigation,
+carry-forward, chosen focus, summary-band dedupe) remain entirely unbuilt while Phase 1 shipped (F-37);
+Supabase auth-error handling still diverges by repository (F-44, A-03), an item the readiness audit raised;
+the `experimental/telemetry/` quarantine keeps slipping (§30); `CASE_STUDY.md` staleness was flagged before
+and has worsened (D-05); the Capture composer still bypasses the shared primitives (F-20); and the Journal
+empty state is still four blank textareas (F-27).
+
+**A tracking gap worth naming.** The 2026-05-24 architecture audit's inline status table is the best
+closure-tracking pattern in the repository — but it was applied only to that audit. The weekly-brief audit's
+phased plan and two readiness-audit architecture items dropped off every ledger, so "what is still open"
+could only be reconstructed by re-auditing. Extending the status-table pattern to the other audits would
+prevent that recurring.
+
+### C. Intentionally deferred — classified as boundaries, not defects
+
+Eleven items, each documented in the repository before this audit found it: the telemetry/KMS/incident
+overbuild and its planned quarantine; Capture, Journal and reminders being local-only by design; the
+Weekly Brief and Settings absence from the offline queue; `setState`-updater persistence with a written
+remediation plan; Chief acceptance signature-cache staleness; fuzzy dedup; the Content OS calendar view;
+Cmd+K; the account-product incompleteness; meta mode's one-way session switch; and the client-side
+telemetry token exposure as a trusted-deployment boundary.
+
+**These are not counted against the project.** Where this audit disagrees, it is about *communication* — for
+example, reminders being local-only is a legitimate boundary (C), but the *absence of in-product copy
+saying so*, on a page that simultaneously advertises sync, is a defect (F-08).
+
+### D. Newly discovered — 128 findings
+
+The three most consequential are F-01 (Supabase concurrency inversion), F-87 (unconfirmed destructive demo
+load), and the CI/automation cluster C-06 through C-09. None of these appear in any prior audit, and the
+reason is instructive: each lives at a boundary that static review of a single layer cannot see — the
+client/Postgres precision boundary, the button/repository boundary, and the workflow-file/actual-run
+boundary. Prior audits reviewed the code correctly; what was missing was checking the code against the
+*runtime and the database's real contract*.
+
+---
+
+## 34. Cross-Cutting Root Problems
+
+Most of the 159 findings collapse into eight root causes. Fixing a root fixes its dependents; fixing the
+dependents one at a time does not.
+
+### R1 — The client and the database disagree about timestamp precision
+
+**Creates:** F-01 (the audit's most important finding), the false-green Supabase test suite (C-04), and
+much of the reason the authenticated regression pass has never completed.
+**Why it persisted:** every test mock encodes the client's own assumption, so the suite cannot see it.
+**Fix once:** stop round-tripping `updated_at` through epoch milliseconds; carry the raw string.
+
+### R2 — Demo/blank workspace state is enforced inconsistently across repositories
+
+**Creates:** F-02 (weekly demo resurrection), F-06 (demo flash on first paint), F-87 (destructive demo
+load), F-89 (clear-demo misses other weeks), F-38 (demo ids surviving edits).
+**Why it persisted:** two of three repositories got a read-time gate and one got an imperative one-time
+clear; the covering test pinned a week that never exercises the branch.
+**Fix once:** one shared demo-state predicate consulted by every repository at read time, plus archive
+before any destructive seed.
+
+### R3 — Repositories diverge at the local/cloud seam
+
+**Creates:** F-44 and A-03 (auth errors thrown by two repositories and caught by two others), A-01
+(local data vanishing after sign-in), the "local-first" label being inaccurate for the two domains that
+actually sync, and the four-strategy inconsistency in §16.2.
+**Fix once:** extract the Chief/Settings auth-fallback classification into a shared helper and apply it
+everywhere; state the source contract per domain in one place.
+
+### R4 — The offline queue has no terminal state and no owner
+
+**Creates:** F-45 (permanent wedge), A-02 (cross-account replay), F-74 (unversioned entries, silent
+drops), F-51 (contradictory copy), and the queued-write-presents-as-failure UX.
+**Fix once:** give entries an owner and a terminal disposition (drop, park, or surface) after N attempts.
+
+### R5 — Side effects inside React state updaters
+
+**Creates:** F-30 (weekly double-writes under StrictMode), F-64 (chief hooks), and contributes to F-35
+(prepend/append mismatch).
+**Note:** documented, with a written plan, and Journal already demonstrates the correct pattern in-repo.
+
+### R6 — `usePersistentState` writes on mount
+
+**Creates:** S-07 and F-73 (spurious "Saved" signals that dilute the app's only data-trust indicator), plus
+a resurrect-a-cleared-key race across tabs.
+**Fix once:** skip the write and the notification when the value is unchanged from what was just loaded.
+
+### R7 — Self-verification is configured but not operating
+
+**Creates:** C-06 (branch protection unappliable and inactive), C-07 (strict gate red 3.5 months), C-01/C-08
+(baseline refresh failed 14/14; ops loop never fired and would fail anyway), C-09 (Netlify telemetry
+silently discarded), F-50 (selector drift that nobody was forced to fix), and D-04 (README claims describing
+enforcement that is not in force).
+**Root of the root:** the green `CI` workflow provides a passing badge, so the red strict gate produced no
+felt pressure. **Fix once:** make the strict gate green, then actually require it.
+
+### R8 — No canonical-document hierarchy
+
+**Creates:** D-01, D-02, D-03, D-06, D-07 — every documentation-drift finding.
+**Why:** three documents each believe they own the same fact (screenshots, env reference, limitations), and
+nothing arbitrates when they disagree.
+**Fix once:** name the canonical owner per topic and make the README a pointer.
+
+---
+
+## 35. Known Good Decisions to Preserve
+
+166 preserve-items were nominated by the inspection fleet. The ones that should survive any remediation,
+consolidated:
+
+**Product and thesis**
+
+- The calm thesis as *implemented*, not just stated: the qualitative momentum label with the numeric score
+  deliberately withheld (with the reasoning committed in a code comment), snooze as an alternative to
+  done-or-ignore, invitation-shaped empty states, and operational surfaces hidden behind `?meta=1`.
+- The **"Recommended because:"** reason attached to every focus recommendation. This is the single line
+  that separates decision support from a tip rotator — do not remove it to save space.
+- Journal heaviness reaching Focus Home as a **presence-only boolean** rather than as text.
+- Point-of-use local-only copy on Capture and Journal (extend it to Reminders; do not remove it).
+
+**Architecture**
+
+- **RLS as written** — `auth.uid() = user_id` with both `using` and `with check` on all seven user tables,
+  plus the telemetry-sink lockdown and the security-definer prune RPC with a pinned `search_path`.
+- **Server-authoritative `updated_at`** via triggers. The F-01 fix should adapt the *client comparison*,
+  never move timestamp authority to the client.
+- The single route registry driving routes, nav groups and page meta, with tests asserting alignment; and
+  meta-gating at **route registration** rather than only in the nav.
+- Versioned storage envelopes with domain-mismatch rejection (the "wrong key swap" guard) and legacy-read
+  compatibility.
+- Corruption **preservation** — backup under `${key}__corrupt_<ts>`, an event, and a non-blocking banner.
+  Data loss is loud, not silent. This is the repository's best reliability idea.
+- The three-tier error boundary architecture, with the route-level boundary keyed to `location.key` so both
+  navigate-away reset and same-path retry work.
+- `usePromotionAction`'s promotion guard: per-record in-flight set, unmount-safe toasts, always-released
+  retry slot.
+- Journal's ref-based debounce/flush pattern — the correct StrictMode-safe reference implementation, which
+  the weekly and chief hooks should be ported *to*.
+- The transport-agnostic proxy core with paper-thin adapters, giving cross-platform behavior parity by
+  construction.
+- `shared/` as the genuine single source of truth for chief actions, config and payload shapes — the
+  client modules are re-export shims, so client/server drift is structurally impossible.
+- Backup import as **validate-all-then-write-all**, with explicit rejection of newer schema versions.
+- Timing-safe HMAC comparison and fail-closed 503 on key-window misconfiguration in the ingest core.
+- The deterministic AI fallback, **visibly labelled** with its reason and error code.
+
+**Engineering practice**
+
+- The axe sweep's calibration: hard-fail on serious/critical, log everything else. Extend it to mobile
+  viewports and the auth routes rather than changing the threshold.
+- Role- and label-based Playwright selectors throughout, which make the e2e suite double as an
+  accessible-name contract.
+- The storage fault-injection pattern in `crud-smoke.spec.js` — real browser-level failure-path coverage is
+  rare and valuable.
+- The negative assertion that a *non*-stale error must not trigger a refetch.
+- The release-governed baseline refresh **design** (`--release` + approval env + approved-event + PR review).
+  Fix the repository setting that breaks it; do not weaken the guard.
+- `KNOWN_LIMITATIONS.md`'s ledger **form**, the CHANGELOG's date-anchored evidence format, and the
+  2026-05-24 audit's inline status table. Fix their stale content; keep their structure.
+- The documented JS-not-TS posture with a staged plan — and `tsc --noEmit` actually running in CI.
