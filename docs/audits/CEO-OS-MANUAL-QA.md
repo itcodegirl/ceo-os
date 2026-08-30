@@ -359,6 +359,10 @@ Run each primary route at **1440 / 1100 / 980 / 860 / 700 / 640 / 390 px**.
       suite reaches 31/31. *(F-50)*
 - [ ] **MQ-X-06** Fix the repository Actions setting ("Allow GitHub Actions to create and approve pull
       requests") and confirm the next weekly baseline refresh succeeds — it has failed all 14 runs. *(§28)*
+- [ ] **MQ-X-09 [REPRO]** Open any PR and look at the `PR Test Suite` run: confirm it reports failure with
+      **zero jobs and zero elapsed time** (a workflow startup failure), not a test failure. Then move the
+      `secrets` test out of the step-level `if:` at `ci-tests.yml:56`, push, and confirm the workflow
+      actually starts and begins executing steps. *(C-07 — the single highest-leverage line in the repo)*
 - [ ] **MQ-X-07** Confirm whether `Scheduled Ops Alerts` ever fires after being re-enabled; it has **zero**
       scheduled runs to date. *(§28)*
 - [ ] **MQ-X-08** Load Ops Reliability with no Supabase snapshots available and confirm it renders four

@@ -42,8 +42,10 @@ Three failures cluster around it:
    fallback branch.
 
 3. **The production-minded governance loops the portfolio advertises are not running.** Verified
-   through the GitHub Actions API: the strict `PR Test Suite / Unit + E2E` gate has failed on all 30
-   most recent runs (2026-05-18 → 2026-06-26) including on `main`, with five PRs merged over it; the
+   through the GitHub Actions API: the strict `PR Test Suite / Unit + E2E` gate has **never executed a
+   single step** — `ci-tests.yml:56` puts `secrets` in a step-level `if:`, which GitHub does not allow, so
+   every run dies at parse time with zero jobs and zero elapsed seconds, and the file has carried that line
+   unedited since it was created on 2026-04-22. Five PRs merged over it; the
    weekly `Release Route Baseline Refresh` has failed all 14 times it has ever run, with the job log
    naming a repository setting (`GitHub Actions is not permitted to create or approve pull requests`)
    as the cause; and `Scheduled Ops Alerts` — described in the README as a daily loop that persists SLO
@@ -158,7 +160,7 @@ Six workflows exist: `ci.yml`, `ci-tests.yml`, `branch-protection.yml`, `release
 | Workflow | Observed state | Evidence |
 | --- | --- | --- |
 | `CI` (markdownlint, lint, build, test, typecheck) | **Green on `main`** | Runs 118–131 successful, including run 131 for the merge of PR #45 |
-| `PR Test Suite / Unit + E2E` (adds route budgets, trend gate, CRUD guard, telemetry integration, Playwright) | **Red on all 30 most recent runs**, 2026-05-18 → 2026-06-26, including runs on `main` (144, 140, 139, 136) | PRs #39, #40, #41, #42, #45 merged over a failing gate |
+| `PR Test Suite / Unit + E2E` (adds route budgets, trend gate, CRUD guard, telemetry integration, Playwright) | **Red on every run examined**, including runs on `main` (144, 140, 139, 136) and all 11 on this audit's branch — and failing at **startup with zero jobs**, so no step has ever executed (see C-07) | PRs #39, #40, #41, #42, #45 merged over a gate that has never run |
 | `Release Route Baseline Refresh` (weekly cron) | **Failed all 14 runs**, 2026-05-25 → 2026-08-24 | Job log, run `32715911620`: `##[error]GitHub Actions is not permitted to create or approve pull requests.` The workflow computes the baseline and force-pushes `chore/release-route-baseline-refresh`, then fails at PR creation. **Classification: CONFIGURATION** (repository Actions setting), not code |
 | `Scheduled Ops Alerts` (daily cron `15 13 * * *`) | **Never ran on schedule** | `list_workflow_runs` with `event=schedule` returns `total_count: 0`. Query validated: the identical query against `release-route-baseline` correctly returns its 14 scheduled runs |
 
@@ -1575,7 +1577,7 @@ manual ─► Enforce Branch Protection                                     → 
 | ID | Pri | Confidence | Class | Finding | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | C-06 | P1 | CONFIRMED | DEFECT | **Branch protection is neither appliable nor active.** Verified: `branch-protection.yml:17` requests `administration: write`, which is not a valid `GITHUB_TOKEN` permission scope, so the workflow cannot grant itself the access it needs. Independently, five PRs (#39–#45) merged while the "Unit + E2E" check — the very check the README says to require — was red | The README instructs keeping the required check set to `Unit + E2E`; that requirement is demonstrably not in force |
-| C-07 | P2 | CONFIRMED | DEFECT | **The strict gate has been red for ~3.5 months** from two deterministic causes: Content OS e2e selector drift (F-50) and the trend gate against a frozen baseline (C-01) | Reproduced locally; confirmed across 30 runs via the Actions API |
+| **C-07** | **P1** | CONFIRMED | DEFECT | **The strict gate has never executed a single step — the workflow file is invalid.** `ci-tests.yml:56` uses `secrets` inside a **step-level `if:`**, a context GitHub Actions does not make available to step conditionals, so the run fails at parse time. Measured signature on every run inspected (including all 11 on this audit's own branch): conclusion `failure`, **zero jobs created, zero seconds elapsed**. `git log` shows the file was introduced in `6faa2da` (2026-04-22) with that line and **has never been edited since** | The two locally-reproduced failures (F-50 selectors, C-01 trend gate) are real defects that *would* fail this gate — but they are **not** why CI is red. Nothing in this workflow has ever run |
 | C-08 | P2 | CONFIRMED | DEFECT | **The daily ops loop is doubly inoperative**: it has never fired on schedule (zero `event=schedule` runs), and it would fail if it did, because it runs `npm run check:route-budgets:trend` with **no `npm run build`** beforehand — verified: `scheduled-ops-alerts.yml:35` has no build step, while the budget script reads `dist/` | — |
 | C-09 | P2 | CONFIRMED | DEFECT | **Netlify silently swallows app-error telemetry.** `netlify.toml` routes only the chief-of-staff function, so `/api/app-error-telemetry` falls into the SPA fallback and returns `index.html` with **HTTP 200** — and the client's delivery check is `Boolean(response?.ok \|\| response?.status === 409)` (`appErrorTelemetry.js:279`), so the batch is marked delivered and dropped. Verified in both files | Silent, total telemetry loss on the documented deployment target |
 | C-10 | P3 | CONFIRMED | TECHNICAL DEBT | CI duplicates lint, build, test and typecheck across two workflows on every PR, while `main` never re-runs the full suite | Wasted minutes and a false sense of double coverage |
@@ -1878,7 +1880,7 @@ a resurrect-a-cleared-key race across tabs.
 
 ### R7 — Self-verification is configured but not operating
 
-**Creates:** C-06 (branch protection unappliable and inactive), C-07 (strict gate red 3.5 months), C-01/C-08
+**Creates:** C-06 (branch protection unappliable and inactive), C-07 (the strict gate has never run at all), C-01/C-08
 (baseline refresh failed 14/14; ops loop never fired and would fail anyway), C-09 (Netlify telemetry
 silently discarded), F-50 (selector drift that nobody was forced to fix), and D-04 (README claims describing
 enforcement that is not in force).
@@ -2032,7 +2034,7 @@ the root resolves them.
 | **F-87** | P1 | DEFECT | Settings / demo | R2 | `archiveStorageValue` before seeding; confirm when target stores are non-empty | S | none | MQ-SET-01 |
 | **F-03** | P1 | ARCH RISK | AI proxy | — | Verify the Supabase session JWT in the proxy, or keep it open with a hard spend ceiling and `max_output_tokens` — then reconcile the docs | M | auth decision | MQ-CHF-01 |
 | **C-06** | P1 | DEFECT | CI governance | R7 | Fix the invalid `administration: write` permission; actually require the strict check | S | C-07 first | §2.3 re-check |
-| **C-07/C-01** | P2 | DEFECT | CI governance | R7 | Fix the two Content OS selectors (F-50); fix the repository Actions setting so the baseline refresh can run | S | none | MQ-X-05, MQ-X-06 |
+| **C-07** | **P1** | DEFECT | CI governance | R7 | **Move `secrets` out of the step-level `if:` in `ci-tests.yml:56`** so the workflow can start at all (one line). Then fix the two Content OS selectors (F-50) and the repository Actions setting so the baseline refresh can run (C-01) | S | none | MQ-X-05, MQ-X-06 |
 | **C-08** | P2 | DEFECT | Ops workflow | R7 | Add `npm run build` before the route checks; establish why the schedule never fires | S | none | MQ-X-07 |
 | **C-09** | P2 | DEFECT | Deployment | R7 | Add the Netlify telemetry redirect; stop treating any `ok` response as delivery | S | none | MQ-X-03 |
 | **F-45 / A-02 / F-74** | P2 | ARCH RISK | Offline queue | R4 | Give entries an owner and a terminal disposition after N attempts; continue draining past terminal failures; make queued writes read as queued | M | none | MQ-STO-05, MQ-AUTH-04 |
@@ -2105,9 +2107,11 @@ repository tests · auth-surface tests and axe coverage for `/sign-in` and `/aut
 and 390px axe pass · e2e for generation, offline replay and autosave · `C-06`–`C-09` (make the gate green,
 required, and actually running).
 
-**Note on ordering:** `C-07` (two selectors + the Actions setting) is a one-hour fix that turns the strict
-gate green, and doing it **first** gives every subsequent phase real enforcement. It is placed in Phase 5
-by category but should be executed immediately.
+**Note on ordering:** `C-07` is a **one-line fix** — move the `secrets` test out of the step
+`if:` (guard on an `env` var set at job level, or drop the condition and let the test self-skip, which it
+already does). That single line is what stands between this repository and a functioning quality gate, and
+it should be executed **first**, before anything else in this document. Only after the workflow can start
+do F-50 and C-01 become the next things it reports.
 
 ### Phase 6 — Portfolio credibility
 
