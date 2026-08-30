@@ -1207,3 +1207,294 @@ empty) rather than as text — a genuinely thoughtful privacy decision worth pre
 The two privacy gaps are both **communication** gaps rather than data leaks: reminders are silently
 device-local on a page advertising sync, and Chief notes are silently transmitted off-device on a page
 advertising local storage. Both are one calm sentence away from being accurate.
+
+---
+
+## 23. Accessibility
+
+**What is proven at runtime.** The axe sweep passes on all nine primary routes (`wcag2a`, `wcag2aa`,
+`best-practice`) with no serious or critical violations, at HEAD, in this audit's own run. Keyboard-only
+row selection and modal open/close are proven by Playwright for Opportunities and Content OS, and Focus
+Home's keyboard mode switching and reversible reminder completion are proven too. That is real, and more
+than most portfolio projects can show.
+
+**What that does not establish.** Automated scanning covers roughly a third of WCAG success criteria and
+none of the behavioral ones. This audit therefore makes **no claim of WCAG conformance**. Four specific
+gaps sit outside what the sweep can see:
+
+1. **The sweep never runs at a mobile viewport.** `playwright.config.js` sets no viewport, so every axe
+   scan runs at the desktop default. The compact navigation state — which only exists below 860px — is
+   never scanned, and that is precisely where S-01 lives.
+2. **The two auth routes are excluded entirely** (A-05). They render outside the shell and appear in no
+   spec, so `/sign-in` and `/auth/callback` have neither automated nor manual accessibility evidence.
+3. **Announcement behavior is unverified everywhere.** Several live regions mount together with their
+   content (toast, page loading, save pill, the Suspense fallback), a pattern known to be announced
+   unreliably by some screen-reader and browser pairings.
+4. **Only serious and critical violations fail CI**; moderate and minor findings are reported to output and
+   ignored. That is a defensible threshold, but it means the gate is narrower than "axe passes" suggests.
+
+**Accessibility findings** are recorded with their home surfaces rather than duplicated here: S-01
+(focusable hidden nav links — the one likely serious violation found), F-13 ("ADHD support layer"
+landmark), F-18 (ambiguous sticky-note action names and label-in-name mismatches), F-25 (button nested
+inside a label), F-26 (three live regions announcing at once), F-49 (`display: grid` on table rows possibly
+stripping table semantics), F-95 (invisible focusable file input), plus the touch-target items F-21 and
+F-28. Notably, the app's own 44px coarse-pointer discipline is applied in most places and missed in
+exactly two.
+
+**Genuine accessibility strengths worth preserving:** the skip link with `main tabIndex={-1}` refocused on
+every route change; the drawer's `aria-expanded`/`aria-controls` disclosure with Escape-close and focus
+restoration to the toggle; the deliberate politeness split between the corruption banner (`role="status"`)
+and the quota banner (`role="alert"`), with a test that asserts *why*; the global
+`prefers-reduced-motion` kill switch; and the design-token contrast regression test.
+
+---
+
+## 24. Responsive / Manual Verification Status
+
+Static review confirms a coherent breakpoint system — 1100px, 980px, 860px (sidebar → drawer), 700px,
+640px, and coarse-pointer rules — with `min-width: 0` discipline through the shell grid so wide content
+cannot force horizontal page scroll. Two runtime data points exist: the mobile-navigation spec proves the
+drawer closes on route change and history return, and the ops-reliability spec proves single-column
+stacking without horizontal scroll.
+
+Everything else about rendered layout is **NEEDS RUNTIME VERIFICATION** and is enumerated in
+`CEO-OS-MANUAL-QA.md` §13. The specific static-only concerns are: the 30rem drawer cap against nine links
+plus four group labels (S-10), the half-width Reminders panel at desktop (F-16), dense-table degradation on
+Opportunities and Content OS, modal fit at 390×844, and the two sub-44px touch targets.
+
+---
+
+## 25. Performance
+
+**Measured at HEAD.** The production build completes in 408 ms. Route chunks are small and genuinely
+split: Dashboard 24.90 kB raw / 7.84 gzip, ChiefOfStaff 51.52 / 15.52, Settings 20.01 / 6.53, WeeklyBrief
+17.17 / 5.25, ContentOS 13.16 / 4.45, Opportunities 10.29 / 3.44. Vendor chunking is explicit and
+deliberate (`vite.config.js` with a comment explaining why): `vendor-react` 189.63 kB, `vendor-supabase`
+187.35 kB, `vendor-router` 41.38 kB. Every route is lazy, and `useRoutePrefetch` warms the three likely-next
+chunks at idle with data-saver and slow-connection opt-outs. All eleven tracked assets pass their **static**
+budgets.
+
+**Notable:** `vendor-supabase` at 187 kB is loaded for every user including the majority who never sign in.
+Given the local-first thesis, deferring the Supabase client behind the first authenticated action would be
+the single largest bundle win available. That is a suggestion, not a finding.
+
+**Runtime performance issues found in code** (all with home surfaces): per-keystroke full-array
+serialisation on the Capture wall (F-04); per-keystroke SELECT + UPDATE round-trips for Chief notes in
+Supabase mode (F-57); a full `localStorage` health scan on every render of the Settings Workspace Data
+section, including every keystroke in the name field (F-96); five independent settings loads and four
+subscription sets per shell mount, which in Supabase mode means five duplicate remote fetches on start and
+again on every settings event (S-06); and an O(table) duplicate-check read per Supabase create (F-46).
+
+### 25.1 The route-budget system itself
+
+This is the part the brief asks to evaluate as governance, not arithmetic — and governance is where it
+fails.
+
+**What the system does well.** Per-asset raw and gzip budgets; a separate trend gate at +8% against a
+committed baseline; a report artifact published per PR and commented onto the PR; and a genuinely
+thoughtful refresh guard — `update-route-performance-baseline.mjs` requires `--release`,
+`ROUTE_BASELINE_REFRESH_APPROVED=true`, **and** an approved event type, so a developer cannot casually
+regenerate the baseline locally to hide a regression. That last control is better than most teams manage.
+
+**Where it breaks.**
+
+| ID | Pri | Confidence | Class | Finding |
+| --- | --- | --- | --- | --- |
+| C-01 | P2 | CONFIRMED | ARCHITECTURAL RISK | **The trend gate is red at HEAD** (verified, exit 1) because the baseline is frozen at 2026-05-18 — and it is frozen because **all 14 runs** of the refresh workflow have failed (§2.3). The governance loop is closed on paper and open in practice |
+| C-02 | P3 | CONFIRMED | ARCHITECTURAL RISK | **The static ceilings and the baseline can both be raised inside the very PR that regresses them.** The `--release` guard protects the *scripted* refresh, but nothing prevents editing `route-performance-baseline.json` or the budget constants by hand in a feature PR, and no CODEOWNERS or review rule covers those files |
+| C-03 | P3 | CONFIRMED | ARCHITECTURAL RISK | The weekly auto-refresh, when it worked, would absorb up to 8% growth per week into the baseline — the workflow comment honestly calls this "drift bounded by a week", but it means slow sustained growth is invisible to the gate by design |
+
+So the answer to *"could someone raise the baseline to hide a regression?"* is: **not through the script,
+but trivially by hand in the same PR** — and right now the question is moot, because the gate is red and
+unenforced anyway.
+
+---
+
+## 26. React / JavaScript Architecture
+
+**Composition is genuinely good.** Pages orchestrate and delegate; presentational components are
+co-located per feature; decision logic lives in pure, unit-tested modules (`focusHomeLogic`,
+`suggestions`, `weeklyBriefEditor`, `contentFormatting`); repositories share one contract; and the shared
+subscription concern is properly extracted into `useSilentRefresh` with module-scope constant event arrays
+so listener identity stays stable across renders — with tests that assert exactly that. Reference-stability
+guards (`shallowEqualRecordArrays`) keep derived memos from invalidating on tab switches. Error boundaries
+exist at three levels. Race conditions are handled with request-id guards and `useIsMountedRef` in the
+places that need them, and those guards are tested.
+
+**The one recurring anti-pattern** is persistence launched from inside `setState` updater callbacks — in
+`useWeeklyBrief` (F-30) and in the chief hooks (F-64). React updaters must be pure; with `StrictMode` on,
+they are double-invoked in development, which is exactly why the weekly path can double-write. This is
+already documented as a deferred item with a written plan, so it is correctly classified as an
+**INTENTIONAL BOUNDARY that has stayed open too long** rather than an unrecognised defect. Journal
+demonstrates the correct pattern (a ref-based current-value tracker) in the same repository, which makes
+the fix a port rather than a design exercise.
+
+**Cross-cutting observations.** `usePersistentState` writing on mount is the root of two separate symptoms
+(S-07 and F-73). The five-independent-settings-loads pattern in the shell (S-06) is the clearest case for a
+small context provider. And the event architecture is coherent but asymmetric: `useSilentRefresh` supports
+storage-key subscriptions, four hooks use them, and `useCrudPage` — the one shared by both CRUD pages —
+does not, which is the entire content of F-41.
+
+### 26.1 JavaScript and type safety
+
+The JS-with-`tsc --noEmit` posture is deliberate, documented, and defended in `ARCHITECTURE.md` with a
+staged migration plan (`lib/` → `hooks/` → `components/` → `pages/`). The audit **validates that ordering**
+and can now ground it in evidence rather than principle.
+
+The two most expensive defects found — F-01 and F-02 — are both `lib/` defects, and both are *exactly* the
+kind types help with:
+
+- **F-01** is a type-identity failure: `updatedAt` is sometimes an epoch-millisecond `number`, sometimes an
+  ISO `string` from Postgres, and the code converts between them lossily. A branded type
+  (`type IsoTimestamp = string & { __brand: 'iso' }` versus `type EpochMs = number`) would have made
+  `expectedUpdatedAtToIso(readUpdatedAtMs(row))` visibly suspicious at the boundary.
+- **F-02** is a nullable-flow failure: `parsed ?? getFallbackCollection(type)` silently substitutes demo
+  data for "no data", a distinction a discriminated return type would force the caller to handle.
+
+Other type-preventable classes visible in the code: Supabase row shapes versus client models (the
+snake/camel mapping is hand-rolled per repository); AI response payloads (validated at runtime by valibot,
+which is genuinely a reasonable substitute here); and date parsing, where `Date.parse` returning `NaN` is
+silently coerced to `0` in `readUpdatedAtMs`.
+
+**Recommendation — confirming the documented plan with a sharper starting point.** Begin with the
+persistence boundary, but start with the *timestamp and identity* modules specifically —
+`staleRecordError.js`, `recordIdentity.js`, `dataSchema.js`, `versionedStorage.js` — rather than `lib/`
+alphabetically. That is a handful of small, heavily-imported files whose types propagate outward through
+inference, and it is where the audit's two most serious defects live. Do not convert everything; convert
+the boundary that carries the invariants.
+
+---
+
+## 27. Tests
+
+### 27.1 Inventory
+
+| Category | Files | Notes |
+| --- | --- | --- |
+| Library / logic | 47 | Decision logic, repositories, schemas, storage, utilities |
+| Hooks | 29 | Including race, listener-stability and unmount-safety tests |
+| Components | 39 | Including 2 snapshot suites and 2 page-integration suites |
+| Pages | 8 | Including a jsdom route-accessibility sweep |
+| Layout | 1 | Shell boundary and retry behavior |
+| Design tokens | 1 | `tokens.contrast.test.js` — contrast regression at the CSS-token level |
+| Server cores | 10 | Proxy, ingest, key provider, KMS adapters, audit, incident lifecycle |
+| Serverless adapters | 4 | Vercel + Netlify pass-through shape |
+| **Vitest total** | **138 files / 823 tests** | 823 passing, 1 skipped at HEAD |
+| Playwright | 10 specs / 31 tests | 9 axe sweeps, 9 direct-load smokes, 6 CRUD, 7 single-flow |
+| Integration (external) | 1 | Telemetry ingest against real Supabase — **secret-gated, skipped here** |
+
+### 27.2 Critical-workflow coverage matrix
+
+| Workflow | Unit | Integration | E2E | A11y | Manual only |
+| --- | --- | --- | --- | --- | --- |
+| Focus recommendation | ✅ strong | ✅ page-level | ⚠️ mode switch + reminders only | ✅ route scan | ranking quality |
+| Capture persistence | ✅ | ✅ | ✅ reload persistence | ✅ | typing behavior (F-04) |
+| Journal autosave | ✅ fake timers | ❌ | ❌ | ✅ | ✅ loss windows |
+| Opportunity stale save | ✅ | ✅ mocked repo | ❌ | ✅ | ✅ **real backend unproven** |
+| Offline replay | ✅ ×4 | ✅ | ❌ | n/a | ✅ browser offline never simulated |
+| Chief generation | ✅ + server | ✅ adapters | ❌ never generates in e2e | ✅ | ✅ |
+| Chief fallback | ✅ | ✅ | ❌ | ✅ | ✅ |
+| Chief acceptance | ✅ | ✅ | ❌ | ✅ | ✅ |
+| Supabase auth | ❌ **none** | ❌ | ❌ | ❌ excluded | ✅ everything |
+| Backup import | ✅ | ❌ | ❌ | ✅ | ✅ quota path |
+
+### 27.3 Test quality
+
+Sampled substantively: `useCrudPage`, the three offline-queue suites, `chiefOfStaffProxyCore`,
+`ContentCrudPage.integration`, `weeklyRepositorySupabase`, the ingest integration test, `App`, `Journal`,
+and `useWorkspaceBackup`. The suite is **behavior-focused with little copy-assertion or implementation
+coupling** — better than typical. Exemplary cases: the fail-closed proxy tests, the duplicate-submission
+guard, and the explicit test that a *non*-stale error must **not** trigger a refetch (asserting a negative
+is a sign of genuine care).
+
+**The most dangerous untested behavior — and it is not a coverage gap but a false positive:**
+
+> Every Supabase repository test keys its hand-rolled stub by the client's own millisecond-ISO string
+> (`weeklyRepositorySupabase.test.js:185-207`, `opportunitiesRepositorySupabase.test.js:116`). The mock and
+> the code share the same wrong assumption about timestamp precision, so the suite is green **because** of
+> the bug, not despite it. This is the class of test that actively conceals a defect (F-01).
+
+Two smaller quality notes: the blank-mode weekly test passes for the wrong reason (F-02), and the page/hook
+tests for the item-ordering bug mock opposite layers, so neither sees the mismatch (F-35). All three share
+a root cause — **mocks that encode the implementation's assumptions rather than the dependency's real
+contract**.
+
+| ID | Pri | Confidence | Class | Finding |
+| --- | --- | --- | --- | --- |
+| C-04 | P2 | CONFIRMED | PORTFOLIO GAP | **Cloud and auth behavior is untested at every level**, and the Supabase stubs structurally cannot catch the precision inversion. `useAuthSession`, `SignIn` and `AuthCallback` have no tests at all |
+| C-05 | P3 | CONFIRMED | PORTFOLIO GAP | The e2e suite never exercises AI generation, offline replay, journal autosave, weekly-brief editing, or any authenticated flow |
+
+---
+
+## 28. CI/CD + Deployment
+
+### 28.1 The pipeline as configured
+
+```text
+PR ──► CI (ci.yml)                 markdownlint · lint · build · test · typecheck        → GREEN
+   └─► PR Test Suite (ci-tests.yml)  lint · build · route budgets (static) ·
+                                     route budgets (trend) · CRUD guard · unit ·
+                                     telemetry integration (secret-gated) ·
+                                     typecheck · Playwright e2e · artifacts       → RED (30/30 runs)
+main ──► CI                                                                        → GREEN
+      └─► deployment (Netlify; no vercel.json)
+weekly ─► Release Route Baseline Refresh                                → FAILED 14/14 runs
+daily ──► Scheduled Ops Alerts                                          → NEVER RAN
+manual ─► Enforce Branch Protection                                     → CANNOT WORK AS SHIPPED
+```
+
+### 28.2 Findings
+
+| ID | Pri | Confidence | Class | Finding | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| C-06 | P1 | CONFIRMED | DEFECT | **Branch protection is neither appliable nor active.** Verified: `branch-protection.yml:17` requests `administration: write`, which is not a valid `GITHUB_TOKEN` permission scope, so the workflow cannot grant itself the access it needs. Independently, five PRs (#39–#45) merged while the "Unit + E2E" check — the very check the README says to require — was red | The README instructs keeping the required check set to `Unit + E2E`; that requirement is demonstrably not in force |
+| C-07 | P2 | CONFIRMED | DEFECT | **The strict gate has been red for ~3.5 months** from two deterministic causes: Content OS e2e selector drift (F-50) and the trend gate against a frozen baseline (C-01) | Reproduced locally; confirmed across 30 runs via the Actions API |
+| C-08 | P2 | CONFIRMED | DEFECT | **The daily ops loop is doubly inoperative**: it has never fired on schedule (zero `event=schedule` runs), and it would fail if it did, because it runs `npm run check:route-budgets:trend` with **no `npm run build`** beforehand — verified: `scheduled-ops-alerts.yml:35` has no build step, while the budget script reads `dist/` | — |
+| C-09 | P2 | CONFIRMED | DEFECT | **Netlify silently swallows app-error telemetry.** `netlify.toml` routes only the chief-of-staff function, so `/api/app-error-telemetry` falls into the SPA fallback and returns `index.html` with **HTTP 200** — and the client's delivery check is `Boolean(response?.ok \|\| response?.status === 409)` (`appErrorTelemetry.js:279`), so the batch is marked delivered and dropped. Verified in both files | Silent, total telemetry loss on the documented deployment target |
+| C-10 | P3 | CONFIRMED | TECHNICAL DEBT | CI duplicates lint, build, test and typecheck across two workflows on every PR, while `main` never re-runs the full suite | Wasted minutes and a false sense of double coverage |
+| C-11 | P3 | CONFIRMED | TECHNICAL DEBT | The CRUD legacy-prop guard hard-fails CI after 2026-09-30 with a coarse regex, though the migration it guards is already closed | A scheduled self-inflicted breakage; retire the guard |
+| C-12 | P3 | CONFIRMED | DOCUMENTATION DRIFT | Env documentation gaps: `SUPABASE_URL` is used but undocumented; `VITE_CHIEF_PROXY_DEBUG` and `VITE_SUPABASE_DEBUG` are undocumented (both are `import.meta.env.DEV`-gated, verified, so neither leaks in production) | — |
+
+### 28.3 Environment variable table (abridged to the decision-relevant rows)
+
+| Variable | Client/Server | Required | Documented | Safe to expose | Used |
+| --- | --- | --- | --- | --- | --- |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Client | for cloud mode | ✅ | ✅ (anon key is public by design, protected by RLS) | ✅ |
+| `VITE_OPENAI_PROXY_URL` | Client | ❌ (defaults to `/api/chief-of-staff`) | ✅ | ✅ | ✅ |
+| `VITE_APP_ERROR_TELEMETRY_TOKEN` | Client | ❌ | ✅ | ⚠️ **inlined into the public bundle**; README does not caveat this one | ✅ |
+| `VITE_APP_ERROR_TELEMETRY_HMAC_SECRET` | Client | ❌ | ✅ | ⚠️ **inlined**; README does caveat it as trusted-deployments-only | ✅ |
+| `VITE_CHIEF_PROXY_DEBUG` / `VITE_SUPABASE_DEBUG` | Client | ❌ | ❌ **undocumented** | ✅ (DEV-gated, verified) | ✅ |
+| `OPENAI_API_KEY` | Server | ✅ for live AI | ✅ | server-only ✅ | ✅ |
+| `CHIEF_STAFF_PROXY_TOKEN` | Server | docs say "MUST" | ✅ | server-only | ⚠️ **unsatisfiable by the client** (F-03) |
+| `CHIEF_STAFF_REQUIRE_TOKEN` | Server | ❌ | ✅ | server-only | ✅ — `'false'` is the only value that makes AI work |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server | for durable ingest | ✅ | server-only ✅ | ✅ |
+| `SUPABASE_URL` | Server | for durable ingest | ❌ **undocumented** | server-only | ✅ |
+| `SUPABASE_TEST_URL` / `SUPABASE_TEST_SERVICE_ROLE_KEY` | CI | for the integration test | ✅ | CI secret | ✅ (absent here → test skipped) |
+| ~20 `APP_ERROR_TELEMETRY_*` rotation/KMS variables | Server | ❌ all optional | ✅ thoroughly | server-only | partially — the KMS paths cannot resolve (T-01) |
+
+No secret values were read or reproduced at any point in this audit.
+
+---
+
+## 29. Documentation Accuracy
+
+Documentation accuracy is part of the product for this repository, because honest engineering is its stated
+differentiator. The corpus is unusually strong in form — five archived audits, a date-anchored CHANGELOG
+with verification evidence, a recruiter-facing limitations ledger — and most architectural claims check out
+when tested against code. `docs/CONFIGURATION.md`, `.env.example`, `docs/ARCHITECTURE.md` and
+`docs/PRODUCTION_TRUST_CHECKLIST.md` are accurate where verified.
+
+The drift is concentrated in three places, and two of them are **regressions of fixes that previously
+landed**.
+
+| ID | Pri | Confidence | Class | Finding |
+| --- | --- | --- | --- | --- |
+| D-01 | P2 | CONFIRMED | DOCUMENTATION DRIFT | **The README presents provably stale visuals as current proof, and the honesty caveat that once covered this was removed.** All five screenshots and the walkthrough video date from commit `6faa2da` (2026-04-22) and show the pre-Focus-Home purple "Dashboard" UI. README:33 captions one "Focus Home overview" and README:278-284 presents a "Product visuals" proof table. Commit `6499631` had added an "Honest screenshot status" section; commit `fb5c48a` removed it. `KNOWN_LIMITATIONS.md:7` still says the screenshots are out of date — **the README and the limitations ledger now contradict each other** |
+| D-02 | P2 | CONFIRMED | DOCUMENTATION DRIFT | **The README re-inlined the env reference that was deliberately split out, and the duplicate has already drifted on a security-relevant detail.** `docs/CONFIGURATION.md` is no longer linked from the README at all, and README:216-218 describes `CHIEF_STAFF_REQUIRE_TOKEN` as though the proxy fails *open* by default, while the code (`chiefOfStaffProxyCore.js:189-196`) and `CONFIGURATION.md:37` both say fail-**closed**. The CHANGELOG still claims the split-out as done |
+| D-03 | P2 | CONFIRMED | DOCUMENTATION DRIFT | **`KNOWN_LIMITATIONS.md` contradicts itself and misstates shipped work in both directions.** Listed as deferred but **shipped**: Content OS "Idea" status and publish date (verified in `contentPayloadSchema.js:12-31,60` and the 2026-05-12 migration). Listed as present but **removed**: the "coming soon" digest and keyboard-shortcut toggles (line 103 says they exist; line 26 of the same file says they were removed). Understated: line 121 claims Capture, Journal and reminders still lack envelope discipline — all three have had it since May. Overstated: line 9 claims all three local-only surfaces carry in-product copy saying so; reminders do not (F-08) |
+| D-04 | P2 | CONFIRMED | DOCUMENTATION DRIFT | **Enforcement claims that are not operative** (§28): "serious/critical violations fail CI" is true of the sweep but the gate is red and unenforced; "keep the required check set to `Unit + E2E`" describes protection that is not active; the Scheduled Ops Alerts description in README:180-186 details a daily loop that has never run |
+| D-05 | P2 | CONFIRMED | PORTFOLIO GAP | **`CASE_STUDY.md` has decayed into an append-only log.** Last substantively touched 2026-05-13; sections run 1→9 then 19,18,…,10 in file order; ~480 of 611 lines are pasted CHANGELOG batches; it omits the strongest recent work (the ten-type output catalogue, the history panel, the architecture-audit closure); and it still instructs proving a behavior — source cues "without implying queued replay" — that the shipped offline queue and Pending-sync pill contradict |
+| D-06 | P3 | CONFIRMED | DOCUMENTATION DRIFT | `docs/AI_ROADMAP.md` inventories a five-action pipeline and proposes building "blockers" and "followup" actions that already shipped as `blocker-analysis` and `opportunity-followup`; it is also linked from nothing |
+| D-07 | P3 | CONFIRMED | DOCUMENTATION DRIFT | Point-in-time PR-voice documents are presented as living docs: `FINAL_ROADMAP.md` contains a "Current PR Scope Note" naming no PR; `PR_SUMMARY_TEMPLATE.md` is a frozen April summary with 35 hardcoded commit hashes; the two `docs/tracking/` PR summaries contradict each other on export/import when read as current; `RELEASE_CHECKLIST.md` is stamped April 30 and predates the surfaces it should smoke-test |
+| D-08 | P3 | CONFIRMED | TECHNICAL DEBT | `docs/git-course/module-01-mental-model.md` is an unrelated, unreferenced Git tutorial that promises a Module 02 which does not exist. A Next.js curriculum is arriving on other branches (PR #46) into this product repository |
+| D-09 | P3 | CONFIRMED | PORTFOLIO GAP | No `LICENSE` (default: all rights reserved — reviewers cannot legally run or reuse it), no `CONTRIBUTING.md`, no `CLAUDE.md`/`AGENTS.md`, and **no declared canonical-document hierarchy** — which is the root cause that let D-01, D-02 and D-03 happen: three documents each believed they owned the same fact |
