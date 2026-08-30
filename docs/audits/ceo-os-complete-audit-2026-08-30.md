@@ -83,6 +83,17 @@ corrected priority — the weekly demo-resurrection finding, for example, was pr
 here as P1. Runtime evidence was gathered by running the repository's own validation commands and by
 querying the GitHub Actions API; §2.1 reports each command as run, including the failures.
 
+**Verification outcome.** Every finding submitted to the adversarial pass was independently re-derived
+from source by a verifier instructed to refute it. **None was refuted.** Four were downgraded, and in three
+of those the corrected priority is the one already published here (the weekly demo-resurrection finding was
+proposed as P0 and is recorded as P1; two offline-queue findings were proposed as P1 and are recorded as
+P2). The fourth downgrade was a factual correction that has been applied: the telemetry replay finding
+(T-02) originally claimed an attacker could defeat deduplication through the unsigned idempotency header,
+which is wrong for the shipped client — that key travels inside the signed body — so the finding now
+describes the narrower, accurate exposure. Two further self-corrections were made against measurement
+rather than review: the CI root cause (C-07) and the typecheck gate (J-01), both of which contradicted
+earlier drafts of this document.
+
 **Reading order for the impatient.** §17.2 (F-01, the concurrency defect), §14 (F-87, the destructive demo
 load), §13 (F-03, the AI auth dead-end), §28 (the CI reality), then §38 for what to do first.
 
@@ -1156,7 +1167,7 @@ The sharper observation is that the subsystem's strongest parts **cannot be used
 | ID | Pri | Confidence | Class | Finding | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | T-01 | P2 | CONFIRMED | ARCHITECTURAL RISK | **The asymmetric/KMS path has no browser producer and cannot be enabled without breaking the app's own telemetry.** The only client signer is WebCrypto HMAC-SHA256; there is no client Ed25519 signing. The verifier *prefers* the asymmetric path whenever any asymmetric source is configured, and that path 401s without a key-id header and accepts only `ed25519`. The three cloud KMS SDKs are **not in `package.json`** (verified), so the provider-native adapters can only throw | Enabling the sophisticated path disables ingest |
-| T-02 | P2 | CONFIRMED | DEFECT (security) | **No replay protection.** Signatures cover the raw body only; the idempotency header sits outside the signed material; `sentAt` is parsed but never checked for freshness; there is no nonce and no rate limit on the ingest path | A captured request can be re-persisted at will |
+| T-02 | P2 | CONFIRMED | DEFECT (security) | **No freshness or rate limiting on ingest.** Signatures cover the raw body only; `sentAt` is parsed but never checked against a freshness window; there is no nonce and no rate limit on the ingest path, so a captured request can be replayed indefinitely | *Corrected during verification:* an earlier draft claimed a replay could defeat dedup by varying the unsigned `x-app-telemetry-idempotency-key` header. That is **wrong for the shipped client** — it embeds `idempotencyKey` inside the signed body (`appErrorTelemetry.js:254-262`) and the server prefers the body value over the header (`resolveIdempotencyKey`, ingest core :680-681), so an identical replay dedupes to 409-as-success. The residual exposure is unbounded request volume and log noise, not forged or duplicated rows; the unsigned header path only matters for a producer that omits the body key |
 | T-03 | P2 | CONFIRMED | DEFECT | **The client remote queue drains only when a future error occurs** — no startup, `online`-event, or interval trigger — and never drops permanently rejected batches (400/401 are treated like transient 503s) | A misconfigured token wedges the queue silently |
 | T-04 | P3 | CONFIRMED | DEFECT | The Vercel adapter verifies signatures over **re-serialised JSON** rather than raw request bytes | Any key-order or whitespace difference breaks verification |
 | T-05 | P3 | CONFIRMED | DEFECT | The Ops Reliability local fallback renders four fabricated April-2026 snapshots under workspace-source copy | The one surface reporting system health can present sample data as real |
@@ -2056,7 +2067,7 @@ the root resolves them.
 | **F-33/F-30/F-64** | P2 | ARCH RISK | React updaters | R5 | Snapshot `updatedAt` at editor open; move persistence out of updaters using Journal's ref pattern | M | F-01 | MQ-OPP-03 |
 | **F-34/F-35/F-36** | P2 | DEFECT | Weekly | — | Keep save errors visible; align prepend/append ordering; delete the duplicated summary render | S | none | MQ-WK-01/02/05 |
 | **F-06/F-07/F-08** | P2 | DEFECT | Focus Home | R2 | Initialise weekly state empty; consume `loadError` with a real retry; wire the local-only notice into Reminders | S | none | MQ-FH-02/11/12 |
-| **T-02/T-03** | P2 | DEFECT | Telemetry | — | Sign a canonical envelope including `sentAt`; add a freshness window; flush on start and `online`; drop terminal batches | M | §30 quarantine decision | — |
+| **T-02/T-03** | P2 | DEFECT | Telemetry | — | Add a `sentAt` freshness window and a request cap on ingest; flush the client queue on start and on `online`; drop terminal batches | M | §30 quarantine decision | — |
 | **T-01 + KMS stack** | P2 | ARCH RISK | Telemetry | — | Execute the documented `experimental/telemetry/` quarantine; keep a thin token + HMAC ingest | L | product decision | — |
 | **D-01…D-09** | P2/P3 | DOC DRIFT | Documentation | R8 | Re-capture visuals or restore the caveat; de-duplicate the env reference and fix the fail-closed wording; reconcile `KNOWN_LIMITATIONS`; correct enforcement claims; trim `CASE_STUDY`; declare a canonical hierarchy; add a LICENSE | M | — | — |
 | **A-05 / C-04 / C-05** | P2 | PORTFOLIO GAP | Tests | R7 | Add auth-surface tests and include both auth routes in the axe sweep; add e2e for generation, offline replay and autosave | M | — | — |
