@@ -71,7 +71,18 @@ higher than production readiness. The fastest path to Level 3 is narrow and well
 timestamp comparison, gate the weekly demo fallback, repair the three CI loops, and run one authenticated
 regression pass.
 
-*(Sections 2–5 follow; the remaining sections are assembled from the full inspector fleet.)*
+**Method.** Fifteen subsystem inspectors read the repository in parallel — each applying every relevant
+lens (correctness, calm-UX, accessibility, responsive implementation, performance, security, privacy,
+persistence, failure handling, testing, launch and portfolio risk) to its assigned surfaces in a single
+pass, so one root problem produces one finding rather than six. High-priority findings were then re-derived
+by independent adversarial verifiers instructed to refute them, and every claim reproduced here was checked
+against the source a second time by the orchestrator. Findings the verifiers downgraded are reported at the
+corrected priority — the weekly demo-resurrection finding, for example, was proposed as P0 and is recorded
+here as P1. Runtime evidence was gathered by running the repository's own validation commands and by
+querying the GitHub Actions API; §2.1 reports each command as run, including the failures.
+
+**Reading order for the impatient.** §17.2 (F-01, the concurrency defect), §14 (F-87, the destructive demo
+load), §13 (F-03, the AI auth dead-end), §28 (the CI reality), then §38 for what to do first.
 
 ---
 
@@ -1557,6 +1568,135 @@ landed**.
 
 ---
 
+## 30. Overengineering Assessment
+
+The brief requires this section to be explicit and to resist praising complexity for its own sake. Each
+subsystem is classified against what the product actually needs.
+
+| Subsystem | Verdict | Reasoning |
+| --- | --- | --- |
+| **Repository pattern across 10 domains** | **NECESSARY** | Two persistence backends and cross-domain promotions demand a seam. It is used, consistent, and tested |
+| **Versioned storage envelope + domain guard + corruption preservation** | **NECESSARY** | Solves real failure modes (wrong-key swap, silent JSON loss) that a local-first app genuinely hits. The best engineering in the repository |
+| **Migration registry** | **REASONABLE FUTURE-PROOFING** | Small, pure, well-documented, honestly described as empty. Downgraded from "necessary" only because the read path is not actually ready to use it (F-71), and the one real migration performed to date bypassed it |
+| **Optimistic concurrency** | **NECESSARY** | Correct instinct for a multi-tab local-first app — and the local implementation works. The cloud implementation is inverted (F-01), which is a defect in execution, not a judgment error |
+| **Offline write queue** | **VALUABLE PORTFOLIO SIGNAL** | Genuinely good primitives; but it serves two of ten domains, has no terminal state, and its UX presents queued writes as failures. The concept earns its place; the lifecycle does not yet |
+| **Custom event pub/sub + `useSilentRefresh`** | **NECESSARY** | The documented reasoning (no global store to justify, free cross-tab via storage events) holds. `useSilentRefresh` is the right extraction |
+| **`CrudPageTemplate` slots abstraction** | **REASONABLE** | Two consumers is thin for an abstraction, but they are genuinely near-identical and the migration is complete and guarded |
+| **Slots-migration CI guard + dated tracking ticket** | **OVERENGINEERED** | A bespoke regex-based CI script and a dated deadline ticket to police a two-consumer refactor that is already closed — and which will hard-fail CI after 2026-09-30 (C-11) |
+| **Route-budget budgets + trend gate** | **VALUABLE PORTFOLIO SIGNAL** | Real discipline, and the `--release` refresh guard is better than most teams manage — but the loop is not operating (C-01), and the baseline is hand-editable in the regressing PR (C-02) |
+| **App-error telemetry ingest (thin: token + HMAC + Supabase + idempotency)** | **DEFENSIBLE** | Proportionate for demonstrating production thinking, and the idempotency design is genuinely good |
+| **HMAC rotation windows (current/next/legacy)** | **PREMATURE** | Rotation infrastructure for a single-founder app with one browser producer and no operator |
+| **Ed25519 asymmetric path** | **PORTFOLIO-ONLY** | No browser producer exists; enabling it **breaks** ingest (T-01) |
+| **Generic KMS keyset URL** | **PORTFOLIO-ONLY** | Same |
+| **Provider-native AWS/GCP/Azure KMS adapters** | **SHOULD BE QUARANTINED** | The three SDKs are not in `package.json` (verified), so these paths can only throw. This is scaffolding presented as capability |
+| **Key-verification audit table** | **PORTFOLIO-ONLY** | Audit logging for a key system with no operator to audit |
+| **Ops incident lifecycle + Slack/PagerDuty fanout** | **HIGH MAINTENANCE RISK** | A full incident state machine whose driving workflow has never executed (§2.3) |
+| **Ops Reliability UI** | **DEFENSIBLE BUT OVERBUILT** | Correctly hidden behind `?meta=1` and honest on load errors, but its local fallback fabricates snapshots (T-05) and no evidence exists that it has ever shown real data |
+| **Dual Vercel + Netlify adapters** | **REASONABLE** | Thin shims over a shared core is the cheap way to stay portable — but shipping `api/` with **no** `vercel.json` (F-80) means the second target is claimed rather than supported |
+| **JS + `tsc --noEmit` staged TS plan** | **NECESSARY / correct judgment** | A defensible, documented trade-off with a real migration plan — and the audit's two worst defects argue for starting it at the persistence boundary (§26.1) |
+
+**The honest summary.** Roughly 2,900 lines of server and script code exist for a telemetry and operations
+capability the product does not need, cannot fully enable, and has never run. The repository already knows
+this — `KNOWN_LIMITATIONS.md:14` says so plainly and commits to an `experimental/telemetry/` quarantine.
+**Because it is documented, the overbuild is an intentional boundary rather than a credibility problem.**
+What has become a credibility problem is that the quarantine keeps slipping while the README continues to
+describe the ops loop in the present tense.
+
+The important nuance for a reviewer: the overbuild is **not** in the product architecture. Focus Home,
+Capture, Journal, Weekly Brief, Opportunities, Content OS, Chief of Staff, the storage layer and the shell
+are all proportionate to the problem. The disproportion is confined to one clearly-labelled corner.
+
+---
+
+## 31. Portfolio / Hiring Assessment
+
+### What would impress a senior frontend hiring manager
+
+1. **Product judgment that costs features.** Removing a working numeric momentum score because it nudged
+   users toward optimisation — and committing the reasoning next to the code — is the single most senior
+   thing in this repository. Most portfolios add; this one subtracts on purpose.
+2. **Failure design.** Corruption is preserved and announced rather than swallowed. The AI fallback is
+   labelled with its reason. Save failures say the text is retained. This is a person who has operated
+   software, not just shipped it.
+3. **A real seam.** The repository contract with dual backends, versioned envelopes, domain guards and
+   typed stale-record errors is architecture, not file organisation.
+4. **Verified accessibility work.** Nine axe route sweeps passing in CI, a skip link, a hand-rolled focus
+   trap with restoration, keyboard-only e2e coverage, and a CSS-token contrast regression test. Very few
+   portfolio projects have any of this; almost none have the token test.
+5. **`shared/` as a true single source of truth** across client and server, so the drift a reviewer would
+   look for structurally cannot happen.
+6. **Honest documentation as a practice** — `KNOWN_LIMITATIONS.md` is a genuinely unusual artifact, and the
+   instinct behind it is the most transferable thing in the repository.
+
+### What would concern the same reviewer
+
+1. **The strict CI gate has been red for three and a half months, with five PRs merged over it.** This is
+   the finding most likely to be spotted in sixty seconds — the Actions tab is public — and it is the one
+   that most undercuts the "production-minded" framing. **Fixing this is the highest-ROI hour available.**
+2. **README screenshots do not match the app**, and the honesty caveat that once covered them was removed.
+   A reviewer who runs the app sees a different product.
+3. **The flagship AI feature cannot be authenticated as documented** (F-03) — a reviewer who reads
+   `CONFIGURATION.md` and then the client code will find this.
+4. **The concurrency feature is likely inverted in cloud mode** (F-01). A reviewer who reads
+   `staleRecordError.js` alongside the migrations may spot it, and it sits under a headline claim.
+5. **Infrastructure disproportionate to the product** — KMS adapters whose SDKs are not installed, an
+   incident lifecycle whose workflow has never fired. Documented, but present in the tree.
+6. **Unrelated content in the repository** — a Git tutorial in `docs/`, a Next.js curriculum arriving on
+   other branches. It reads as an unmaintained scratch space rather than a curated artifact.
+7. **No LICENSE**, so a reviewer technically cannot run or reuse it.
+
+### What demonstrates judgment rather than code volume
+
+The subtractions and the honest boundaries: the withheld momentum number; snooze as a third option;
+meta-gating operational surfaces so a reviewer sees only product; the deliberate JS-not-TS posture with a
+written plan instead of a fashionable rewrite; the explicit "what's intentionally out of scope" list; and
+choosing DOM events over a state library with the reasoning recorded. Also the negative test asserting that
+a non-stale error must *not* trigger a refetch — that is someone thinking about what should not happen.
+
+### What looks disproportionately complex
+
+The telemetry, KMS, key-audit and incident-lifecycle stack (§30), and the CI ceremony around a closed
+two-consumer refactor (C-11).
+
+### The five highest-ROI changes for hiring credibility
+
+| # | Change | Effort | Why it pays |
+| --- | --- | --- | --- |
+| 1 | **Get the strict CI gate green and make it required.** Fix two e2e selectors (F-50), fix the repository Actions setting so the baseline refresh can run (C-01), and fix `branch-protection.yml`'s invalid permission (C-06) | ~1–2 hours | Turns the most visible negative signal into the strongest positive one. A public green gate backs every other claim |
+| 2 | **Re-capture the five screenshots and the walkthrough**, or restore the honesty caveat until you do | ~1 afternoon | Both prior audits called this the single largest portfolio risk; it is still open and now contradicts the limitations ledger |
+| 3 | **Fix F-01 and add a microsecond-precision repository test** | ~half a day | Converts the most serious defect into a demonstration of exactly the debugging depth the project claims |
+| 4 | **Rewrite `CASE_STUDY.md` down to its first six sections** plus a short "what changed since" | ~2 hours | It is the document written for interviews and currently the weakest; cutting 480 pasted lines improves it |
+| 5 | **Execute the `experimental/telemetry/` quarantine and add a LICENSE** | ~half a day | Removes the disproportion critique and the one instant checklist failure |
+
+Everything on that list is a day and a half of work in total, and none of it requires new features.
+
+---
+
+## 32. Dead / Legacy / Duplicate Code
+
+| Item | Classification | Evidence |
+| --- | --- | --- |
+| `src/components/dashboard/MomentumChart.jsx` | **CONFIRMED DEAD** | Verified: zero importers, no test. Also renders 0–100 bars, contradicting the shipped qualitative-momentum decision |
+| `src/components/dashboard/ActivityFeed.jsx` + test | **CONFIRMED DEAD** | Verified: zero production importers; only its own test imports it |
+| `dashboardDemoData` (`mockData.js:133-163`) | **CONFIRMED DEAD** | No consumers; carries a pre-Focus-Home `focusScore` shape |
+| `buildNextMoveQueue`, `isLocalDashboardDemoMode` | **CONFIRMED DEAD** (test-only) | Exported but consumed only by tests; the latter is evaluated once at module load and would be stale anyway |
+| `SOURCE_NOTICE_LOCAL_FIRST_ONLY` (`uiCopy.js:18`) | **INTENTIONAL FUTURE HOOK — should be wired now** | Defined and unit-tested with zero production consumers; it is exactly the copy F-08 needs |
+| `if (!aiConfig.endpoint)` branch (`openai.js:153`) | **CONFIRMED DEAD** | Verified unreachable: the endpoint constant always falls back to `/api/chief-of-staff` |
+| Bluesky icon sheet in `public/icons.svg`; `.topbar__action` and two other orphaned shell classes | **CONFIRMED DEAD** | No references |
+| ~16 momentum-chart / activity-feed CSS blocks in `components.css`; content card-grid CSS retained only for the skeleton | **LIKELY DEAD** | Tied to the dead components above |
+| `docs/git-course/module-01-mental-model.md` | **NEEDS PRODUCT DECISION** | Unrelated to the product, unreferenced, promises a Module 02 that does not exist |
+| `docs/PR_SUMMARY_TEMPLATE.md`, the two `docs/tracking/` PR summaries | **NEEDS PRODUCT DECISION** | Point-in-time records presented as living docs |
+| `scripts/check-crud-template-legacy-props.mjs` | **INTENTIONAL — now retirable** | Its migration is closed and it hard-fails CI after 2026-09-30 |
+| The four `Chief*List` components | **NOT DEAD — verified live** | Each has exactly one production importer; `ChiefAcceptList` has four. The consolidation worked as intended |
+| `src/lib/chiefActions.js`, `src/lib/chiefStructuredPayload.js` | **NOT DUPLICATES — verified** | Pure re-export shims over `shared/`, which is what makes client/server drift structurally impossible |
+
+Nothing was deleted. Two of these entries exist specifically to *prevent* an unnecessary deletion: the
+`Chief*List` components and the `shared/` re-export shims both look like duplication and are not.
+
+---
+
+---
+
 ## 33. Historical Audit Reconciliation
 
 CEO OS has five prior audits (`docs/audits/`) plus a detailed closure ledger in `KNOWN_LIMITATIONS.md` and
@@ -1749,135 +1889,6 @@ consolidated:
 - `KNOWN_LIMITATIONS.md`'s ledger **form**, the CHANGELOG's date-anchored evidence format, and the
   2026-05-24 audit's inline status table. Fix their stale content; keep their structure.
 - The documented JS-not-TS posture with a staged plan — and `tsc --noEmit` actually running in CI.
-
----
-
-## 30. Overengineering Assessment
-
-The brief requires this section to be explicit and to resist praising complexity for its own sake. Each
-subsystem is classified against what the product actually needs.
-
-| Subsystem | Verdict | Reasoning |
-| --- | --- | --- |
-| **Repository pattern across 10 domains** | **NECESSARY** | Two persistence backends and cross-domain promotions demand a seam. It is used, consistent, and tested |
-| **Versioned storage envelope + domain guard + corruption preservation** | **NECESSARY** | Solves real failure modes (wrong-key swap, silent JSON loss) that a local-first app genuinely hits. The best engineering in the repository |
-| **Migration registry** | **REASONABLE FUTURE-PROOFING** | Small, pure, well-documented, honestly described as empty. Downgraded from "necessary" only because the read path is not actually ready to use it (F-71), and the one real migration performed to date bypassed it |
-| **Optimistic concurrency** | **NECESSARY** | Correct instinct for a multi-tab local-first app — and the local implementation works. The cloud implementation is inverted (F-01), which is a defect in execution, not a judgment error |
-| **Offline write queue** | **VALUABLE PORTFOLIO SIGNAL** | Genuinely good primitives; but it serves two of ten domains, has no terminal state, and its UX presents queued writes as failures. The concept earns its place; the lifecycle does not yet |
-| **Custom event pub/sub + `useSilentRefresh`** | **NECESSARY** | The documented reasoning (no global store to justify, free cross-tab via storage events) holds. `useSilentRefresh` is the right extraction |
-| **`CrudPageTemplate` slots abstraction** | **REASONABLE** | Two consumers is thin for an abstraction, but they are genuinely near-identical and the migration is complete and guarded |
-| **Slots-migration CI guard + dated tracking ticket** | **OVERENGINEERED** | A bespoke regex-based CI script and a dated deadline ticket to police a two-consumer refactor that is already closed — and which will hard-fail CI after 2026-09-30 (C-11) |
-| **Route-budget budgets + trend gate** | **VALUABLE PORTFOLIO SIGNAL** | Real discipline, and the `--release` refresh guard is better than most teams manage — but the loop is not operating (C-01), and the baseline is hand-editable in the regressing PR (C-02) |
-| **App-error telemetry ingest (thin: token + HMAC + Supabase + idempotency)** | **DEFENSIBLE** | Proportionate for demonstrating production thinking, and the idempotency design is genuinely good |
-| **HMAC rotation windows (current/next/legacy)** | **PREMATURE** | Rotation infrastructure for a single-founder app with one browser producer and no operator |
-| **Ed25519 asymmetric path** | **PORTFOLIO-ONLY** | No browser producer exists; enabling it **breaks** ingest (T-01) |
-| **Generic KMS keyset URL** | **PORTFOLIO-ONLY** | Same |
-| **Provider-native AWS/GCP/Azure KMS adapters** | **SHOULD BE QUARANTINED** | The three SDKs are not in `package.json` (verified), so these paths can only throw. This is scaffolding presented as capability |
-| **Key-verification audit table** | **PORTFOLIO-ONLY** | Audit logging for a key system with no operator to audit |
-| **Ops incident lifecycle + Slack/PagerDuty fanout** | **HIGH MAINTENANCE RISK** | A full incident state machine whose driving workflow has never executed (§2.3) |
-| **Ops Reliability UI** | **DEFENSIBLE BUT OVERBUILT** | Correctly hidden behind `?meta=1` and honest on load errors, but its local fallback fabricates snapshots (T-05) and no evidence exists that it has ever shown real data |
-| **Dual Vercel + Netlify adapters** | **REASONABLE** | Thin shims over a shared core is the cheap way to stay portable — but shipping `api/` with **no** `vercel.json` (F-80) means the second target is claimed rather than supported |
-| **JS + `tsc --noEmit` staged TS plan** | **NECESSARY / correct judgment** | A defensible, documented trade-off with a real migration plan — and the audit's two worst defects argue for starting it at the persistence boundary (§26.1) |
-
-**The honest summary.** Roughly 2,900 lines of server and script code exist for a telemetry and operations
-capability the product does not need, cannot fully enable, and has never run. The repository already knows
-this — `KNOWN_LIMITATIONS.md:14` says so plainly and commits to an `experimental/telemetry/` quarantine.
-**Because it is documented, the overbuild is an intentional boundary rather than a credibility problem.**
-What has become a credibility problem is that the quarantine keeps slipping while the README continues to
-describe the ops loop in the present tense.
-
-The important nuance for a reviewer: the overbuild is **not** in the product architecture. Focus Home,
-Capture, Journal, Weekly Brief, Opportunities, Content OS, Chief of Staff, the storage layer and the shell
-are all proportionate to the problem. The disproportion is confined to one clearly-labelled corner.
-
----
-
-## 31. Portfolio / Hiring Assessment
-
-### What would impress a senior frontend hiring manager
-
-1. **Product judgment that costs features.** Removing a working numeric momentum score because it nudged
-   users toward optimisation — and committing the reasoning next to the code — is the single most senior
-   thing in this repository. Most portfolios add; this one subtracts on purpose.
-2. **Failure design.** Corruption is preserved and announced rather than swallowed. The AI fallback is
-   labelled with its reason. Save failures say the text is retained. This is a person who has operated
-   software, not just shipped it.
-3. **A real seam.** The repository contract with dual backends, versioned envelopes, domain guards and
-   typed stale-record errors is architecture, not file organisation.
-4. **Verified accessibility work.** Nine axe route sweeps passing in CI, a skip link, a hand-rolled focus
-   trap with restoration, keyboard-only e2e coverage, and a CSS-token contrast regression test. Very few
-   portfolio projects have any of this; almost none have the token test.
-5. **`shared/` as a true single source of truth** across client and server, so the drift a reviewer would
-   look for structurally cannot happen.
-6. **Honest documentation as a practice** — `KNOWN_LIMITATIONS.md` is a genuinely unusual artifact, and the
-   instinct behind it is the most transferable thing in the repository.
-
-### What would concern the same reviewer
-
-1. **The strict CI gate has been red for three and a half months, with five PRs merged over it.** This is
-   the finding most likely to be spotted in sixty seconds — the Actions tab is public — and it is the one
-   that most undercuts the "production-minded" framing. **Fixing this is the highest-ROI hour available.**
-2. **README screenshots do not match the app**, and the honesty caveat that once covered them was removed.
-   A reviewer who runs the app sees a different product.
-3. **The flagship AI feature cannot be authenticated as documented** (F-03) — a reviewer who reads
-   `CONFIGURATION.md` and then the client code will find this.
-4. **The concurrency feature is likely inverted in cloud mode** (F-01). A reviewer who reads
-   `staleRecordError.js` alongside the migrations may spot it, and it sits under a headline claim.
-5. **Infrastructure disproportionate to the product** — KMS adapters whose SDKs are not installed, an
-   incident lifecycle whose workflow has never fired. Documented, but present in the tree.
-6. **Unrelated content in the repository** — a Git tutorial in `docs/`, a Next.js curriculum arriving on
-   other branches. It reads as an unmaintained scratch space rather than a curated artifact.
-7. **No LICENSE**, so a reviewer technically cannot run or reuse it.
-
-### What demonstrates judgment rather than code volume
-
-The subtractions and the honest boundaries: the withheld momentum number; snooze as a third option;
-meta-gating operational surfaces so a reviewer sees only product; the deliberate JS-not-TS posture with a
-written plan instead of a fashionable rewrite; the explicit "what's intentionally out of scope" list; and
-choosing DOM events over a state library with the reasoning recorded. Also the negative test asserting that
-a non-stale error must *not* trigger a refetch — that is someone thinking about what should not happen.
-
-### What looks disproportionately complex
-
-The telemetry, KMS, key-audit and incident-lifecycle stack (§30), and the CI ceremony around a closed
-two-consumer refactor (C-11).
-
-### The five highest-ROI changes for hiring credibility
-
-| # | Change | Effort | Why it pays |
-| --- | --- | --- | --- |
-| 1 | **Get the strict CI gate green and make it required.** Fix two e2e selectors (F-50), fix the repository Actions setting so the baseline refresh can run (C-01), and fix `branch-protection.yml`'s invalid permission (C-06) | ~1–2 hours | Turns the most visible negative signal into the strongest positive one. A public green gate backs every other claim |
-| 2 | **Re-capture the five screenshots and the walkthrough**, or restore the honesty caveat until you do | ~1 afternoon | Both prior audits called this the single largest portfolio risk; it is still open and now contradicts the limitations ledger |
-| 3 | **Fix F-01 and add a microsecond-precision repository test** | ~half a day | Converts the most serious defect into a demonstration of exactly the debugging depth the project claims |
-| 4 | **Rewrite `CASE_STUDY.md` down to its first six sections** plus a short "what changed since" | ~2 hours | It is the document written for interviews and currently the weakest; cutting 480 pasted lines improves it |
-| 5 | **Execute the `experimental/telemetry/` quarantine and add a LICENSE** | ~half a day | Removes the disproportion critique and the one instant checklist failure |
-
-Everything on that list is a day and a half of work in total, and none of it requires new features.
-
----
-
-## 32. Dead / Legacy / Duplicate Code
-
-| Item | Classification | Evidence |
-| --- | --- | --- |
-| `src/components/dashboard/MomentumChart.jsx` | **CONFIRMED DEAD** | Verified: zero importers, no test. Also renders 0–100 bars, contradicting the shipped qualitative-momentum decision |
-| `src/components/dashboard/ActivityFeed.jsx` + test | **CONFIRMED DEAD** | Verified: zero production importers; only its own test imports it |
-| `dashboardDemoData` (`mockData.js:133-163`) | **CONFIRMED DEAD** | No consumers; carries a pre-Focus-Home `focusScore` shape |
-| `buildNextMoveQueue`, `isLocalDashboardDemoMode` | **CONFIRMED DEAD** (test-only) | Exported but consumed only by tests; the latter is evaluated once at module load and would be stale anyway |
-| `SOURCE_NOTICE_LOCAL_FIRST_ONLY` (`uiCopy.js:18`) | **INTENTIONAL FUTURE HOOK — should be wired now** | Defined and unit-tested with zero production consumers; it is exactly the copy F-08 needs |
-| `if (!aiConfig.endpoint)` branch (`openai.js:153`) | **CONFIRMED DEAD** | Verified unreachable: the endpoint constant always falls back to `/api/chief-of-staff` |
-| Bluesky icon sheet in `public/icons.svg`; `.topbar__action` and two other orphaned shell classes | **CONFIRMED DEAD** | No references |
-| ~16 momentum-chart / activity-feed CSS blocks in `components.css`; content card-grid CSS retained only for the skeleton | **LIKELY DEAD** | Tied to the dead components above |
-| `docs/git-course/module-01-mental-model.md` | **NEEDS PRODUCT DECISION** | Unrelated to the product, unreferenced, promises a Module 02 that does not exist |
-| `docs/PR_SUMMARY_TEMPLATE.md`, the two `docs/tracking/` PR summaries | **NEEDS PRODUCT DECISION** | Point-in-time records presented as living docs |
-| `scripts/check-crud-template-legacy-props.mjs` | **INTENTIONAL — now retirable** | Its migration is closed and it hard-fails CI after 2026-09-30 |
-| The four `Chief*List` components | **NOT DEAD — verified live** | Each has exactly one production importer; `ChiefAcceptList` has four. The consolidation worked as intended |
-| `src/lib/chiefActions.js`, `src/lib/chiefStructuredPayload.js` | **NOT DUPLICATES — verified** | Pure re-export shims over `shared/`, which is what makes client/server drift structurally impossible |
-
-Nothing was deleted. Two of these entries exist specifically to *prevent* an unnecessary deletion: the
-`Chief*List` components and the `shared/` re-export shims both look like duplication and are not.
-
----
 
 ## 36. Unknown / Unverified
 
@@ -2097,7 +2108,72 @@ machinery it points to as evidence of production thinking is not currently runni
 
 ---
 
-## 62. Product Verdict
+## 40. Final Coverage Reconciliation
+
+A second, independent discovery pass was run at the end of the audit: the repository was re-enumerated from
+disk and every production file was checked against the citations produced by the inspection fleet.
+
+```text
+COVERAGE
+
+Routes discovered:                    12 (9 shell + 2 auth + 1 wildcard)
+Routes audited:                       12  (100%)
+
+Meaningful product surfaces discovered: 156
+Surfaces audited:                       156 (100%) — healthy surfaces recorded, not omitted
+
+Persistence domains discovered:        13 (10 local, 7 Supabase-backed, plus queue,
+                                          ops snapshots and UI preferences)
+Persistence domains audited:           13  (100%) — full matrix in §16.1
+
+Server / API surfaces discovered:      7 server modules, 2 Vercel adapters,
+                                       2 Netlify functions, 4 shared modules
+Server / API surfaces audited:         all 15 (100%)
+
+Supabase migrations reviewed:          8 of 8
+Tables / policies reviewed:            12 tables; RLS verified per table (§17.1)
+
+CI workflows reviewed:                 5 of 5 — plus their actual run history via the Actions API
+
+Tests inventoried:                     138 vitest files (823 tests) + 10 Playwright specs (31 tests)
+
+Production source files re-checked:    230
+  cited by at least one inspector:     229
+  gap found and closed by the orchestrator: 1 (src/lib/chiefPanelResult.js — read directly;
+                                          43 lines, live, well-guarded on every input path,
+                                          has its own test; no findings)
+
+Runtime-verified workflows:            npm run verify (823 tests, lint, typecheck, build);
+                                       markdownlint; CRUD template guard; static route budgets;
+                                       route-budget trend gate (FAILS, exit 1);
+                                       Playwright 29/31 including 9 axe route sweeps;
+                                       GitHub Actions run history for all 5 workflows
+
+Manual verification remaining:         ~90 checks in CEO-OS-MANUAL-QA.md, dominated by the
+                                       authenticated Supabase block
+
+Known exclusions:                      node_modules; package-lock.json; binary assets
+                                       (5 PNGs, 1 .webm, 2 SVGs) — inspected as metadata and
+                                       provenance (commit dates), with one PNG rendered to
+                                       confirm the staleness claim in D-01
+Reason for exclusions:                 vendored code is out of scope; binary content cannot be
+                                       audited as source
+```
+
+**Is anything meaningful present in the repository but absent from this audit?** After the second pass:
+no. The one gap found (`chiefPanelResult.js`) was inspected and closed before publication. Every route,
+surface, persistence domain, server module, adapter, migration, script, workflow and documentation file is
+represented somewhere in this report.
+
+**Is "100% coverage" a defensible claim?** For *static* coverage of production source, yes — and the
+numbers above are how it was checked rather than asserted. For *behavioral* coverage, emphatically no: the
+entire authenticated Supabase surface, all screen-reader behavior, and all rendered visual behavior remain
+unverified, and §36 enumerates them. This audit covers the whole repository; it does not claim to have
+exercised the whole product.
+
+---
+
+## Appendix — Product Verdict
 
 **Does CEO OS genuinely reduce founder cognitive load?** In local mode, yes — more than a generic dashboard,
 and for a specific reason: it *explains* its recommendations. "Recommended because:" turns a ranking into
