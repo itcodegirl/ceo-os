@@ -756,3 +756,454 @@ never traced the client's request headers against it.
 | F-66 | P3 | NEEDS RUNTIME | NEEDS PRODUCT DECISION | A 12-second hard timeout converts slow-but-successful generations into canned fallbacks | — | Raise the ceiling or stream |
 | F-67 | P3 | HIGH | DEFECT | The page ignores `feedbackKind`, so errors render in the same muted style as informational hints | — | Style by kind |
 | F-68 | P3 | HIGH | INTENTIONAL BOUNDARY | Acceptance signature caches go stale against out-of-band repository changes | Documented deferral, bounded by the post-generation reset | Subscribe the caches to repository events when convenient |
+
+---
+
+## 14. Settings Findings
+
+Settings is a form-orchestration surface with three sections (theme, workspace profile/data, account) plus
+the workspace backup facility. Its axe sweep and the `settings-shell` e2e spec (branding and timezone
+propagating to the shell after save) both pass at runtime.
+
+**The backup path is genuinely well-built and should be preserved.** `importWorkspaceBackup`
+(`workspacePortability.js:476-522`) is **validate-all-then-write-all**: every entry is normalised and
+validated, and any failure throws, *before* the first `setItem` runs — so a malformed or partially-invalid
+backup cannot half-apply. `validateBackupEnvelope` (395-410) requires a schema version, rejects
+`schemaVersion < 1`, and — notably — rejects payloads from a **newer** CEO OS version
+("Backup file was created by a newer CEO OS version"). Unknown keys are skipped and reported as
+`ignoredKeyCount` rather than written blindly.
+
+That last point produces a useful internal comparison: **the backup reader guards against future versions;
+the primary storage reader does not** (see F-71, §16). The correct behavior already exists in this
+codebase — it simply is not applied on the hot path.
+
+Settings itself is mature: four extracted sections around a `useSettings` hook with request-id and
+edit-version guards and a queued save loop, all covered by focused tests; genuinely careful timezone
+handling (Intl validation, a supported-zone datalist, a device-timezone shortcut, blur normalisation, and a
+disabled Save whose accessible name explains why); and the persistence source surfaced in three places.
+
+### F-87 — "Load demo workspace" destroys user-created local records without confirmation
+
+```text
+ID:                    F-87
+Priority:              P1
+Confidence:            CONFIRMED
+Classification:        DEFECT
+Area:                  Settings / Focus Home setup / local persistence
+File(s):               src/lib/opportunitiesRepository.js:339-343
+                       src/lib/contentRepository.js:353-358
+                       src/lib/weeklyRepository.js:833-848
+                       src/components/settings/SettingsWorkspaceDataSection.jsx:74-85
+                       src/hooks/useWorkspaceSetup.js
+```
+
+**Evidence.** Verified directly: `resetLocalOpportunityDemoData()` is
+`const seeded = getDemoLocalItems(); writeLocalOpportunities(seeded);` — a **full store replacement**, not
+a merge. The same pattern replaces the content store and the current week's brief. The Settings control
+(`SettingsWorkspaceDataSection.jsx:74-75`) is an always-enabled button with no confirmation modal and no
+`archiveStorageValue` backup — note the contrast with its sibling "Clear demo data" (line 81-85), which
+*is* correctly gated behind `disabled={!isDemoMode}`. The same action is also reachable in one click from
+the Focus Home setup card.
+
+**Problem.** A founder with real local opportunities, content items and weekly data who clicks "Load demo
+workspace" loses all of it irrecoverably: no confirmation, no undo, and no preserved copy. The plausible
+path to accidental loss is specific and realistic — until a setup choice is saved, the card reads "No setup
+choice has been saved yet. Demo records are shown for review until you choose", so a user who has been
+working locally while demo records were also displayed may click "Load demo workspace" to resolve the
+ambiguity and destroy their own records in the process.
+
+**Why it matters.** This violates the repository's own stated contract. `weeklyRepository.js:306-315`
+articulates the "never discard user data without trace" principle, `archiveStorageValue` exists precisely
+for this purpose and is used for legacy keys, and the corruption path is built around preserving rather than
+losing data. This is the one place where a destructive action skips the discipline the rest of the codebase
+applies consistently.
+
+**Why P1 and not P0.** The action is user-initiated through an explicitly labelled control rather than a
+silent or automatic loss, and a backup facility exists. It is nonetheless irreversible and violates the
+project's own guarantee, so it is the highest-priority item in Phase 1.
+
+**Recommended remediation.** Archive the three stores via `archiveStorageValue` before seeding (recovery
+then already exists through the corruption/restore path), and put the destructive variant behind the
+existing `ConfirmModal` when the target stores are non-empty — stating how many records will be replaced.
+
+**Scope:** S · **Runtime verification:** not required · **Manual QA:** MQ-SET-01 · **Historical:** D — new.
+
+| ID | Pri | Confidence | Class | Finding | Remediation |
+| --- | --- | --- | --- | --- | --- |
+| F-88 | P2 | CONFIRMED | DEFECT | **Backup import overwrites matching stores with no confirmation and no pre-write archive**, and the write loop uses raw `storage.setItem` rather than `requireLocalStorageSetItem` — so a quota failure mid-loop half-applies the import *and* never reaches the quota banner (`workspacePortability.js:511-513`) | Archive before writing; use the guarded setter; restore on failure |
+| F-89 | P2 | HIGH | DEFECT | **"Clear demo data" misses weekly demo items outside the current week.** `clearLocalWeeklyDemoData` filters demo ids only inside `store[currentWeek]`, and `startBlankWorkspace` calls it with no argument — so demo items materialised under an earlier week (via F-02) survive into a supposedly blank workspace | Clear demo ids across all week records |
+| F-90 | P2 | HIGH | DEFECT | **After a failed save, "Retry" silently discards the user's on-screen edits.** The shared error slot wires `onRetry={refreshSettings}`, which reloads persisted values, while the copy claims "while we retry" | Make retry re-attempt the save, or relabel and warn that edits will be replaced |
+| F-69 | P3 | HIGH | DEFECT | Import is transactional against *validation* failures but not against a quota failure mid-write | Snapshot the affected keys and restore on failure, or stage-and-swap |
+| F-91 | P3 | HIGH | DEFECT | An imported theme preference is not applied until a full reload — the synthesized `StorageEvent` lacks `storageArea`, so `usePersistentState` ignores it | Include `storageArea`, or apply the theme directly after import |
+| F-92 | P3 | HIGH | DEFECT | Settings' demo/blank actions give no success or failure feedback (Focus Home has toasts; Settings does not), and the mode flips before the clearing writes complete | Add feedback; order the writes before the mode flip; handle rejection |
+| F-93 | P3 | HIGH | DEFECT | Signed-out users in a Supabase-configured build briefly see sync-active copy before the first settings load resolves | Initialise the source as unknown rather than `supabase` |
+| F-94 | P3 | HIGH | PRODUCT GAP | The "needs recovery" health line names a problem but offers no recovery affordance on the page | Link to the corruption-restore flow |
+| F-95 | P3 | HIGH | DEFECT | The hidden import file input is a focusable, invisible tab stop | Use a label-wrapped input or `display: none` until activated |
+| F-96 | P3 | HIGH | ARCHITECTURAL RISK | `getLocalWorkspaceDataHealth` JSON-parses every store on **every render** of the Workspace Data section — including on every keystroke in the name field | Memoise, or recompute on repository events only |
+| F-97 | P3 | HIGH | DEFECT | The `autoSave` toggle flips visually but silently skips persistence while the timezone field is invalid | Disable the toggle, or surface why the save was skipped |
+| F-98 | P3 | HIGH | TECHNICAL DEBT | Orphaned settings fields and a dead offline-queue branch remain from earlier audit fixes | Remove |
+| F-70 | P3 | CONFIRMED | INTENTIONAL BOUNDARY | Import replaces domains wholesale (no merge) and does not migrate into Supabase; backup-scope copy slightly overstates coverage (drafts and preserved corruption backups are excluded) | Documented in `KNOWN_LIMITATIONS.md:13`; tighten the scope copy |
+
+Additional Settings-adjacent findings appear under Focus Home (F-08, the missing Reminders local-only
+notice, whose copy constant exists but has no consumer) and §15 (account lifecycle).
+
+---
+
+## 15. Authentication + Account Findings
+
+This section deliberately separates two claims the repository sometimes blurs.
+
+**AUTHENTICATION TECHNICALLY EXISTS.** PKCE magic-link sign-in with calm three-state copy; an auth callback
+with timeout and error branches; session restore via `persistSession` plus `onAuthStateChange`; sign-out in
+Settings; a distinct "Sign in to sync" pill state; and honest disabled states when Supabase is unconfigured.
+Statically, this looks correct.
+
+**THE ACCOUNT PRODUCT IS NOT COMPLETE.** Missing: account recovery, account deletion, email change, cloud
+data export, per-user scoping of local storage, and any user scoping of the offline write queue. The gap is
+explicitly acknowledged in `README.md:303-306` and `KNOWN_LIMITATIONS.md:119` — so most of it is an
+**INTENTIONAL BOUNDARY**, not a defect. What the audit adds is that three specific consequences are *not*
+documented and are more than boundary-shaped.
+
+| ID | Pri | Confidence | Class | Finding | Evidence | Remediation |
+| --- | --- | --- | --- | --- | --- | --- |
+| A-01 | P2 | HIGH | PRODUCT GAP | **First sign-in silently hides the existing local workspace** while the sign-in page promises "Supabase becomes an additional source rather than a replacement" | After first sign-in the four synced domains read exclusively from Supabase; pre-existing local records vanish from the UI. Local-to-cloud migration is a documented non-goal, but this copy actively contradicts the behavior | Correct the copy to say the cloud workspace replaces the local view, and tell the user their local data is still on the device (with the export path) |
+| A-02 | P2 | HIGH | DEFECT (privacy) | **The offline write queue is not account-scoped.** Verified: it is a single global key `ceo-os-offline-write-queue` with entries `{id, kind, payload, createdAt, attempts}` and no `userId` | Entries survive sign-out; replay stamps the *currently* signed-in user, so user A's queued opportunity (name, company, next step) can be inserted into user B's account on a shared browser. RLS is not bypassed — the row is legitimately written to B | Scope the queue key (or each entry) by user id; drop or quarantine entries whose owner does not match on drain |
+| A-03 | P2 | HIGH | DEFECT | **Signed-out-but-configured builds show a false offline state.** Opportunities/Content/Weekly call `requireSupabaseUserId` and throw, and `source === 'supabase' && hasLoadError` maps to offline copy | The user sees empty lists plus "Data source: Offline. No cloud replay queue is active." while actually online, with a retry that can never succeed | Recognise auth errors distinctly (see F-44) and render a "Sign in to continue" state instead of offline copy |
+| A-04 | P3 | HIGH | DEFECT | Local storage is not per-user: user B on a shared browser sees user A's Capture, Journal, Reminders and Chief-notes residue (those domains never sync and are keyed globally) | — | Namespace local keys by account once signed in, or state the single-user-per-browser assumption in-product |
+| A-05 | P2 | CONFIRMED | PORTFOLIO GAP | **The auth surfaces have zero automated coverage.** No test exists for `SignIn`, `AuthCallback`, `useAuthSession`, or `SettingsAccountSection`, and both auth routes are excluded from the axe e2e sweep (they render outside the shell) | Confirmed against the test inventory and `e2e/a11y-sweep.spec.js`'s route list | Add component tests for the three states each, and include both routes in the axe sweep |
+| A-06 | P3 | NEEDS RUNTIME | DEFECT | Auth callback UX races: a fixed 5s timeout can pre-empt a slow PKCE exchange, and the intended deep-link destination is dropped | — | Make the timeout generous and resumable; preserve and honour the return path |
+| A-07 | P2 | CONFIRMED | INTENTIONAL BOUNDARY | No recovery, deletion, email change, cloud export, or per-user local scoping | Documented in README and KNOWN_LIMITATIONS | Keep as a boundary; do not describe the project as account-based SaaS until closed |
+
+Everything in this section that depends on a real session is **NEEDS RUNTIME VERIFICATION** — no
+authenticated environment was available, and the repository's own docs state that an authenticated
+regression pass has never been run.
+
+---
+
+## 16. Local-First Architecture
+
+### 16.1 Domain persistence matrix
+
+| Domain | Local key | Supabase | Versioned envelope | Migration | Corruption recovery | Offline queue | Cross-tab | Auth-scoped |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Opportunities | `ceo-os-opportunities` | ✅ `opportunities` | ✅ | registry present, empty | preserve + reseed | ✅ create/update/delete | ❌ page; Dashboard watches the key | ❌ |
+| Content OS | `ceo-os-content-items` | ✅ `content_items` | ✅ | registry present, empty | preserve + reseed | ✅ create/update/delete | ❌ page; Dashboard watches the key | ❌ |
+| Weekly Brief | `ceo-os-weekly-briefs` (+4 legacy keys) | ✅ `weekly_briefs`, `weekly_brief_items` | ✅ | ad-hoc legacy migration **outside** the registry | preserve (no reseed) | ❌ documented | ✅ event + storage keys | ❌ |
+| Settings | `ceo-os-settings` (+ unversioned `…-saved-at` sidecar) | ✅ `profiles` (auth-fallback to local) | ✅ | registry present, empty | preserve | ❌ (errors throw) | ✅ | ❌ |
+| Chief workspace | 2 enveloped keys | ✅ `chief_sessions`, `chief_outputs` (auth-fallback) | ✅ | registry present, empty | preserve | ❌ | ❌ no updated event | ❌ |
+| Chief telemetry | `ceo-os-chief-telemetry-events` | ✅ `chief_telemetry_events` | ❌ raw array | ❌ not registered | ❌ raw `setItem` | ❌ | ❌ | ❌ |
+| Capture | `ceo-os-capture-notes` | ❌ **by design** | ✅ | registry present, empty | preserve + reseed | ❌ n/a | ❌ same-tab only | ❌ |
+| Journal | `ceo-os-journal-entries` | ❌ **by design** | ✅ | registry present, empty | preserve | ❌ n/a | ❌ same-tab only | ❌ |
+| Reminders | `ceo-os-reminders` | ❌ **by design** | ✅ | registry present, empty | preserve | ❌ n/a | ✅ watched by Focus Home | ❌ |
+| Offline queue | `ceo-os-offline-write-queue` | n/a | ❌ raw, unversioned entries | ❌ | preserve | n/a | ✅ **both** event and storage | ❌ (A-02) |
+| Ops SLO snapshots | none | ✅ `ops_slo_snapshots` (read-only) | n/a | n/a | n/a | n/a | n/a | anon-readable |
+| App-error telemetry | 2 raw keys | ✅ service-role tables | ❌ raw | ❌ | silent write helper | own queue | ❌ | n/a |
+| UI prefs (theme, focus mode, capture draft, setup, notice) | 5 raw JSON keys | ❌ | ❌ **second storage model** | ❌ | preserve (via `usePersistentState`) | n/a | ✅ | ❌ |
+
+### 16.2 Verdict — is "local-first" a coherent architecture or a set of special cases?
+
+**In pure local mode: coherent.** One envelope pattern, one corruption path, one event idiom, one
+save-status bus. This is genuinely good architecture and the single strongest engineering artifact in the
+repository.
+
+**In Supabase mode: not local-first, and not uniform.** Four different strategies coexist: Opportunities
+and Content OS become *remote-only* with a retry queue (there is no local mirror, so the "local-first"
+label is inaccurate for exactly the two domains that sync most); Settings and Chief fall back to local on
+auth errors (in two different variants); Weekly Brief throws; and three domains never sync at all. The
+seam, not the core, is where the special cases live.
+
+A secondary architectural observation: there are **two storage models** — the versioned envelope used by
+repositories, and raw JSON via `usePersistentState` for UI preferences. That split is defensible (prefs
+are disposable), but `ARCHITECTURE.md` documents only the first, so a reader encountering
+`ceo-os-focus-mode` finds an undocumented pattern.
+
+| ID | Pri | Confidence | Class | Finding | Evidence | Remediation |
+| --- | --- | --- | --- | --- | --- | --- |
+| F-71 | P2 | CONFIRMED | ARCHITECTURAL RISK | **No guard for future-version envelopes, and no completeness check on the migration chain.** Verified independently: `readVersionedLocalStorage` returns `migrated.data` without ever comparing `migrated.toVersion` to `CURRENT_DATA_SCHEMA_VERSION` (`versionedStorage.js:58-60`), and `migrateStoragePayload` short-circuits and returns data **unchanged** when `currentVersion >= CURRENT` (`storageMigrations.js:46-53`) | When v2 ships, a missing or partial migrator silently yields v1-shaped data presented as current; an older build reading a v2 payload (a stale cached bundle, or a newer backup) accepts it and downgrades it on the next write. The backup reader already implements the correct future-version rejection (§14) | Reject or quarantine payloads whose version exceeds the current schema, and treat an incomplete chain as a read failure rather than returning partial data |
+| F-72 | P2 | HIGH | DEFECT | **Corrupt primaries are never quarantined for non-reseeding domains**, so every read churns a new backup, evicts distinct older ones from the 3-slot cap, and re-fires the event that resets the recovery banner under the user | — | Quarantine (rename) the corrupt primary after preserving it, or de-duplicate by content hash |
+| F-73 | P3 | HIGH | DEFECT | Mount-time storage writes fire spurious "Saved" signals through the save-status bus (same root cause as S-07) | `usePersistentState` re-writes and calls `notifySaveSucceeded` on mount | Skip persistence and notification when the value is unchanged from the loaded one |
+| F-74 | P3 | HIGH | INTENTIONAL BOUNDARY | Queue entries are unversioned, unknown kinds accumulate silently forever, and the 200-entry cap drops oldest silently | `offlineWriteQueue.js:26,119` | Version the entries; log or surface silent drops |
+| F-75 | P3 | CONFIRMED | DOCUMENTATION DRIFT | Storage documentation lags implementation in three places — most importantly `KNOWN_LIMITATIONS.md:121`, which lists Capture, Journal and reminders as lacking envelope discipline when all three have had it since May, and `:105`, which says only Weekly Brief writes an envelope | Verified in `captureRepository.js:92-98`, `journalRepository.js:65-71`, `remindersRepository.js:72-78` | Re-audit the list against actual `versionedStorage` usage |
+
+---
+
+## 17. Supabase + Data Integrity
+
+### 17.1 Row-level security — verified correct
+
+For every user-data table, the audit asked the four mandated questions and answered them from the SQL:
+
+| Table | RLS enabled | Can A read B? | Can A modify B? | Anonymous reach | Ownership enforced by |
+| --- | --- | --- | --- | --- | --- |
+| `profiles` | ✅ | ❌ `auth.uid() = id` | ❌ (insert/update own; **no delete policy** — deliberate) | ❌ | RLS |
+| `opportunities` | ✅ | ❌ | ❌ `using` + `with check` | ❌ | RLS |
+| `content_items` | ✅ | ❌ | ❌ `using` + `with check` | ❌ | RLS |
+| `weekly_briefs` | ✅ | ❌ | ❌ `using` + `with check` | ❌ | RLS |
+| `weekly_brief_items` | ✅ | ❌ | ❌ `using` + `with check` | ❌ | RLS |
+| `chief_sessions` | ✅ | ❌ | ❌ `using` + `with check` | ❌ | RLS |
+| `chief_outputs` | ✅ | ❌ | ❌ `using` + `with check` | ❌ | RLS |
+| `chief_telemetry_events` | ✅ | ❌ | ❌ | ❌ | RLS |
+| `app_error_telemetry_events` | ❌ (grants) | n/a | n/a | ❌ revoked | grants: service_role only |
+| `app_error_telemetry_key_audit_events` | ❌ (grants) | n/a | n/a | ❌ revoked | grants: service_role only |
+| `ops_incident_lifecycle_events` | ❌ (grants) | any authenticated user can `select` | ❌ | ❌ | grants |
+| `ops_slo_snapshots` | ❌ (grants) | **anon `select` granted** | ❌ | ✅ **by design** | grants |
+
+**This is the strongest security result in the audit and should be preserved as-is.** Ownership is enforced
+in the database, not merely by client filtering, with `with check` present so a client cannot write rows it
+could not read. The telemetry sinks correctly revoke `anon`/`authenticated` and grant only `service_role`.
+
+Two deliberate exposures warrant a product decision rather than a fix: `ops_slo_snapshots` is readable by
+anyone holding the public anon key (operational metrics, not user data — this is how the Ops page reads it),
+and `ops_incident_lifecycle_events` is readable by any signed-in user. Neither is a vulnerability; both are
+broader than strictly necessary.
+
+### 17.2 F-01 — Optimistic locking is inverted in Supabase mode
+
+```text
+ID:                    F-01
+Priority:              P1
+Confidence:            CONFIRMED (mechanism, re-derived independently); NEEDS RUNTIME VERIFICATION (end-to-end)
+Classification:        DEFECT
+Area:                  Data integrity / Supabase / the flagship concurrency feature
+Surface:               Opportunities, Content OS, Weekly Brief items — every guarded Supabase update
+File(s):               src/lib/staleRecordError.js:44 (readUpdatedAtMs), :63 (expectedUpdatedAtToIso)
+                       src/lib/opportunitiesRepository.js:236-256
+                       src/lib/contentRepository.js (same pattern)
+                       src/lib/weeklyRepository.js:643-645, 741-743
+                       supabase/migrations/20260421_core_schema_rls.sql:15,30,49,67,90,143-176
+                       src/lib/offlineWriteQueueIntegration.js:43-45
+```
+
+**Evidence — established three independent ways.** All five core tables declare
+`updated_at timestamptz not null default now()`, and `set_updated_at()` triggers assign `now()` on every
+update (migration lines 143-176). Postgres `now()` carries **microsecond** precision. The client reads that
+value with `readUpdatedAtMs`, which uses `Date.parse` — millisecond resolution — and writes it back through
+`expectedUpdatedAtToIso`, which does `new Date(ms).toISOString()`, producing a `.SSSZ` literal. That literal
+is applied as `query.eq('updated_at', expectedIso)`. Confirmed numerically in Node:
+
+```text
+Date.parse('2026-05-12T10:23:45.123456+00:00')  → 1778581425123
+new Date(1778581425123).toISOString()           → '2026-05-12T10:23:45.123Z'
+'2026-05-12T10:23:45.123Z' === stored value?    → false
+```
+
+`.eq()` therefore matches zero rows for any row whose microsecond remainder is non-zero (~999 of every
+1000). `maybeSingle()` returns `data: null`, and the repository converts that to a thrown
+`StaleRecordError` (`opportunitiesRepository.js:253-256`).
+
+**Problem.** Nearly every authenticated edit of an opportunity, content item, or weekly item is rejected as
+a phantom "changed in another window" conflict. Retrying cannot help: re-reading returns the same
+microsecond value, which truncates identically. And because `shouldEnqueueWriteFailure` explicitly excludes
+`StaleRecordError` (`offlineWriteQueueIntegration.js:43-45` — correct in isolation), the write is discarded
+rather than queued.
+
+**Why the test suite cannot catch it.** Every Supabase repository test mocks `updated_at` as a `.000Z`
+string and compares by string equality, so the mock is precision-free by construction. This is the single
+most valuable test-quality finding in the audit: the mocks encode an assumption the database does not
+honour.
+
+**Why it matters.** The optimistic-concurrency story is a headline architecture claim in the README,
+CASE_STUDY and ARCHITECTURE docs. If this behaves as the code indicates, the feature does not merely fail
+to protect data in cloud mode — it *inverts*, blocking all legitimate edits while a genuine cross-tab
+conflict would be indistinguishable from the false one.
+
+**Launch / portfolio risk.** Highest in the audit. It is also the most credible single explanation for why
+an authenticated regression pass has never been completed.
+
+**Recommended remediation (in preference order).** (1) Keep the raw `updated_at` ISO string on the item and
+echo it back verbatim in the `.eq()` guard, using the parsed ms only for display and legacy-skip logic —
+this removes the round-trip entirely. (2) Or truncate server-side so the stored precision matches what the
+client can represent: `new.updated_at = date_trunc('milliseconds', now())` in the trigger. (3) Or replace
+equality with a 1 ms half-open range (`gte`/`lt`). Whichever is chosen, add a repository test whose mocked
+timestamps carry **microsecond** precision, so the suite can fail on this class of bug in future.
+
+**Scope:** S (the fix) / M (with tests and an authenticated pass) · **Dependencies:** none ·
+**Runtime verification:** REQUIRED · **Manual QA:** MQ-SUP-01 · **Historical:** D — new. Prior audits added
+`updated_at` to the Supabase selectors and tested stale conflicts through mocks, which is precisely how the
+precision mismatch slipped through.
+
+### 17.3 Other Supabase and data-integrity findings
+
+| ID | Pri | Confidence | Class | Finding | Evidence | Remediation |
+| --- | --- | --- | --- | --- | --- | --- |
+| F-76 | P3 | CONFIRMED | TECHNICAL DEBT | **Migrations are not reproducibly applicable.** Verified: filenames use date-only prefixes with duplicates (three `20260421`, two `20260424`), and `20260421_auth_uid_defaults.sql` sorts **before** `20260421_core_schema_rls.sql`, which creates the tables it alters. Because every statement uses `alter table if exists`, an ordered apply on a fresh database makes the entire file a **silent no-op** — no error is raised | Mitigated in practice only because clients always send `user_id` explicitly | Use ordered version prefixes (timestamps, not dates), and document the apply procedure |
+| F-77 | P3 | HIGH | ARCHITECTURAL RISK | RLS does not enforce parent–child ownership consistency: `weekly_brief_items.brief_id` and `chief_outputs.session_id` are checked against the child's own `user_id`, not the parent's owner | A client could in principle attach its own child row to another user's parent id | Add a policy predicate joining the parent's `user_id` |
+| F-78 | P3 | CONFIRMED | TECHNICAL DEBT | Schema-vs-client drift: chief fallback provenance has no columns; content status defaults differ between schema and client; timezone handling is naive | — | Reconcile per domain |
+| F-79 | P3 | HIGH | NEEDS PRODUCT DECISION | `ops_slo_snapshots` is anon-readable and `ops_incident_lifecycle_events` is readable by any authenticated user | Verified in the migrations | Decide deliberately; if public reporting is intended, say so in the docs |
+
+---
+
+## 18. Offline + Synchronization
+
+The queue's primitives are well made — FIFO with a 200-entry cap, stop-on-first-failure to avoid hammering
+a down service, attempt counters, a dedicated update event, correct exclusion of permanent errors from
+enqueueing, and `skipQueue` on replay so a failed replay cannot re-enqueue itself. It is also the only
+surface that listens to **both** its custom event and cross-tab `storage` events.
+
+The lifecycle around those primitives is the weakest subsystem in the repository:
+
+1. **No permanent-failure eviction.** `attempts` is incremented but never consulted. A head entry that can
+   never succeed (a duplicate created by a user retry, or a record deleted server-side) blocks every later
+   write indefinitely, re-toasting "check your connection" on each reconnect (F-45).
+2. **No account scoping** (A-02) — a cross-account data path on a shared browser.
+3. **Failure copy contradicts the queue's purpose**: `tryRemoteOrEnqueue` enqueues *and rethrows*, so a
+   queued write presents as a hard save failure, inviting the retry that creates the duplicate that then
+   wedges the queue.
+4. **Only two domains participate.** Opportunities and Content OS queue; Weekly Brief, Settings, Chief,
+   Capture, Journal and reminders do not. For the three local-only domains that is correct by design; for
+   Weekly Brief and Settings it is a documented deferral.
+
+**Trace of the intended path** — recoverable failure → `enqueueOfflineWrite` → topbar "Pending sync" →
+reconnect or manual retry → `drainOfflineQueue` replays FIFO with `skipQueue` → success removes the entry
+by id (re-reading the queue first, so other tabs' changes are respected) → failure bumps `attempts` and
+stops. Every step exists; the missing piece is the terminal state.
+
+---
+
+## 19. Server / Serverless
+
+The adapter architecture is genuinely clean and is a portfolio strength. One transport-agnostic core
+(`server/chiefOfStaffProxyCore.js`, 357 lines) implements method gating, token auth, rate limiting, body
+normalisation, the upstream call with a 10s abort, and an error taxonomy carrying `request_id` and
+`correlation_id`. Both adapters are thin shims — `api/chief-of-staff.js` is 11 lines,
+`netlify/functions/chief-of-staff.js` is 17 — so **function-level behavior parity is by construction**:
+methods, status codes and error shapes cannot drift between platforms.
+
+Where drift genuinely exists is the **deployment envelope**, not the function:
+
+| ID | Pri | Confidence | Class | Finding | Evidence | Remediation |
+| --- | --- | --- | --- | --- | --- | --- |
+| F-80 | P2 | HIGH | DEFECT | **There is no `vercel.json`.** `netlify.toml` carries CSP, HSTS, `frame-ancestors`, the SPA fallback, and the `/api/chief-of-staff` function route; a Vercel deployment — for which the `api/` directory exists — ships with none of those headers | Verified: no `vercel.json` anywhere in the repository | Add a `vercel.json` mirroring the Netlify headers, or document Netlify as the only supported target |
+| F-81 | P2 | HIGH | DEFECT | **Netlify has no `/api/app-error-telemetry` redirect**, so the telemetry path `.env.example` suggests silently returns `index.html` with HTTP 200 on Netlify | `netlify.toml` maps only the chief-of-staff function | Add the redirect; document the per-platform endpoint value |
+| F-82 | P2 | HIGH | DEFECT | **Rate limiting is best-effort.** The limiter keys on client-influenceable headers (`x-forwarded-for` first element, `x-real-ip`), lives in per-instance memory that resets on cold start and is not shared across concurrent lambdas, and no `max_output_tokens` is set upstream | Netlify documents XFF as spoofable | Treat as advisory; add a hard spend ceiling and output cap; document the limitation |
+| F-83 | P3 | HIGH | DEFECT | An upstream 2xx carrying invalid JSON returns **HTTP 200 with an error object** instead of 502; unknown `actionKey`s are silently coerced to `summarize` | — | Map upstream parse failures to 502; reject unknown action keys explicitly |
+| F-84 | P3 | HIGH | DOCUMENTATION DRIFT | No local dev path for the proxy and no CORS support, so the documented "host the proxy elsewhere" override cannot work cross-origin from a browser | No `server.proxy` in `vite.config.js`, no vercel/netlify dev script | Add a dev proxy or a documented `netlify dev` flow; add CORS if the override is meant to be real |
+| F-85 | P3 | HIGH | TECHNICAL DEBT | Token comparison is not constant-time and the 401 path bypasses the rate limiter | — | Use `timingSafeEqual` (the telemetry core already does) and rate-limit failures |
+| F-86 | P3 | HIGH | TECHNICAL DEBT | The core's 400/500 validation branches and the success-path structured-payload attachment are untested; adapter tests mock the core and prove pass-through shape only | — | Add branch coverage for validation and the success path |
+
+---
+
+## 20. AI Security + Reliability
+
+**What is correctly handled.** The OpenAI key never reaches the browser — the client only ever knows a proxy
+URL. The CSP in `netlify.toml` deliberately omits `api.openai.com` from `connect-src`, with an inline
+comment explaining why, so the browser cannot talk to OpenAI directly even if code tried. Untrusted model
+output is normalised defensively on both sides with item and length caps, and a malformed upstream response
+cannot crash the function (`json().catch`, throw-safe extraction). The deterministic fallback is
+client-side and **honestly labelled** with its reason and error code — failure is visible, not hidden.
+Notes are capped at 12k characters by a shared constant enforced in the UI, so server-side truncation is
+unreachable in the shipped client.
+
+**What is not.**
+
+- **F-03 (§13)** — the authentication dead-end, which forces either a disabled feature or an open proxy.
+- **F-58 (§13)** — no in-product disclosure that Generate transmits notes off-device, while nearby copy
+  says the workspace is device-local. This is the audit's clearest **privacy-communication** gap.
+- **Prompt injection.** User notes are embedded into the system/user messages with no hardening, and the
+  model's output is parsed into structured items that the user can accept into their own workspace. The
+  realistic risk is low — the attacker would be the user pasting their own notes, and accepted items are
+  plain records rather than executed instructions — so this is classified **THEORETICAL ONLY** rather than
+  a vulnerability. It is worth a defensive note in the system prompt, not a redesign.
+- **Cost control.** With the only working configuration being an open proxy, spend protection rests on a
+  spoofable, per-instance rate limiter (F-82).
+
+---
+
+## 21. Telemetry / Ops
+
+### 21.1 What exists
+
+A complete error-telemetry pipeline: a browser emitter with real PII scrubbing, a shared serverless ingest
+core behind thin Vercel and Netlify adapters, HMAC current/next/legacy rotation windows, an Ed25519
+asymmetric path fed by env JSON or a KMS keyset URL or provider-native AWS/GCP/Azure adapters, Supabase
+persistence with content-hash idempotency and a bounded retention prune, a key-verification audit table, a
+scheduled ops workflow, and a meta-gated Ops Reliability page.
+
+Engineering quality *within* each file is high, and several parts deserve preservation: timing-safe HMAC
+comparison with a length pre-check; fail-closed 503 on key-window misconfiguration rather than accepting
+unsigned traffic; and content-hash idempotency backed by a DB unique constraint with 409-mapped-to-success,
+which is the one part proven against a **real** Supabase instance by the integration test.
+
+### 21.2 Proportionality verdict — **DEFENSIBLE BUT OVERBUILT**, shading to **PORTFOLIO-ONLY**
+
+This is the mandated classification, and it is the repository's own conclusion too
+(`KNOWN_LIMITATIONS.md:14,28-31`; `CONFIGURATION.md:42-46`; three prior audits), with a committed plan to
+quarantine the stack behind `experimental/telemetry/` while keeping a thin HMAC ingest. Because the docs
+frame it honestly, **the overbuild is an INTENTIONAL BOUNDARY, not a defect.** What the audit adds is that
+the quarantine keeps slipping, and until it happens roughly 2,900 lines of server and script code must stay
+green for a capability the product does not need — the definition of maintenance risk.
+
+The sharper observation is that the subsystem's strongest parts **cannot be used together**:
+
+| ID | Pri | Confidence | Class | Finding | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| T-01 | P2 | CONFIRMED | ARCHITECTURAL RISK | **The asymmetric/KMS path has no browser producer and cannot be enabled without breaking the app's own telemetry.** The only client signer is WebCrypto HMAC-SHA256; there is no client Ed25519 signing. The verifier *prefers* the asymmetric path whenever any asymmetric source is configured, and that path 401s without a key-id header and accepts only `ed25519`. The three cloud KMS SDKs are **not in `package.json`** (verified), so the provider-native adapters can only throw | Enabling the sophisticated path disables ingest |
+| T-02 | P2 | CONFIRMED | DEFECT (security) | **No replay protection.** Signatures cover the raw body only; the idempotency header sits outside the signed material; `sentAt` is parsed but never checked for freshness; there is no nonce and no rate limit on the ingest path | A captured request can be re-persisted at will |
+| T-03 | P2 | CONFIRMED | DEFECT | **The client remote queue drains only when a future error occurs** — no startup, `online`-event, or interval trigger — and never drops permanently rejected batches (400/401 are treated like transient 503s) | A misconfigured token wedges the queue silently |
+| T-04 | P3 | CONFIRMED | DEFECT | The Vercel adapter verifies signatures over **re-serialised JSON** rather than raw request bytes | Any key-order or whitespace difference breaks verification |
+| T-05 | P3 | CONFIRMED | DEFECT | The Ops Reliability local fallback renders four fabricated April-2026 snapshots under workspace-source copy | The one surface reporting system health can present sample data as real |
+| T-06 | P3 | NEEDS RUNTIME | ARCHITECTURAL RISK | CI writes ops rows to `SUPABASE_TEST_*` while the UI reads the app's runtime project — so whether any deployment ever shows real data is unverified | — |
+| T-07 | P3 | HIGH | ARCHITECTURAL RISK | Post-response pruning and timeout-less Supabase fetches in a serverless context make retention and latency unreliable | — |
+| T-08 | P3 | HIGH | DEFECT | The incident-lifecycle read-then-insert race can double-fire notifications on concurrent runs | — |
+
+**Client-side secret exposure (verified).** `VITE_APP_ERROR_TELEMETRY_TOKEN` and
+`VITE_APP_ERROR_TELEMETRY_HMAC_SECRET` are read via `import.meta.env` (`appErrorTelemetry.js:120,124`) and
+are therefore **inlined into the public bundle**. Anyone can read them and forge telemetry. Severity is
+contained — the tables are service-role-only and hold scrubbed error data, so the impact is pollution
+rather than disclosure — and the README caveats the HMAC one as "trusted/internal deployments only"
+(though not the token). Classified **SECURITY WEAKNESS**, not a vulnerability.
+
+### 21.3 Is the operational data real?
+
+Per §2.3: the daily `Scheduled Ops Alerts` workflow **has never run on its schedule**, and the weekly
+baseline refresh has failed every time. The Ops Reliability page is correctly hidden behind `?meta=1` and
+degrades honestly on load errors, but between the never-run collector and the fabricated local fallback,
+**no evidence was found that this surface has ever displayed real production telemetry.** It should be
+described as portfolio evidence of operational thinking — which the docs mostly already do — and never as a
+staffed production operations capability.
+
+---
+
+## 22. Security + Privacy
+
+### 22.1 Security findings by area
+
+| Area | Concern | Classification | Note |
+| --- | --- | --- | --- |
+| Supabase | Tenant isolation on all user tables | **Not vulnerable** | RLS with `using` + `with check` verified on all seven tables (§17.1) |
+| Supabase | Parent–child ownership consistency | DEFENSE-IN-DEPTH (F-77) | Child rows validate their own `user_id`, not the parent's |
+| Supabase | Ops tables readable by anon / any authenticated user | THEORETICAL ONLY (F-79) | Deliberate; operational metrics, not user data |
+| Chief proxy | Endpoint unauthenticated in its only working configuration | **SECURITY WEAKNESS** (F-03) | Cost-abuse exposure, not data exposure |
+| Chief proxy | Spoofable, per-instance rate limiting; no output cap | SECURITY WEAKNESS (F-82) | Compounds F-03 |
+| Chief proxy | Non-constant-time token compare; unthrottled 401 path | DEFENSE-IN-DEPTH (F-85) | Low practical risk |
+| Chief proxy | Prompt injection via user notes | THEORETICAL ONLY | Attacker is the user; output becomes records, not instructions |
+| Telemetry | Client token and HMAC secret inlined into the public bundle | SECURITY WEAKNESS | Forgeable telemetry; scrubbed payloads; service-role tables |
+| Telemetry | No replay protection, no freshness window, no rate limit | SECURITY WEAKNESS (T-02) | Re-persistable captured requests |
+| Client | Secrets in client code | **Not vulnerable** | No API keys; the two `VITE_` telemetry values are the only secret-shaped ones, and are documented as such |
+| Client | Dangerous HTML / unsafe URLs | **Not vulnerable** | No `dangerouslySetInnerHTML` in the tree |
+| Deployment | CSP/HSTS present on Netlify; absent on Vercel | SECURITY WEAKNESS (F-80) | Envelope drift, not a code defect |
+| Cross-account | Offline queue replays A's writes into B's account | **LIKELY VULNERABILITY** (A-02) | Requires a shared browser and account switching; RLS is not bypassed, but A's content lands in B's workspace |
+
+**No CONFIRMED VULNERABILITY was found**, and no P0. The single most consequential security-adjacent item is
+F-03, because it forces a choice between a disabled feature and an open endpoint.
+
+### 22.2 Privacy: what actually leaves the browser
+
+| Data | Stays local | Reaches Supabase | Reaches the AI provider | Reaches telemetry | Copy accurate? |
+| --- | --- | --- | --- | --- | --- |
+| Journal entries | ✅ always | ❌ never | ❌ never | ❌ never | ✅ "Private to this device — never synced" is **true** |
+| Capture notes | ✅ unless promoted | only via promotion | ❌ | ❌ | ✅ "Stays on this device. Promote a note when you want it in your synced workspace" |
+| Reminders | ✅ always | ❌ never | ❌ | ❌ | ❌ **No local-only notice**, on a page that can say "Workspace sync is active" (F-08) |
+| Opportunities / Content | ❌ when signed in | ✅ | only if pasted into Chief | ❌ | ✅ |
+| Weekly Brief | ❌ when signed in | ✅ | ❌ | ❌ | ✅ |
+| **Chief of Staff notes** | local copy kept | ✅ `chief_sessions` | ✅ **every Generate** | ❌ (only `notesLength`) | ❌ **No disclosure of the off-device transmission** (F-58) |
+| Error telemetry | ring buffer | ✅ service-role tables | ❌ | ✅ | scrubbing verified in code |
+| Local backup export | user-initiated download | ❌ | ❌ | ❌ | ✅ |
+
+Journal heaviness reaches Focus Home as a **presence-only boolean** (`feelsHeavy` set and `oneNextThing`
+empty) rather than as text — a genuinely thoughtful privacy decision worth preserving. Telemetry sends
+`notesLength`, never note content.
+
+The two privacy gaps are both **communication** gaps rather than data leaks: reminders are silently
+device-local on a page advertising sync, and Chief notes are silently transmitted off-device on a page
+advertising local storage. Both are one calm sentence away from being accurate.
