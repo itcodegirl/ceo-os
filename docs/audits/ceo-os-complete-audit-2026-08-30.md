@@ -111,7 +111,7 @@ the failures.
 
 | Command | Result | Exit | Evidence provided | Limitations |
 | --- | --- | --- | --- | --- |
-| `npm run verify` | **RUNTIME PASS** | 0 | lint + `tsc --noEmit` + 823 unit tests + production build all succeed | Proves nothing about browser behavior |
+| `npm run verify` | **RUNTIME PASS** | 0 | lint + `tsc --noEmit` + 823 unit tests + production build all succeed | Proves nothing about browser behavior; and see J-01 — the typecheck step passes trivially because `checkJs` is off |
 | `npm run test:run` | **RUNTIME PASS** | 0 | 137 files passed, 1 skipped; 823 tests passed, 1 skipped; 97.6s | Unit/jsdom only |
 | `npx markdownlint-cli2 "**/*.md" "!node_modules/**"` | **RUNTIME PASS** | 0 | 22 files, 0 issues | Style only, not accuracy |
 | `npm run check:crud-template-legacy` | **RUNTIME PASS** | 0 | No legacy `CrudPageTemplate` props in production source | Confirms the slots migration is genuinely closed |
@@ -120,6 +120,11 @@ the failures.
 | `npm run test:integration:telemetry` | **INTENTIONAL SKIP** | 0 | 1 file / 1 test skipped — `describe.skip` when `SUPABASE_TEST_URL` is absent | No durable-ingest evidence obtainable here (MISSING SECRET) |
 | `npm run test:e2e` (attempt 1) | **ENVIRONMENT FAIL** | — | All 31 specs failed: repo pins `@playwright/test` 1.59.1 expecting `chromium_headless_shell-1217`; the container ships build 1194 | Resolved at the environment level by symlinking 1194 into the 1217 path — **no repository file was modified** |
 | `npm run test:e2e` (attempt 2) | **29 passed / 2 failed** (2.3 min) | — | See §2.2 | Ran against Chromium 1194, slightly older than the pinned build |
+
+**Additional read-only probe.** `npx tsc -p jsconfig.json --noEmit --checkJs` (the same project, with JS
+checking switched on) reports **608 errors** — 387 in test files, 221 in production files — against zero
+for the configured command. No repository file was modified to obtain this; the flag was supplied on the
+command line. See J-01.
 
 Build output at HEAD: 408 ms; vendor chunks `vendor-react` 189.63 kB, `vendor-supabase` 187.35 kB,
 `vendor-router` 41.38 kB; largest route chunk `ChiefOfStaff` 52.75 kB raw / 15.97 kB gzip.
@@ -1405,8 +1410,63 @@ does not, which is the entire content of F-41.
 ### 26.1 JavaScript and type safety
 
 The JS-with-`tsc --noEmit` posture is deliberate, documented, and defended in `ARCHITECTURE.md` with a
-staged migration plan (`lib/` → `hooks/` → `components/` → `pages/`). The audit **validates that ordering**
-and can now ground it in evidence rather than principle.
+staged migration plan (`lib/` → `hooks/` → `components/` → `pages/`). The *plan* is sound. The *enforcement
+it claims* is not.
+
+### J-01 — The typecheck gate verifies essentially nothing
+
+```text
+ID:                    J-01
+Priority:              P2
+Confidence:            CONFIRMED (measured)
+Classification:        DOCUMENTATION DRIFT
+Area:                  Type safety / quality gates
+File(s):               jsconfig.json · docs/ARCHITECTURE.md:38 · package.json (typecheck script)
+```
+
+**Evidence — measured, not inferred.** `jsconfig.json` sets `"checkJs": false` and `"strict": false`.
+With `checkJs` off, TypeScript parses `.js`/`.jsx` files but does not report type errors in them — and the
+include set contains **zero** `.ts`/`.tsx` files (verified). A repository-wide grep for `@param`,
+`@returns` and `@typedef` returns **zero files**, so there is also no JSDoc to power inference.
+
+Run as configured, the gate passes trivially:
+
+```text
+npx tsc -p jsconfig.json --noEmit              → exit 0, no diagnostics
+npx tsc -p jsconfig.json --noEmit --checkJs    → 608 errors
+                                                  387 in test files (mostly vitest mock patterns — noise)
+                                                  221 in production files
+```
+
+Production hot spots include `src/lib/focusHomeLogic.js` (22 — e.g. `Property 'priorities' does not exist
+on type '{}'`), `Icon.jsx` (35), `CrudPageTemplate.jsx` (14), `AppLayout.jsx` (11). Error classes are
+dominated by TS2339 (property does not exist, 67), TS2741/TS2739 (missing properties, 84) and TS2322
+(type not assignable, 39).
+
+**Problem.** `ARCHITECTURE.md:38` states: *"The current `jsconfig.json` already runs
+`tsc -p jsconfig.json --noEmit` in CI, so structural type errors that JSDoc + ambient type packages can
+catch are caught."* Both halves fail: `checkJs: false` means JS type errors are not reported at all, and
+there is no JSDoc anywhere for the mechanism to use. The command runs in **two** CI workflows on every PR
+and verifies little beyond what lint and build already cover.
+
+**Why it matters.** This is not an argument for TypeScript — the JS choice remains defensible. It is that
+the repository claims a safety net it does not have, in the same document that justifies not having
+TypeScript. A reviewer who checks `jsconfig.json` finds the claim contradicted in eight lines. It also
+explains why F-01's type-identity confusion survived: nothing was ever checking.
+
+**Recommended remediation.** Either make the claim true — turn on `checkJs`, fix or `// @ts-nocheck` the
+test-file noise, and work down the 221 production diagnostics (many are genuine latent bugs; the
+`focusHomeLogic` ones point at exactly the untyped shapes F-02 exploits) — or correct
+`ARCHITECTURE.md:38` to say the gate currently checks syntax only and that real checking arrives with the
+staged migration. The honest short-term move is the documentation fix plus enabling `checkJs` on `shared/`
+and `src/lib/` first.
+
+**Scope:** S (docs) / M (enable and clear `lib/`) · **Historical:** D — new.
+
+### 26.2 Where types would actually pay
+
+The audit **validates the documented migration ordering** and can now ground it in evidence rather than
+principle.
 
 The two most expensive defects found — F-01 and F-02 — are both `lib/` defects, and both are *exactly* the
 kind types help with:
@@ -1888,7 +1948,10 @@ consolidated:
   Fix the repository setting that breaks it; do not weaken the guard.
 - `KNOWN_LIMITATIONS.md`'s ledger **form**, the CHANGELOG's date-anchored evidence format, and the
   2026-05-24 audit's inline status table. Fix their stale content; keep their structure.
-- The documented JS-not-TS posture with a staged plan — and `tsc --noEmit` actually running in CI.
+- The documented JS-not-TS posture **as a decision**, with a staged migration plan and honest reasoning.
+  (Preserve the decision and the plan — but see J-01: the `tsc --noEmit` gate that is supposed to back it
+  runs with `checkJs: false` and currently verifies almost nothing, so the *claim* needs fixing even though
+  the *choice* does not.)
 
 ## 36. Unknown / Unverified
 
