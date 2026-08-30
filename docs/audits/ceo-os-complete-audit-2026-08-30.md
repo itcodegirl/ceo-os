@@ -2286,3 +2286,41 @@ on a system that is not running.
 **The one-sentence product judgment:** CEO OS is a genuinely calm, genuinely original single-user operating
 system whose product thinking is ahead of its infrastructure — and whose most valuable next move is not a
 new feature, but making the cloud half behave as well as the local half already does.
+
+---
+
+## Appendix — Failure and Recovery Matrix
+
+Consolidated answer to "what happens when X fails, and can the user recover without understanding the
+implementation?" Each row states the observed behavior and where the finding lives.
+
+| Failure | What happens today | User can recover? | Finding |
+| --- | --- | --- | --- |
+| Client render exception | Three-tier error boundaries: panel fallback, route-level boundary keyed to `location.key` (navigate-away reset **and** same-path retry), shell boundary. Scrubbed telemetry emitted | **Yes** — retry or navigate away | healthy |
+| Route chunk fails to load | Caught by the route boundary; retry path exists | Yes | healthy |
+| `localStorage` JSON corruption | Blob preserved under `${key}__corrupt_<ts>` (3-slot cap), event dispatched, non-blocking banner with restore/discard | **Mostly** — except corruption detected during the first render commit, where the backup is made but no banner ever appears | S-04, F-72 |
+| Storage quota exceeded | Classified on the save-status bus; assertive banner naming the failing key; deep link scrolls and focuses Settings → Workspace Data | Yes | healthy (F-94 has no recovery affordance for the "needs recovery" line) |
+| Quota exceeded **during backup import** | Raw `setItem` in the write loop: import half-applies **and** never reaches the quota banner | **No** | F-88, F-69 |
+| Supabase unreachable (signed in) | Opportunities/Content enqueue recoverable failures and show "Pending sync"; Weekly Brief and Settings surface errors; Focus Home shows only a 2.2 s toast | Partly — but a queued write presents as a hard failure, inviting the retry that wedges the queue | F-45, F-07 |
+| Supabase auth error / token refresh | **Divergent by repository**: Settings and Chief fall back to local; Opportunities/Content/Weekly throw, and the UI renders "Offline. No cloud replay queue is active" while actually online | **No** — the retry can never succeed | F-44, A-03 |
+| Stale record (local) | `assertRecordIsFresh` throws `StaleRecordError`; `useCrudPage` shows a friendly message and refreshes the list under the open modal | Yes — this is the designed path and it works | preserve |
+| Stale record (Supabase) | The guard misfires on nearly every edit because of the precision mismatch, and the write is discarded rather than queued | **No** | **F-01** |
+| Offline write replay fails permanently | `attempts` increments but is never consulted; drain stops at the first failure; no eviction, no dead-letter, no discard UI | **No** — every later write is blocked indefinitely | F-45 |
+| Account switch with queued writes | Queue is a single global key with no owner; replay stamps whoever is signed in now | **No** — and user A's content can land in user B's workspace | A-02 |
+| AI proxy unavailable / unauthorized | Client falls back to a deterministic local plan, **visibly labelled** with reason and error code | Yes — failure is honest. But under the documented production config this is the *permanent* state | preserve / F-03 |
+| AI returns malformed JSON | Normalised defensively on both sides with item and length caps; upstream parse failure cannot crash the function (though it returns 200 with an error object rather than 502) | Yes | F-83 |
+| Generation completes after navigating away | Output is silently discarded — the mount guard returns before the save | **No** | F-56 |
+| Telemetry endpoint missing (Netlify) | SPA fallback returns `index.html` with HTTP 200; the client's delivery check treats any `ok` as success and drops the batch | **No** — silent, total loss | C-09 |
+| Telemetry batch permanently rejected (400/401) | Treated like a transient 503; queue never advances; drains only when a *future* error occurs | No | T-03 |
+| Malformed backup import | Validate-all-then-write-all: rejected before any write; newer schema versions rejected explicitly; unknown keys ignored and counted | **Yes** — genuinely well built | preserve |
+| Future-version storage envelope | Short-circuits and is returned **unchanged** as if current; an incomplete migration chain is also returned as data | **No** — silent wrong-shape data | F-71 |
+| Expired session mid-save (Settings) | Persists locally and flips the source to local | Partly — what happens to that local change after re-authentication is unverified | A-07, U1 |
+| Journal autosave fails, then date switched | Old day's unsaved text discarded **and** the error message cleared | **No** | F-22 |
+| Weekly reflection unsaved at navigation | Debounce cancelled without flushing; no `beforeunload`, no blur flush | **No** | F-31 |
+
+**The pattern.** Failure design is genuinely strong wherever the repository built it deliberately —
+corruption preservation, quota banners, the labelled AI fallback, local stale-record recovery, transactional
+import validation. The gaps cluster in two places: the **seam** between local and cloud (rows F-01, F-44,
+A-02, A-03, F-45), and **lifecycle edges** where a pending write meets an unmount, a date change, or a
+version bump (F-22, F-31, F-56, F-71). Neither is a failure of intent; both are places where a
+well-designed mechanism stops short of its last state.
