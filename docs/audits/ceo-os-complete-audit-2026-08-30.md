@@ -290,7 +290,7 @@ previous theme and title.
 
 ## 5. Complete Surface Inventory
 
-156 distinct surfaces were catalogued across the inspection fleet. They are grouped below by system
+201 distinct surfaces were catalogued across the inspection fleet. They are grouped below by system
 area; surfaces with no findings are listed as **healthy** rather than omitted, per the audit contract.
 
 ### 5.1 Shell and global surfaces
@@ -1701,14 +1701,14 @@ Nothing was deleted. Two of these entries exist specifically to *prevent* an unn
 
 CEO OS has five prior audits (`docs/audits/`) plus a detailed closure ledger in `KNOWN_LIMITATIONS.md` and
 a date-anchored CHANGELOG. This audit read all of them before forming findings, and spot-checked claimed
-fixes against current code. The distribution across the mandated categories, over 159 findings:
+fixes against current code. The distribution across the mandated categories, over 174 findings:
 
 | Category | Count | Meaning |
 | --- | --- | --- |
 | **A** — previously found and fixed | 4 | Only reopened where current code shows a regression |
-| **B** — previously found, still open | 16 | Revalidated against current implementation |
+| **B** — previously found, still open | 21 | Revalidated against current implementation |
 | **C** — intentionally deferred | 11 | Documented boundaries, **not** characterised as neglect |
-| **D** — newly discovered | 128 | Not captured by any prior audit |
+| **D** — newly discovered | 138 | Not captured by any prior audit |
 
 ### A. Previously found and confirmed fixed — verified, not reopened
 
@@ -1732,7 +1732,7 @@ Four items are reopened **with regression evidence**:
 
 ### B. Previously found and still open — revalidated
 
-Sixteen findings. The most significant: the weekly-brief UX audit's Phases 2–5 (week navigation,
+Twenty-one findings. The most significant: the weekly-brief UX audit's Phases 2–5 (week navigation,
 carry-forward, chosen focus, summary-band dedupe) remain entirely unbuilt while Phase 1 shipped (F-37);
 Supabase auth-error handling still diverges by repository (F-44, A-03), an item the readiness audit raised;
 the `experimental/telemetry/` quarantine keeps slipping (§30); `CASE_STUDY.md` staleness was flagged before
@@ -1758,7 +1758,7 @@ telemetry token exposure as a trusted-deployment boundary.
 example, reminders being local-only is a legitimate boundary (C), but the *absence of in-product copy
 saying so*, on a page that simultaneously advertises sync, is a defect (F-08).
 
-### D. Newly discovered — 128 findings
+### D. Newly discovered — 138 findings
 
 The three most consequential are F-01 (Supabase concurrency inversion), F-87 (unconfirmed destructive demo
 load), and the CI/automation cluster C-06 through C-09. None of these appear in any prior audit, and the
@@ -1771,7 +1771,7 @@ boundary. Prior audits reviewed the code correctly; what was missing was checkin
 
 ## 34. Cross-Cutting Root Problems
 
-Most of the 159 findings collapse into eight root causes. Fixing a root fixes its dependents; fixing the
+Most of the 174 findings collapse into eight root causes. Fixing a root fixes its dependents; fixing the
 dependents one at a time does not.
 
 ### R1 — The client and the database disagree about timestamp precision
@@ -1836,7 +1836,7 @@ nothing arbitrates when they disagree.
 
 ## 35. Known Good Decisions to Preserve
 
-166 preserve-items were nominated by the inspection fleet. The ones that should survive any remediation,
+180 preserve-items were nominated by the inspection fleet. The ones that should survive any remediation,
 consolidated:
 
 **Product and thesis**
@@ -1995,7 +1995,7 @@ the root resolves them.
 | **T-01 + KMS stack** | P2 | ARCH RISK | Telemetry | — | Execute the documented `experimental/telemetry/` quarantine; keep a thin token + HMAC ingest | L | product decision | — |
 | **D-01…D-09** | P2/P3 | DOC DRIFT | Documentation | R8 | Re-capture visuals or restore the caveat; de-duplicate the env reference and fix the fail-closed wording; reconcile `KNOWN_LIMITATIONS`; correct enforcement claims; trim `CASE_STUDY`; declare a canonical hierarchy; add a LICENSE | M | — | — |
 | **A-05 / C-04 / C-05** | P2 | PORTFOLIO GAP | Tests | R7 | Add auth-surface tests and include both auth routes in the axe sweep; add e2e for generation, offline replay and autosave | M | — | — |
-| ~50 P3 items | P3 | mixed | all | mixed | See the per-section tables | S each | — | — |
+| ~100 P3 items | P3 | mixed | all | mixed | See the per-section tables | S each | — | — |
 
 ---
 
@@ -2119,8 +2119,8 @@ COVERAGE
 Routes discovered:                    12 (9 shell + 2 auth + 1 wildcard)
 Routes audited:                       12  (100%)
 
-Meaningful product surfaces discovered: 156
-Surfaces audited:                       156 (100%) — healthy surfaces recorded, not omitted
+Meaningful product surfaces discovered: 201
+Surfaces audited:                       201 (100%) — healthy surfaces recorded, not omitted
 
 Persistence domains discovered:        13 (10 local, 7 Supabase-backed, plus queue,
                                           ops snapshots and UI preferences)
