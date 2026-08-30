@@ -1233,6 +1233,62 @@ gaps sit outside what the sweep can see:
 4. **Only serious and critical violations fail CI**; moderate and minor findings are reported to output and
    ignored. That is a defensible threshold, but it means the gate is narrower than "axe passes" suggests.
 
+5. **The sweep only ever runs in the dark theme.** No spec sets `data-theme="light"`, so the entire light
+   palette — a headline closed-audit item — has never been scanned by axe. That matters, because of the
+   next finding.
+
+### 23.1 Light-theme contrast falls below AA, and the regression test validates a different pair
+
+```text
+ID:                    G-01
+Priority:              P2
+Confidence:            CONFIRMED (arithmetic); NEEDS RUNTIME VERIFICATION (which token renders where)
+Classification:        DEFECT
+Area:                  Design system / accessibility
+File(s):               src/styles/tokens.css:212-216 (light overlay)
+                       src/styles/system.css (light overlay overriding the button color)
+                       src/styles/tokens.contrast.test.js:272-274
+```
+
+**Evidence.** Computed directly from the token values. In the light theme `--accent` is `#1f7fc6` and
+`--bg` is `#f3f6fb`:
+
+```text
+contrast(#1f7fc6, #f3f6fb) = 3.95 : 1     WCAG AA small text requires 4.5 : 1
+contrast(#15243a, #f3f6fb) = 14.41 : 1    (body text — healthy)
+```
+
+`--accent` is the rendered color of light-theme action buttons and focus chips, because the light overlay
+in `system.css` overrides the token the regression test actually checks. The test asserts
+`--accent-soft-strong` against `--bg-accent-subtle` (`tokens.contrast.test.js:273-274`) — a **different
+pair** from the one the cascade produces. The same inspection found the light "Scheduled" pill at 3.43:1,
+`--warning` at 3.73:1 and `--success` at 3.99:1 in small-text roles, and the light focus ring compositing to
+roughly 2.2:1 against the page, under the 3:1 non-text minimum (the dark ring is 7.6:1).
+
+**Why it slipped through.** Two safety nets both miss it in the same way: axe never runs in light theme,
+and the contrast test validates a token pair that the light cascade replaces. This is the **same failure
+shape as F-01** — a check that encodes an assumption rather than measuring the real artifact.
+
+**Why it matters.** The light theme is a documented closed audit item ("two working themes from one token
+system"). Sub-AA text on the primary action color, plus a focus ring below the non-text minimum, means the
+claim does not fully hold in the rendered cascade.
+
+**Recommended remediation.** Darken the light-theme `--accent` (and the warning/success/scheduled
+small-text roles) until they clear 4.5:1 on `--bg`, strengthen the light focus ring past 3:1, and — most
+importantly — change the regression test to assert the token pairs that **actually render**, then add a
+light-theme pass to the axe sweep so both nets close.
+
+**Scope:** S · **Manual QA:** MQ-THM-01, MQ-THM-03 · **Historical:** D — new.
+
+**Other design-system findings** (all P3 unless noted): shared form primitives are styled by `forms.css`,
+which only five surfaces import by convention, so a new consumer silently renders unstyled; dead assets and
+orphaned shell CSS (an unused Bluesky icon sheet in `public/icons.svg`, `.topbar__action`, and two other
+orphaned classes); the breakpoint ladder has drifted to ten distinct max-widths with single-use outliers;
+`theme-color` meta values no longer match `--bg` and `--font-mono` declares a never-loaded IBM Plex face;
+`Badge` exposes `ariaLabel` on a role-less `<span>`, which assistive technology is not required to honour;
+the desktop sidebar is not sticky, so it scrolls out of view on long pages; and mobile-Safari hazards
+(`100vh` in modal sizing, `background-attachment: fixed`, broad `backdrop-filter`) need device verification.
+
 **Accessibility findings** are recorded with their home surfaces rather than duplicated here: S-01
 (focusable hidden nav links — the one likely serious violation found), F-13 ("ADHD support layer"
 landmark), F-18 (ambiguous sticky-note action names and label-in-name mismatches), F-25 (button nested
@@ -1693,3 +1749,381 @@ consolidated:
 - `KNOWN_LIMITATIONS.md`'s ledger **form**, the CHANGELOG's date-anchored evidence format, and the
   2026-05-24 audit's inline status table. Fix their stale content; keep their structure.
 - The documented JS-not-TS posture with a staged plan — and `tsc --noEmit` actually running in CI.
+
+---
+
+## 30. Overengineering Assessment
+
+The brief requires this section to be explicit and to resist praising complexity for its own sake. Each
+subsystem is classified against what the product actually needs.
+
+| Subsystem | Verdict | Reasoning |
+| --- | --- | --- |
+| **Repository pattern across 10 domains** | **NECESSARY** | Two persistence backends and cross-domain promotions demand a seam. It is used, consistent, and tested |
+| **Versioned storage envelope + domain guard + corruption preservation** | **NECESSARY** | Solves real failure modes (wrong-key swap, silent JSON loss) that a local-first app genuinely hits. The best engineering in the repository |
+| **Migration registry** | **REASONABLE FUTURE-PROOFING** | Small, pure, well-documented, honestly described as empty. Downgraded from "necessary" only because the read path is not actually ready to use it (F-71), and the one real migration performed to date bypassed it |
+| **Optimistic concurrency** | **NECESSARY** | Correct instinct for a multi-tab local-first app — and the local implementation works. The cloud implementation is inverted (F-01), which is a defect in execution, not a judgment error |
+| **Offline write queue** | **VALUABLE PORTFOLIO SIGNAL** | Genuinely good primitives; but it serves two of ten domains, has no terminal state, and its UX presents queued writes as failures. The concept earns its place; the lifecycle does not yet |
+| **Custom event pub/sub + `useSilentRefresh`** | **NECESSARY** | The documented reasoning (no global store to justify, free cross-tab via storage events) holds. `useSilentRefresh` is the right extraction |
+| **`CrudPageTemplate` slots abstraction** | **REASONABLE** | Two consumers is thin for an abstraction, but they are genuinely near-identical and the migration is complete and guarded |
+| **Slots-migration CI guard + dated tracking ticket** | **OVERENGINEERED** | A bespoke regex-based CI script and a dated deadline ticket to police a two-consumer refactor that is already closed — and which will hard-fail CI after 2026-09-30 (C-11) |
+| **Route-budget budgets + trend gate** | **VALUABLE PORTFOLIO SIGNAL** | Real discipline, and the `--release` refresh guard is better than most teams manage — but the loop is not operating (C-01), and the baseline is hand-editable in the regressing PR (C-02) |
+| **App-error telemetry ingest (thin: token + HMAC + Supabase + idempotency)** | **DEFENSIBLE** | Proportionate for demonstrating production thinking, and the idempotency design is genuinely good |
+| **HMAC rotation windows (current/next/legacy)** | **PREMATURE** | Rotation infrastructure for a single-founder app with one browser producer and no operator |
+| **Ed25519 asymmetric path** | **PORTFOLIO-ONLY** | No browser producer exists; enabling it **breaks** ingest (T-01) |
+| **Generic KMS keyset URL** | **PORTFOLIO-ONLY** | Same |
+| **Provider-native AWS/GCP/Azure KMS adapters** | **SHOULD BE QUARANTINED** | The three SDKs are not in `package.json` (verified), so these paths can only throw. This is scaffolding presented as capability |
+| **Key-verification audit table** | **PORTFOLIO-ONLY** | Audit logging for a key system with no operator to audit |
+| **Ops incident lifecycle + Slack/PagerDuty fanout** | **HIGH MAINTENANCE RISK** | A full incident state machine whose driving workflow has never executed (§2.3) |
+| **Ops Reliability UI** | **DEFENSIBLE BUT OVERBUILT** | Correctly hidden behind `?meta=1` and honest on load errors, but its local fallback fabricates snapshots (T-05) and no evidence exists that it has ever shown real data |
+| **Dual Vercel + Netlify adapters** | **REASONABLE** | Thin shims over a shared core is the cheap way to stay portable — but shipping `api/` with **no** `vercel.json` (F-80) means the second target is claimed rather than supported |
+| **JS + `tsc --noEmit` staged TS plan** | **NECESSARY / correct judgment** | A defensible, documented trade-off with a real migration plan — and the audit's two worst defects argue for starting it at the persistence boundary (§26.1) |
+
+**The honest summary.** Roughly 2,900 lines of server and script code exist for a telemetry and operations
+capability the product does not need, cannot fully enable, and has never run. The repository already knows
+this — `KNOWN_LIMITATIONS.md:14` says so plainly and commits to an `experimental/telemetry/` quarantine.
+**Because it is documented, the overbuild is an intentional boundary rather than a credibility problem.**
+What has become a credibility problem is that the quarantine keeps slipping while the README continues to
+describe the ops loop in the present tense.
+
+The important nuance for a reviewer: the overbuild is **not** in the product architecture. Focus Home,
+Capture, Journal, Weekly Brief, Opportunities, Content OS, Chief of Staff, the storage layer and the shell
+are all proportionate to the problem. The disproportion is confined to one clearly-labelled corner.
+
+---
+
+## 31. Portfolio / Hiring Assessment
+
+### What would impress a senior frontend hiring manager
+
+1. **Product judgment that costs features.** Removing a working numeric momentum score because it nudged
+   users toward optimisation — and committing the reasoning next to the code — is the single most senior
+   thing in this repository. Most portfolios add; this one subtracts on purpose.
+2. **Failure design.** Corruption is preserved and announced rather than swallowed. The AI fallback is
+   labelled with its reason. Save failures say the text is retained. This is a person who has operated
+   software, not just shipped it.
+3. **A real seam.** The repository contract with dual backends, versioned envelopes, domain guards and
+   typed stale-record errors is architecture, not file organisation.
+4. **Verified accessibility work.** Nine axe route sweeps passing in CI, a skip link, a hand-rolled focus
+   trap with restoration, keyboard-only e2e coverage, and a CSS-token contrast regression test. Very few
+   portfolio projects have any of this; almost none have the token test.
+5. **`shared/` as a true single source of truth** across client and server, so the drift a reviewer would
+   look for structurally cannot happen.
+6. **Honest documentation as a practice** — `KNOWN_LIMITATIONS.md` is a genuinely unusual artifact, and the
+   instinct behind it is the most transferable thing in the repository.
+
+### What would concern the same reviewer
+
+1. **The strict CI gate has been red for three and a half months, with five PRs merged over it.** This is
+   the finding most likely to be spotted in sixty seconds — the Actions tab is public — and it is the one
+   that most undercuts the "production-minded" framing. **Fixing this is the highest-ROI hour available.**
+2. **README screenshots do not match the app**, and the honesty caveat that once covered them was removed.
+   A reviewer who runs the app sees a different product.
+3. **The flagship AI feature cannot be authenticated as documented** (F-03) — a reviewer who reads
+   `CONFIGURATION.md` and then the client code will find this.
+4. **The concurrency feature is likely inverted in cloud mode** (F-01). A reviewer who reads
+   `staleRecordError.js` alongside the migrations may spot it, and it sits under a headline claim.
+5. **Infrastructure disproportionate to the product** — KMS adapters whose SDKs are not installed, an
+   incident lifecycle whose workflow has never fired. Documented, but present in the tree.
+6. **Unrelated content in the repository** — a Git tutorial in `docs/`, a Next.js curriculum arriving on
+   other branches. It reads as an unmaintained scratch space rather than a curated artifact.
+7. **No LICENSE**, so a reviewer technically cannot run or reuse it.
+
+### What demonstrates judgment rather than code volume
+
+The subtractions and the honest boundaries: the withheld momentum number; snooze as a third option;
+meta-gating operational surfaces so a reviewer sees only product; the deliberate JS-not-TS posture with a
+written plan instead of a fashionable rewrite; the explicit "what's intentionally out of scope" list; and
+choosing DOM events over a state library with the reasoning recorded. Also the negative test asserting that
+a non-stale error must *not* trigger a refetch — that is someone thinking about what should not happen.
+
+### What looks disproportionately complex
+
+The telemetry, KMS, key-audit and incident-lifecycle stack (§30), and the CI ceremony around a closed
+two-consumer refactor (C-11).
+
+### The five highest-ROI changes for hiring credibility
+
+| # | Change | Effort | Why it pays |
+| --- | --- | --- | --- |
+| 1 | **Get the strict CI gate green and make it required.** Fix two e2e selectors (F-50), fix the repository Actions setting so the baseline refresh can run (C-01), and fix `branch-protection.yml`'s invalid permission (C-06) | ~1–2 hours | Turns the most visible negative signal into the strongest positive one. A public green gate backs every other claim |
+| 2 | **Re-capture the five screenshots and the walkthrough**, or restore the honesty caveat until you do | ~1 afternoon | Both prior audits called this the single largest portfolio risk; it is still open and now contradicts the limitations ledger |
+| 3 | **Fix F-01 and add a microsecond-precision repository test** | ~half a day | Converts the most serious defect into a demonstration of exactly the debugging depth the project claims |
+| 4 | **Rewrite `CASE_STUDY.md` down to its first six sections** plus a short "what changed since" | ~2 hours | It is the document written for interviews and currently the weakest; cutting 480 pasted lines improves it |
+| 5 | **Execute the `experimental/telemetry/` quarantine and add a LICENSE** | ~half a day | Removes the disproportion critique and the one instant checklist failure |
+
+Everything on that list is a day and a half of work in total, and none of it requires new features.
+
+---
+
+## 32. Dead / Legacy / Duplicate Code
+
+| Item | Classification | Evidence |
+| --- | --- | --- |
+| `src/components/dashboard/MomentumChart.jsx` | **CONFIRMED DEAD** | Verified: zero importers, no test. Also renders 0–100 bars, contradicting the shipped qualitative-momentum decision |
+| `src/components/dashboard/ActivityFeed.jsx` + test | **CONFIRMED DEAD** | Verified: zero production importers; only its own test imports it |
+| `dashboardDemoData` (`mockData.js:133-163`) | **CONFIRMED DEAD** | No consumers; carries a pre-Focus-Home `focusScore` shape |
+| `buildNextMoveQueue`, `isLocalDashboardDemoMode` | **CONFIRMED DEAD** (test-only) | Exported but consumed only by tests; the latter is evaluated once at module load and would be stale anyway |
+| `SOURCE_NOTICE_LOCAL_FIRST_ONLY` (`uiCopy.js:18`) | **INTENTIONAL FUTURE HOOK — should be wired now** | Defined and unit-tested with zero production consumers; it is exactly the copy F-08 needs |
+| `if (!aiConfig.endpoint)` branch (`openai.js:153`) | **CONFIRMED DEAD** | Verified unreachable: the endpoint constant always falls back to `/api/chief-of-staff` |
+| Bluesky icon sheet in `public/icons.svg`; `.topbar__action` and two other orphaned shell classes | **CONFIRMED DEAD** | No references |
+| ~16 momentum-chart / activity-feed CSS blocks in `components.css`; content card-grid CSS retained only for the skeleton | **LIKELY DEAD** | Tied to the dead components above |
+| `docs/git-course/module-01-mental-model.md` | **NEEDS PRODUCT DECISION** | Unrelated to the product, unreferenced, promises a Module 02 that does not exist |
+| `docs/PR_SUMMARY_TEMPLATE.md`, the two `docs/tracking/` PR summaries | **NEEDS PRODUCT DECISION** | Point-in-time records presented as living docs |
+| `scripts/check-crud-template-legacy-props.mjs` | **INTENTIONAL — now retirable** | Its migration is closed and it hard-fails CI after 2026-09-30 |
+| The four `Chief*List` components | **NOT DEAD — verified live** | Each has exactly one production importer; `ChiefAcceptList` has four. The consolidation worked as intended |
+| `src/lib/chiefActions.js`, `src/lib/chiefStructuredPayload.js` | **NOT DUPLICATES — verified** | Pure re-export shims over `shared/`, which is what makes client/server drift structurally impossible |
+
+Nothing was deleted. Two of these entries exist specifically to *prevent* an unnecessary deletion: the
+`Chief*List` components and the `shared/` re-export shims both look like duplication and are not.
+
+---
+
+## 36. Unknown / Unverified
+
+94 items were nominated as not conclusively established. They collapse into eight blocks. Nothing here is
+omitted for convenience — where the audit could not prove something, it says so.
+
+### U1 — All authenticated Supabase behavior
+
+**Why unverified:** no authenticated environment was available, and the repository's own documentation
+states this pass has never been run. **Static evidence:** repository code paths, migrations and RLS policies
+read in full. **Runtime evidence:** none. **Required verification:** `CEO-OS-MANUAL-QA.md` §10, especially
+**MQ-AUTH-01**, which alone decides F-01 — the audit's most important finding. Also unproven: whether local
+data really disappears after first sign-in (A-01), whether the queue replays across accounts (A-02),
+multi-tab auth behavior, and whether the two-timezone week split materialises as two rows (F-29).
+
+### U2 — Rendered visual behavior
+
+Layout at real viewports, the light-theme first-paint flash, the half-width Reminders panel, drawer
+clipping at 30rem, and the appearance of the unstyled Chief accept buttons. Static CSS proves the rules
+exist; it cannot prove what a browser paints. **Required:** MQ-RSP-*, MQ-THM-*, MQ-SHL-03. Note that the
+G-01 contrast *arithmetic* is confirmed; what needs verification is which token renders on which control.
+
+### U3 — Screen-reader announcement behavior
+
+Whether the conditionally-mounted live regions (toast, save pill, page loading, the Suspense fallback) are
+announced at all; whether the Journal prompt's accessible name absorbs its nested button; whether
+`display: grid` on table rows strips row/cell semantics; whether the corruption banner over-announces during
+its re-fire storm. axe cannot establish any of these. **Required:** the `[A11Y]` items.
+
+### U4 — Deployed proxy and platform behavior
+
+Whether Vercel or Netlify sanitise `x-forwarded-for` before the function sees it (which decides how weak the
+rate limiter really is); Vercel's SPA deep-link fallback with no `vercel.json`; and — importantly —
+**whether any deployed instance is currently running in open, token-disabled mode with a live
+`OPENAI_API_KEY`**. That last question is the practical severity of F-03 and can only be answered by the
+owner.
+
+### U5 — Telemetry ingest end-to-end
+
+The one true external integration test is secret-gated and **skipped** in this environment, so durable
+ingest, the retention prune, and the idempotency constraint are unproven here (they are proven in CI when
+`SUPABASE_TEST_*` is present). Whether the Ops Reliability page has *ever* displayed real data is unknown
+and, given §2.3, doubtful.
+
+### U6 — Timing and perception
+
+The visible duration of the demo-data flash and the theme flash; whether repeated silent-refresh failures
+re-toast at an annoying rate in practice; whether per-keystroke writes on a 100-note Capture wall produce
+perceptible lag; and whether the unsignalled lazy-route wait reads as broken.
+
+### U7 — Behaviors this audit inferred from React or browser semantics
+
+Chiefly F-04 (controlled-textarea snap-back), S-01 (focusable hidden nav links), and S-03 (scroll not
+resetting). Each is a standard, well-understood mechanism and each is rated HIGH CONFIDENCE — but jsdom
+applies no CSS and asserts no cursor behavior, so a browser is the only proof. Each has a `[REPRO]` item.
+
+### U8 — Whether prior-audit claims about *runtime* behavior still hold
+
+Touch-target sizes, the quota deep-link scroll-and-focus, and reduced-motion behavior were verified as CSS
+rules, not as rendered results.
+
+**One methodological note.** Three of the audit's most important findings (F-01, G-01, and the blank-mode
+test in F-02) share a shape: **an existing test or check validates something adjacent to what actually
+runs.** That pattern is worth carrying into the remediation — when fixing each, fix the check as well, or
+the next regression will be equally invisible.
+
+---
+
+## 37. Master Remediation Backlog
+
+Deduplicated and grouped under the root causes from §34. Symptoms are folded into their root where fixing
+the root resolves them.
+
+| ID | Pri | Class | Area | Root | Recommended fix | Size | Dependency | Verification |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **F-01** | P1 | DEFECT | Supabase concurrency | R1 | Carry the raw `updated_at` string and echo it verbatim in the `.eq()` guard (or `date_trunc('milliseconds')` server-side); add a microsecond-precision repository test | S | none | **MQ-AUTH-01** |
+| **F-02** | P1 | DEFECT | Weekly / Focus Home | R2 | Gate the weekly demo fallback on `isDemoWorkspaceEnabled()`; fix the test to pin the current week; add a rollover case | S | none | MQ-FH-01 |
+| **F-87** | P1 | DEFECT | Settings / demo | R2 | `archiveStorageValue` before seeding; confirm when target stores are non-empty | S | none | MQ-SET-01 |
+| **F-03** | P1 | ARCH RISK | AI proxy | — | Verify the Supabase session JWT in the proxy, or keep it open with a hard spend ceiling and `max_output_tokens` — then reconcile the docs | M | auth decision | MQ-CHF-01 |
+| **C-06** | P1 | DEFECT | CI governance | R7 | Fix the invalid `administration: write` permission; actually require the strict check | S | C-07 first | §2.3 re-check |
+| **C-07/C-01** | P2 | DEFECT | CI governance | R7 | Fix the two Content OS selectors (F-50); fix the repository Actions setting so the baseline refresh can run | S | none | MQ-X-05, MQ-X-06 |
+| **C-08** | P2 | DEFECT | Ops workflow | R7 | Add `npm run build` before the route checks; establish why the schedule never fires | S | none | MQ-X-07 |
+| **C-09** | P2 | DEFECT | Deployment | R7 | Add the Netlify telemetry redirect; stop treating any `ok` response as delivery | S | none | MQ-X-03 |
+| **F-45 / A-02 / F-74** | P2 | ARCH RISK | Offline queue | R4 | Give entries an owner and a terminal disposition after N attempts; continue draining past terminal failures; make queued writes read as queued | M | none | MQ-STO-05, MQ-AUTH-04 |
+| **F-44 / A-03 / A-01** | P2 | ARCH RISK | Local/cloud seam | R3 | Extract the Chief/Settings auth-fallback classification into a shared helper; render a sign-in state instead of offline copy; correct the sign-in copy | M | none | MQ-AUTH-02, MQ-AUTH-03 |
+| **F-04** | P1 | DEFECT | Capture | — | Local draft state with debounce; normalise only at persist time; decide the empty-text behavior | M | none | MQ-CAP-01 |
+| **F-05** | P2 | DEFECT | Focus Home | — | One `selectActiveReminders` selector used by all five call sites; test that hero and suggested loop agree | S | none | MQ-FH-03 |
+| **F-22 / F-31** | P2 | DEFECT | Journal / Weekly autosave | — | Flush on unmount rather than cancel; port Journal's flush pattern to the weekly reflection; fix the misleading comment and the audit doc | S | none | MQ-JRN-01, MQ-WK-03 |
+| **F-71** | P2 | ARCH RISK | Storage | — | Reject future-version envelopes; treat an incomplete migration chain as a read failure | S | none | — |
+| **F-72** | P2 | DEFECT | Storage | — | Quarantine the corrupt primary after preserving it | S | none | MQ-STO-02 |
+| **F-41** | P2 | DEFECT + DOC | CRUD | R3 | Wire `useCrudPage` through `useSilentRefresh`, or correct the comment and the docs | S | none | MQ-OPP-03 |
+| **F-42** | P2 | DEFECT | Modals | — | Modal stacking registry so only the topmost handles Escape | S | none | MQ-OPP-02 |
+| **F-43** | P2 | DEFECT | CRUD delete | — | Thread `expectedUpdatedAt` into delete; treat local not-found as success; surface errors in the modal | S | F-01 | MQ-OPP-04 |
+| **G-01** | P2 | DEFECT | Design / a11y | — | Darken light-theme accent/warning/success/scheduled to ≥4.5:1 and the focus ring past 3:1; **make the contrast test assert the pairs that actually render**; add a light-theme axe pass | S | none | MQ-THM-01/03 |
+| **S-01** | P2 | DEFECT | Mobile nav a11y | — | Add `[hidden] { display: none !important }`; add a 390px axe scan | S | none | MQ-SHL-01 |
+| **S-02** | P2 | DEFECT | Theming | — | Inline pre-hydration theme script in `index.html` (also fixes the auth routes) | S | none | MQ-SHL-03/04 |
+| **F-55/F-56/F-57/F-58** | P2 | DEFECT | Chief client | — | Accept from the stored payload; persist before the mount gate; debounce notes with a sequence guard; add the off-device disclosure and delete the dead branch | M | none | MQ-CHF-03/04/05/06 |
+| **F-88/F-89/F-90** | P2 | DEFECT | Settings | R2 | Archive before import and use the guarded setter; clear demo ids across all weeks; make Retry re-attempt the save | S | none | MQ-SET-02/05/06 |
+| **F-29** | P2 | DEFECT | Week key | — | Format the week key from local date components; alias existing rows | M | data migration | MQ-WK-06, MQ-AUTH-10 |
+| **F-33/F-30/F-64** | P2 | ARCH RISK | React updaters | R5 | Snapshot `updatedAt` at editor open; move persistence out of updaters using Journal's ref pattern | M | F-01 | MQ-OPP-03 |
+| **F-34/F-35/F-36** | P2 | DEFECT | Weekly | — | Keep save errors visible; align prepend/append ordering; delete the duplicated summary render | S | none | MQ-WK-01/02/05 |
+| **F-06/F-07/F-08** | P2 | DEFECT | Focus Home | R2 | Initialise weekly state empty; consume `loadError` with a real retry; wire the local-only notice into Reminders | S | none | MQ-FH-02/11/12 |
+| **T-02/T-03** | P2 | DEFECT | Telemetry | — | Sign a canonical envelope including `sentAt`; add a freshness window; flush on start and `online`; drop terminal batches | M | §30 quarantine decision | — |
+| **T-01 + KMS stack** | P2 | ARCH RISK | Telemetry | — | Execute the documented `experimental/telemetry/` quarantine; keep a thin token + HMAC ingest | L | product decision | — |
+| **D-01…D-09** | P2/P3 | DOC DRIFT | Documentation | R8 | Re-capture visuals or restore the caveat; de-duplicate the env reference and fix the fail-closed wording; reconcile `KNOWN_LIMITATIONS`; correct enforcement claims; trim `CASE_STUDY`; declare a canonical hierarchy; add a LICENSE | M | — | — |
+| **A-05 / C-04 / C-05** | P2 | PORTFOLIO GAP | Tests | R7 | Add auth-surface tests and include both auth routes in the axe sweep; add e2e for generation, offline replay and autosave | M | — | — |
+| ~50 P3 items | P3 | mixed | all | mixed | See the per-section tables | S each | — | — |
+
+---
+
+## 38. Recommended Remediation Order
+
+### Phase 0 — Critical
+
+**None.** No P0 was found: nothing exploitable, no silent destruction of pre-existing user data, no
+completely broken core workflow in the default (local) mode.
+
+### Phase 1 — Data and trust integrity
+
+`F-01` (Supabase concurrency — and the microsecond test that goes with it) · `F-87` (archive + confirm
+before demo seeding) · `F-02` (blank-mode gate + a test that exercises the right branch) · `F-45`/`A-02`
+(queue owner and terminal state) · `F-71` (future-version guard) · `F-72` (quarantine corrupt primaries) ·
+`F-88` (archive before import, guarded setter).
+
+*Rationale: everything here either loses data, corrupts a workspace, or blocks legitimate writes.*
+
+### Phase 2 — Core product workflows
+
+`F-04` (Capture editing) · `F-05` (one reminder selector) · `F-22`/`F-31` (autosave flush on both surfaces) ·
+`F-55`–`F-58` (Chief acceptance fidelity, mid-generation persistence, note debounce, off-device disclosure) ·
+`F-34`–`F-36` (weekly error visibility, ordering, duplicated summary) · `F-06`–`F-08` (demo flash, real
+retry, reminders disclosure) · `F-89`/`F-90`.
+
+### Phase 3 — UX and accessibility
+
+`S-01` (focusable hidden nav links) · `G-01` (light-theme contrast **and** the test that missed it) ·
+`S-02` (pre-hydration theme) · `F-42` (modal Escape stacking) · `S-03` (scroll reset) · `S-05`/`F-26` (failure
+messages that persist; live-region consolidation) · `F-13`/`F-18`/`F-25`/`F-95` · the two sub-44px targets.
+
+### Phase 4 — Architecture simplification
+
+`R3` (one auth-error helper across repositories) · `F-41` (cross-tab refresh, or honest docs) · `R5` (move
+persistence out of `setState` updaters, porting Journal's pattern) · `S-06` (one settings provider in the
+shell) · `R6` (`usePersistentState` mount write) · **the `experimental/telemetry/` quarantine** · retire
+`C-11`'s guard script.
+
+### Phase 5 — Tests and production trust
+
+`MQ-AUTH-*` (the authenticated regression pass — the single largest evidence gap) · microsecond-precision
+repository tests · auth-surface tests and axe coverage for `/sign-in` and `/auth/callback` · a light-theme
+and 390px axe pass · e2e for generation, offline replay and autosave · `C-06`–`C-09` (make the gate green,
+required, and actually running).
+
+**Note on ordering:** `C-07` (two selectors + the Actions setting) is a one-hour fix that turns the strict
+gate green, and doing it **first** gives every subsequent phase real enforcement. It is placed in Phase 5
+by category but should be executed immediately.
+
+### Phase 6 — Portfolio credibility
+
+Re-capture screenshots and the walkthrough (or restore the caveat) · trim `CASE_STUDY.md` · reconcile
+`KNOWN_LIMITATIONS.md` · de-duplicate and correct the env reference · add a LICENSE and a canonical-doc
+declaration · relocate `docs/git-course/`.
+
+### Phase 7 — Cleanup
+
+Delete the confirmed-dead components, exports and CSS · resolve the point-in-time docs · consolidate the
+ten-value breakpoint ladder · fix the `theme-color` and `--font-mono` drift.
+
+---
+
+## 39. Readiness Classification
+
+### Overall: **Level 2 — Strong Portfolio Project**
+
+**Evidence supporting this level.** A working, coherent product with an implemented thesis; 823 passing
+unit tests and 29/31 e2e tests including nine axe route sweeps; a genuine architectural seam with versioned
+storage, corruption preservation and optimistic locking that works in local mode; correct and complete RLS;
+a clean shared-core serverless design; real performance budgeting; and honest limitation documentation.
+This is well above a prototype.
+
+**Evidence preventing Level 3 (Beta-Ready).**
+
+1. **F-01** — the flagship concurrency feature appears inverted in cloud mode, and no authenticated pass has
+   ever been run to prove otherwise.
+2. **F-02 / F-87** — a documented workspace guarantee is not implemented, and a one-click unconfirmed action
+   destroys local records.
+3. **F-03** — the differentiating AI feature cannot be authenticated as documented.
+4. **R7** — the project's own verification loops are red, unenforced, or have never executed, so "it works"
+   currently rests on claims rather than a passing gate.
+
+A beta implies users can rely on it. Items 1–3 each break that for a real user; item 4 means the project
+cannot currently demonstrate otherwise.
+
+**Manual/runtime verification still required.** The full `[AUTH]` block, the `[REPRO]` items, and the
+`[A11Y]` pass — see `CEO-OS-MANUAL-QA.md`.
+
+**Conditions to advance to Level 3.** Complete Phase 1; run the authenticated regression pass
+(`MQ-AUTH-01` first); get the strict CI gate green and required. That is a small, well-defined body of
+work — days, not months.
+
+**Conditions to advance to Level 4 (Production-Capable With Known Limitations).** All of the above, plus:
+per-user proxy authentication or a hard spend ceiling; the account lifecycle gaps either closed or
+prominently bounded in-product; the offline queue given an owner and a terminal state; and either the
+telemetry quarantine executed or the ops claims removed from the README.
+
+### The three readinesses stated separately
+
+| Dimension | Level | Reasoning |
+| --- | --- | --- |
+| **Portfolio readiness** | **Strong, with fixable damage** | The architecture, product judgment and accessibility work are genuinely impressive and above the bar for a senior frontend role. What holds it back is presentational and reversible: a publicly red CI gate, stale screenshots, and a decayed case study. Roughly a day and a half of work moves this to "very strong" |
+| **Product readiness** | **Usable single-user local tool; not ready for someone's real week in cloud mode** | In pure local mode a founder could genuinely use this daily — with the caveats of F-04 (sticky editing), F-02 (demo resurrection) and F-87 (destructive demo load). In cloud mode, F-01 likely blocks editing entirely |
+| **Production readiness** | **Not production-ready, and honestly documented as such** | No authenticated verification, incomplete account lifecycle, an AI proxy that is either off or open, unenforced quality gates, and operational tooling that has never run. The repository's own framing already says most of this — the audit's addition is that it is further from production than the ops infrastructure's *presence* implies |
+
+The gap between portfolio readiness and production readiness is the honest headline of this audit — and
+the repository's own documentation mostly says so already. What it does not yet say is that some of the
+machinery it points to as evidence of production thinking is not currently running.
+
+---
+
+## 62. Product Verdict
+
+**Does CEO OS genuinely reduce founder cognitive load?** In local mode, yes — more than a generic dashboard,
+and for a specific reason: it *explains* its recommendations. "Recommended because:" turns a ranking into
+decision support. The daily loop (capture → ranked focus → promote → weekly review) is coherent and
+original, and the deliberate subtractions — no numeric score, no streaks, snooze as a third option, ops
+hidden behind a flag — mean the product resists the thing it was built to avoid.
+
+**Which features best accomplish it.** Focus Home's single hero with a reason and a safe-to-ignore list;
+Capture's frictionless entry with promotion verbs that move a thought into the right domain without
+retyping; Chief of Staff's structured acceptance, which converts a wall of AI text into reviewable items
+with visible destinations; and the calm failure design throughout.
+
+**Which features add complexity without proportionate benefit.** The telemetry, KMS and incident stack —
+invisible to the user and, per §30, largely unusable. Within the product itself, very little is
+gratuitous: the focus-tools drawer is collapsed by default, and the momentum readout is quiet enough that
+its staleness (F-09) barely registers.
+
+**Where the product feels coherent.** Everything inside a single local workspace. The domains share
+vocabulary, the promotion verbs share one hook, the surfaces share one design language, and the whole thing
+degrades honestly when something fails.
+
+**Where it feels like separate systems accumulated over time.** The local/cloud seam (four different
+strategies, per §16.2); reminders — a first-class product concept that lives in a panel, syncs nowhere, and
+is the only one of five promotion verbs without a guard or a disclosure; and the ops surface, which reports
+on a system that is not running.
+
+**The one-sentence product judgment:** CEO OS is a genuinely calm, genuinely original single-user operating
+system whose product thinking is ahead of its infrastructure — and whose most valuable next move is not a
+new feature, but making the cloud half behave as well as the local half already does.
