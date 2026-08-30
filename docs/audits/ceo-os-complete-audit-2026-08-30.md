@@ -14,7 +14,7 @@ CEO OS is a genuinely well-engineered local-first React application whose produc
 founder operating system — is visible in the code, not just the README. The repository shows real
 senior judgment: a single route registry driving routes/nav/meta, a repository pattern with versioned
 storage envelopes and corruption preservation, deterministic and *explained* focus recommendations, a
-deliberate JS + `tsc --noEmit` posture with a written migration plan, and an unusually honest
+deliberate JS-not-TypeScript decision with a written staged migration plan, and an unusually honest
 `KNOWN_LIMITATIONS.md`. The full unit suite (823 tests) passes, `npm run verify` is green, markdownlint
 is clean, and 29 of 31 Playwright specs — including nine axe accessibility sweeps across every primary
 route — pass at HEAD.
@@ -29,8 +29,8 @@ Three failures cluster around it:
    numerically; the consequence is that every guarded Supabase edit on Opportunities, Content OS and
    Weekly Brief items would be rejected with "changed in another window" — and because
    `StaleRecordError` is deliberately excluded from the offline queue, the edit is discarded rather
-   than retried. Two independent inspectors found this; the orchestrator re-derived it from the
-   migrations and Node. It needs a real authenticated environment to close, and it is the single most
+   than retried. Three independent inspectors found this, an adversarial verifier confirmed it, and the
+   orchestrator re-derived it from the migrations and in Node. It needs a real authenticated environment to close, and it is the single most
    important item in this audit.
 
 2. **A documented "Start blank" guarantee is not implemented for Weekly Brief.** `weeklyRepository`
@@ -45,7 +45,8 @@ Three failures cluster around it:
    through the GitHub Actions API: the strict `PR Test Suite / Unit + E2E` gate has **never executed a
    single step** — `ci-tests.yml:56` puts `secrets` in a step-level `if:`, which GitHub does not allow, so
    every run dies at parse time with zero jobs and zero elapsed seconds, and the file has carried that line
-   unedited since it was created on 2026-04-22. Five PRs merged over it; the
+   unedited since it was created on 2026-04-22 — five PRs have merged over a check that has never
+   validated anything. The
    weekly `Release Route Baseline Refresh` has failed all 14 times it has ever run, with the job log
    naming a repository setting (`GitHub Actions is not permitted to create or approve pull requests`)
    as the cause; and `Scheduled Ops Alerts` — described in the README as a daily loop that persists SLO
@@ -53,8 +54,12 @@ Three failures cluster around it:
    schedule** (zero runs with `event=schedule`, on a query validated against the workflow that does
    have scheduled runs).
 
-None of these are exploitable security vulnerabilities, and none destroy pre-existing user data. There
-is no P0 in this audit. But together they describe a system whose *self-verification* has drifted from
+A fourth, found late and worth stating beside them: the `typecheck` gate that backs the
+JS-not-TypeScript decision runs with `checkJs: false` over a codebase with zero type annotations, so it
+verifies almost nothing — 608 diagnostics appear the moment JS checking is switched on (J-01).
+
+None of these are exploitable security vulnerabilities, and none destroys pre-existing user data
+without a deliberate click. There is no P0 in this audit. But together they describe a system whose *self-verification* has drifted from
 its self-description, which matters more than usual for a project whose stated differentiator is honest
 engineering.
 
