@@ -1029,7 +1029,7 @@ equality with a 1 ms half-open range (`gte`/`lt`). Whichever is chosen, add a re
 timestamps carry **microsecond** precision, so the suite can fail on this class of bug in future.
 
 **Scope:** S (the fix) / M (with tests and an authenticated pass) · **Dependencies:** none ·
-**Runtime verification:** REQUIRED · **Manual QA:** MQ-SUP-01 · **Historical:** D — new. Prior audits added
+**Runtime verification:** REQUIRED · **Manual QA:** MQ-AUTH-01 · **Historical:** D — new. Prior audits added
 `updated_at` to the Supabase selectors and tested stale conflicts through mocks, which is precisely how the
 precision mismatch slipped through.
 
