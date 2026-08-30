@@ -1644,6 +1644,7 @@ landed**.
 | D-06 | P3 | CONFIRMED | DOCUMENTATION DRIFT | `docs/AI_ROADMAP.md` inventories a five-action pipeline and proposes building "blockers" and "followup" actions that already shipped as `blocker-analysis` and `opportunity-followup`; it is also linked from nothing |
 | D-07 | P3 | CONFIRMED | DOCUMENTATION DRIFT | Point-in-time PR-voice documents are presented as living docs: `FINAL_ROADMAP.md` contains a "Current PR Scope Note" naming no PR; `PR_SUMMARY_TEMPLATE.md` is a frozen April summary with 35 hardcoded commit hashes; the two `docs/tracking/` PR summaries contradict each other on export/import when read as current; `RELEASE_CHECKLIST.md` is stamped April 30 and predates the surfaces it should smoke-test |
 | D-08 | P3 | CONFIRMED | TECHNICAL DEBT | `docs/git-course/module-01-mental-model.md` is an unrelated, unreferenced Git tutorial that promises a Module 02 which does not exist. A Next.js curriculum is arriving on other branches (PR #46) into this product repository |
+| D-10 | P3 | CONFIRMED | DEFECT | **Social link previews render no image.** `index.html:24,31` set `og:image` and `twitter:image` to `/favicon.svg` — a 48×46 **SVG**, and a **relative** URL. Verified directly. Essentially no social platform (X, LinkedIn, Slack, Facebook) renders SVG for `og:image`, and all expect an absolute URL and a much larger raster (≥1200×630). Combined with the relative `og:url` already noted in S-08, a shared link to the app or repo previews with no image at all — on a project whose portfolio value depends on being shared | Point both at an absolute URL for a raster image (a screenshot re-capture from D-01 would supply one) |
 | D-09 | P3 | CONFIRMED | PORTFOLIO GAP | No `LICENSE` (default: all rights reserved — reviewers cannot legally run or reuse it), no `CONTRIBUTING.md`, no `CLAUDE.md`/`AGENTS.md`, and **no declared canonical-document hierarchy** — which is the root cause that let D-01, D-02 and D-03 happen: three documents each believed they owned the same fact |
 
 ---
@@ -2227,6 +2228,11 @@ Production source files re-checked:    230
   gap found and closed by the orchestrator: 1 (src/lib/chiefPanelResult.js — read directly;
                                           43 lines, live, well-guarded on every input path,
                                           has its own test; no findings)
+Independent critic pass:               16th agent re-enumerated the repo; no hidden surfaces found;
+                                          no inspector coverage claim contradicted
+Supply chain:                          package-lock.json v3, 303 packages, 0 non-npm sources
+Residual thin coverage:                2 test files at skim depth, 2 snapshot files unread,
+                                          ~15 unit tests known at test-name depth (none load-bearing)
 
 Runtime-verified workflows:            npm run verify (823 tests, lint, typecheck, build);
                                        markdownlint; CRUD template guard; static route budgets;
@@ -2245,10 +2251,34 @@ Reason for exclusions:                 vendored code is out of scope; binary con
                                        audited as source
 ```
 
-**Is anything meaningful present in the repository but absent from this audit?** After the second pass:
-no. The one gap found (`chiefPanelResult.js`) was inspected and closed before publication. Every route,
-surface, persistence domain, server module, adapter, migration, script, workflow and documentation file is
-represented somewhere in this report.
+**Independent completeness critic.** A sixteenth agent re-enumerated the repository from disk and
+reconciled it against every inspector's claimed coverage. Its verdict: *"no hidden surfaces (service
+workers, extra workflows, dotfile configs, alternate entry points, untracked source) exist beyond those
+listed,"* and *"nothing discovered contradicts any inspector's claimed coverage."* It also closed several
+items first-hand that the fleet had only inferred, and those results are folded in above and below:
+
+- **Screenshot staleness is now directly observed twice, not inferred once.** The critic rendered
+  `weekly-brief-planning.png` and confirms it shows the pre-rebuild UI, corroborating D-01 beyond the
+  shared-commit-provenance argument.
+- **Supply chain, previously unowned by any inspector, is clean.** Verified directly: `package-lock.json`
+  is lockfileVersion 3 with 303 packages and **zero** dependencies resolved from anywhere but
+  `registry.npmjs.org` — no git, tarball or alternate-registry sources.
+- **`test-results/` corroborates F-50 first-hand** — the on-disk Playwright error contexts name the stale
+  `Create a new content item` locator against the rendered `Add a content idea or draft` button, which the
+  audit had cited from its own run rather than from the artifacts.
+- **`public/favicon.svg`** turned out to matter: it is reused as `og:image`/`twitter:image` (finding D-10).
+
+**Residual coverage gaps, stated honestly.** Four things remain thinner than the rest and are recorded
+rather than papered over: `src/pages/RouteAccessibility.test.jsx` and `src/lib/uiCopy.test.js` were read at
+name/skim depth by their owners rather than in full; the two `__snapshots__` files were read by nobody
+(their underlying components were read in full elsewhere); and roughly fifteen unit-test files are known at
+describe/it-name depth rather than assertion depth. None of these carries a finding, and none is load-bearing
+for a conclusion in this report — but "covered" means something weaker for them than for the rest.
+
+**Is anything meaningful present in the repository but absent from this audit?** After both passes: no.
+The one production-source gap (`chiefPanelResult.js`) was inspected and closed before publication. Every
+route, surface, persistence domain, server module, adapter, migration, script, workflow and documentation
+file is represented somewhere in this report.
 
 **Is "100% coverage" a defensible claim?** For *static* coverage of production source, yes — and the
 numbers above are how it was checked rather than asserted. For *behavioral* coverage, emphatically no: the
