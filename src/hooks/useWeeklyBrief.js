@@ -56,6 +56,17 @@ export function useWeeklyBrief() {
   const [wins, setWinsState] = useState(defaultWins);
   const [blockers, setBlockersState] = useState(defaultBlockers);
 
+  // Refs mirror the latest committed value of each editable collection so the
+  // setters can read the "previous" value synchronously (like Journal.jsx's
+  // entryRef) instead of inside a setState updater. Keeping persistence out of
+  // the updaters means React 18 StrictMode's dev-only double-invocation of
+  // updaters can't fire duplicate writes. Every place that commits one of these
+  // values updates both the state and its ref in lock-step.
+  const reviewNotesRef = useRef(reviewNotes);
+  const prioritiesRef = useRef(priorities);
+  const winsRef = useRef(wins);
+  const blockersRef = useRef(blockers);
+
   useEffect(() => {
     weekStartRef.current = weekStart;
   }, [weekStart]);
@@ -107,18 +118,29 @@ export function useWeeklyBrief() {
       const nextWins = normalizeCollectionPayload(payload, 'wins');
       const nextBlockers = normalizeCollectionPayload(payload, 'blockers');
 
+      // Commit each value and keep its ref in lock-step. The refs mirror the
+      // committed React state, so comparing against `*Ref.current` reproduces
+      // the previous functional-updater bail-out (skip the write, preserve the
+      // reference) without reading state inside an updater.
       setLoadError('');
       setSource((current) => (current === nextSource ? current : nextSource));
-      setReviewNotesState((current) => (current === nextReviewNotes ? current : nextReviewNotes));
-      setPrioritiesState((current) => (
-        shallowEqualRecordArrays(current, nextPriorities) ? current : nextPriorities
-      ));
-      setWinsState((current) => (
-        shallowEqualRecordArrays(current, nextWins) ? current : nextWins
-      ));
-      setBlockersState((current) => (
-        shallowEqualRecordArrays(current, nextBlockers) ? current : nextBlockers
-      ));
+
+      if (reviewNotesRef.current !== nextReviewNotes) {
+        reviewNotesRef.current = nextReviewNotes;
+        setReviewNotesState(nextReviewNotes);
+      }
+      if (!shallowEqualRecordArrays(prioritiesRef.current, nextPriorities)) {
+        prioritiesRef.current = nextPriorities;
+        setPrioritiesState(nextPriorities);
+      }
+      if (!shallowEqualRecordArrays(winsRef.current, nextWins)) {
+        winsRef.current = nextWins;
+        setWinsState(nextWins);
+      }
+      if (!shallowEqualRecordArrays(blockersRef.current, nextBlockers)) {
+        blockersRef.current = nextBlockers;
+        setBlockersState(nextBlockers);
+      }
     } catch (error) {
       if (!isMountedRef.current || requestId !== requestIdRef.current) {
         return;
@@ -247,86 +269,91 @@ export function useWeeklyBrief() {
   }, [weekStart]);
 
   const setReviewNotes = useCallback((nextValue) => {
-    setReviewNotesState((currentValue) => {
-      const resolvedValue = resolveNextValue(nextValue, currentValue);
-      const normalizedValue = typeof resolvedValue === 'string' ? resolvedValue : DEFAULT_REVIEW_NOTES;
+    const currentValue = reviewNotesRef.current;
+    const resolvedValue = resolveNextValue(nextValue, currentValue);
+    const normalizedValue = typeof resolvedValue === 'string' ? resolvedValue : DEFAULT_REVIEW_NOTES;
 
-      setReviewNotesStatus('saving');
+    // Commit the optimistic value first (state + ref), then persist. Persistence
+    // lives outside the updater so a StrictMode double-invoke can't double-save.
+    reviewNotesRef.current = normalizedValue;
+    setReviewNotesState(normalizedValue);
+    setReviewNotesStatus('saving');
 
-      Promise.resolve(saveWeeklyBriefReviewNotes({
-        weekStart,
-        reviewNotes: normalizedValue,
-      }))
-        .then(() => {
-          if (isMountedRef.current) {
-            setReviewNotesStatus('saved');
-          }
-        })
-        .catch((error) => {
-          if (isMountedRef.current) {
-            setReviewNotesStatus('error');
-          }
-          recoverAfterPersistenceFailure(
-            'Unable to save weekly review notes right now.',
-            'Failed to save weekly review notes',
-            error,
-          );
-        });
-
-      return normalizedValue;
-    });
+    Promise.resolve(saveWeeklyBriefReviewNotes({
+      weekStart,
+      reviewNotes: normalizedValue,
+    }))
+      .then(() => {
+        if (isMountedRef.current) {
+          setReviewNotesStatus('saved');
+        }
+      })
+      .catch((error) => {
+        if (isMountedRef.current) {
+          setReviewNotesStatus('error');
+        }
+        recoverAfterPersistenceFailure(
+          'Unable to save weekly review notes right now.',
+          'Failed to save weekly review notes',
+          error,
+        );
+      });
   }, [isMountedRef, recoverAfterPersistenceFailure, weekStart]);
 
-  const setPriorities = useCallback((nextValue) => {
-    setPrioritiesState((currentValue) => {
-      const resolvedValue = resolveNextValue(nextValue, currentValue);
-      const normalizedValue = normalizeArrayValue(resolvedValue, []);
+  // Shared implementation for the three collection setters. Reads the previous
+  // value from the ref, commits the optimistic next value (state + ref), then
+  // diffs and persists — all outside any setState updater so StrictMode's
+  // double-invoke can't fire duplicate writes. On failure it recovers from the
+  // persisted state via a silent reload.
+  const commitCollection = useCallback((ref, setState, itemType, nextValue, errorMessage, logLabel) => {
+    const currentValue = ref.current;
+    const resolvedValue = resolveNextValue(nextValue, currentValue);
+    const normalizedValue = normalizeArrayValue(resolvedValue, []);
 
-      void persistCollectionDiff('priority', currentValue, normalizedValue).catch((error) => {
-        recoverAfterPersistenceFailure(
-          isStaleRecordError(error) ? STALE_RECORD_MESSAGE : 'Unable to save weekly priorities right now.',
-          'Failed to persist weekly priorities',
-          error,
-        );
-      });
+    ref.current = normalizedValue;
+    setState(normalizedValue);
 
-      return normalizedValue;
+    void persistCollectionDiff(itemType, currentValue, normalizedValue).catch((error) => {
+      recoverAfterPersistenceFailure(
+        isStaleRecordError(error) ? STALE_RECORD_MESSAGE : errorMessage,
+        logLabel,
+        error,
+      );
     });
   }, [persistCollectionDiff, recoverAfterPersistenceFailure]);
+
+  const setPriorities = useCallback((nextValue) => {
+    commitCollection(
+      prioritiesRef,
+      setPrioritiesState,
+      'priority',
+      nextValue,
+      'Unable to save weekly priorities right now.',
+      'Failed to persist weekly priorities',
+    );
+  }, [commitCollection]);
 
   const setWins = useCallback((nextValue) => {
-    setWinsState((currentValue) => {
-      const resolvedValue = resolveNextValue(nextValue, currentValue);
-      const normalizedValue = normalizeArrayValue(resolvedValue, []);
-
-      void persistCollectionDiff('win', currentValue, normalizedValue).catch((error) => {
-        recoverAfterPersistenceFailure(
-          isStaleRecordError(error) ? STALE_RECORD_MESSAGE : 'Unable to save weekly wins right now.',
-          'Failed to persist weekly wins',
-          error,
-        );
-      });
-
-      return normalizedValue;
-    });
-  }, [persistCollectionDiff, recoverAfterPersistenceFailure]);
+    commitCollection(
+      winsRef,
+      setWinsState,
+      'win',
+      nextValue,
+      'Unable to save weekly wins right now.',
+      'Failed to persist weekly wins',
+    );
+  }, [commitCollection]);
 
   const setBlockers = useCallback((nextValue) => {
-    setBlockersState((currentValue) => {
-      const resolvedValue = resolveNextValue(nextValue, currentValue);
-      const normalizedValue = normalizeArrayValue(resolvedValue, []);
-
-      void persistCollectionDiff('blocker', currentValue, normalizedValue).catch((error) => {
-        recoverAfterPersistenceFailure(
-          isStaleRecordError(error) ? STALE_RECORD_MESSAGE : 'Unable to save weekly blockers right now.',
-          'Failed to persist weekly blockers',
-          error,
-        );
-      });
-
-      return normalizedValue;
-    });
-  }, [persistCollectionDiff, recoverAfterPersistenceFailure]);
+    commitCollection(
+      blockersRef,
+      setBlockersState,
+      'blocker',
+      nextValue,
+      'Unable to save weekly blockers right now.',
+      'Failed to persist weekly blockers',
+    );
+  }, [commitCollection]);
 
   return {
     weekStart,

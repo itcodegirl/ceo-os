@@ -1,3 +1,4 @@
+import { StrictMode, createElement } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_REVIEW_NOTES, defaultPriorities } from '../lib/weeklyData';
@@ -412,5 +413,75 @@ describe('useWeeklyBrief', () => {
     });
 
     expect(result.current.loadError).toBe('');
+  });
+
+  it('persists a collection edit exactly once under StrictMode double-invocation', async () => {
+    const stampedPriority = {
+      id: 'priority-strict',
+      title: 'Only once',
+      owner: 'Jenna',
+      status: 'Planned',
+      updatedAt: 1777663200000,
+    };
+    getWeeklyBriefByWeek.mockResolvedValue({
+      reviewNotes: DEFAULT_REVIEW_NOTES,
+      priorities: [stampedPriority],
+      wins: [],
+      blockers: [],
+      source: 'local',
+    });
+    deleteWeeklyItem.mockResolvedValue(undefined);
+
+    const wrapper = ({ children }) => createElement(StrictMode, null, children);
+    const { result } = renderHook(() => useWeeklyBrief(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    act(() => {
+      result.current.setPriorities([]);
+    });
+
+    await waitFor(() => {
+      expect(deleteWeeklyItem).toHaveBeenCalled();
+    });
+
+    // Persistence lives outside the setState updater, so StrictMode's dev-only
+    // double-invocation of updaters must not delete the item twice. Before the
+    // fix this ran the delete twice (once per updater invocation).
+    expect(deleteWeeklyItem).toHaveBeenCalledTimes(1);
+    expect(result.current.priorities).toEqual([]);
+  });
+
+  it('reads the latest value from the ref across batched setter calls in one tick', async () => {
+    getWeeklyBriefByWeek.mockResolvedValue({
+      reviewNotes: DEFAULT_REVIEW_NOTES,
+      priorities: [],
+      wins: [],
+      blockers: [],
+      source: 'local',
+    });
+    createWeeklyItem.mockResolvedValue({ id: 'created' });
+
+    const { result } = renderHook(() => useWeeklyBrief());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Two functional updates in the same tick: the second must see the first's
+    // result via the ref, so both items survive (append semantics).
+    act(() => {
+      result.current.setPriorities((current) => [...current, { id: 'p1', title: 'First', status: 'Planned' }]);
+      result.current.setPriorities((current) => [...current, { id: 'p2', title: 'Second', status: 'Planned' }]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.priorities).toEqual([
+        { id: 'p1', title: 'First', status: 'Planned' },
+        { id: 'p2', title: 'Second', status: 'Planned' },
+      ]);
+    });
   });
 });
