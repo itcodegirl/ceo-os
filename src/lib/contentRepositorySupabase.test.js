@@ -14,15 +14,18 @@ vi.mock('./supabaseRuntime', () => {
 
 import { isStaleRecordError } from './staleRecordError';
 import * as runtimeModule from './supabaseRuntime';
+import { matchesExpectedUpdatedAtRange, withMicroseconds } from '../test/timestampPrecision';
 import { createContentItem, listContentItems, updateContentItem } from './contentRepository';
 
 function buildSupabaseClientStub({
   listRows = [],
   createRow = null,
-  rowsByExpectedAt = {},
+  storedUpdatedAt = null,
+  updateRow = null,
 } = {}) {
   const captured = {
     eqs: [],
+    rangeFilters: [],
     insert: null,
     selects: [],
     update: null,
@@ -33,6 +36,7 @@ function buildSupabaseClientStub({
     from() {
       let operation = 'list';
       const filters = {};
+      const range = {};
       const builder = {
         insert(payload) {
           operation = 'insert';
@@ -52,6 +56,16 @@ function buildSupabaseClientStub({
           }
           return builder;
         },
+        gte(column, value) {
+          captured.rangeFilters.push(['gte', column, value]);
+          if (column === 'updated_at') range.gte = value;
+          return builder;
+        },
+        lt(column, value) {
+          captured.rangeFilters.push(['lt', column, value]);
+          if (column === 'updated_at') range.lt = value;
+          return builder;
+        },
         select(value) {
           captured.selects.push(value);
           return builder;
@@ -60,13 +74,12 @@ function buildSupabaseClientStub({
           return { data: createRow, error: null };
         },
         async maybeSingle() {
-          if (filters.updated_at && !rowsByExpectedAt[filters.updated_at]) {
+          // Postgres semantics: the stored row keeps microsecond precision and
+          // the guard is an instant range, not string equality.
+          if (!updateRow || !matchesExpectedUpdatedAtRange(storedUpdatedAt, range)) {
             return { data: null, error: null };
           }
-          const data = rowsByExpectedAt[filters.updated_at]
-            || rowsByExpectedAt['*']
-            || null;
-          return { data, error: null };
+          return { data: updateRow, error: null };
         },
       };
       return builder;
@@ -135,38 +148,49 @@ describe('contentRepository Supabase timestamp coverage', () => {
 
   it('passes expected updated_at to Supabase and returns the fresh row when it matches', async () => {
     const expectedMs = Date.UTC(2026, 4, 1, 13, 0, 0);
-    const expectedIso = new Date(expectedMs).toISOString();
+    // The row as Postgres holds it: same millisecond, plus the microsecond
+    // remainder the client's Date.parse discarded on read.
     const stub = buildSupabaseClientStub({
-      rowsByExpectedAt: {
-        [expectedIso]: {
-          id: 'content-1',
-          title: 'Founder memo updated',
-          platform: 'LinkedIn',
-          status: 'Editing',
-          updated_at: '2026-05-01T13:05:00.000Z',
-        },
+      storedUpdatedAt: withMicroseconds(new Date(expectedMs).toISOString(), 321),
+      updateRow: {
+        id: 'content-1',
+        title: 'Renamed',
+        platform: 'LinkedIn',
+        content_type: 'Post',
+        status: 'Drafting',
+        purpose: '',
+        scheduled_for: null,
+        notes: '',
+        updated_at: '2026-05-01T13:05:00.000Z',
       },
     });
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
 
-    const updated = await updateContentItem(
+    const result = await updateContentItem(
       'content-1',
-      { title: 'Founder memo updated', platform: 'LinkedIn', status: 'Editing' },
+      { title: 'Renamed', platform: 'LinkedIn', status: 'Drafting' },
       { expectedUpdatedAt: expectedMs },
     );
 
-    expect(stub.captured.eqs).toContainEqual(['updated_at', expectedIso]);
+    expect(stub.captured.rangeFilters).toEqual([
+      ['gte', 'updated_at', new Date(expectedMs).toISOString()],
+      ['lt', 'updated_at', new Date(expectedMs + 1).toISOString()],
+    ]);
     expect(stub.captured.selects[0]).toContain('updated_at');
-    expect(updated).toMatchObject({
+    expect(result).toMatchObject({
       id: 'content-1',
-      title: 'Founder memo updated',
+      title: 'Renamed',
       updatedAt: Date.parse('2026-05-01T13:05:00.000Z'),
     });
   });
 
   it('throws StaleRecordError when a Supabase content row changed elsewhere', async () => {
     const expectedMs = Date.UTC(2026, 4, 1, 13, 0, 0);
-    const stub = buildSupabaseClientStub({ rowsByExpectedAt: {} });
+    // Row moved on by a full millisecond -> outside the client's window.
+    const stub = buildSupabaseClientStub({
+      storedUpdatedAt: withMicroseconds(new Date(expectedMs + 1).toISOString(), 250),
+      updateRow: { id: 'content-1', title: 'Renamed', updated_at: '2026-05-01T13:05:00.000Z' },
+    });
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
 
     let captured;

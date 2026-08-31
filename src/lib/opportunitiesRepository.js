@@ -5,7 +5,7 @@ import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime'
 import {
   StaleRecordError,
   assertRecordIsFresh,
-  expectedUpdatedAtToIso,
+  applyExpectedUpdatedAtFilter,
   readUpdatedAtMs,
 } from './staleRecordError';
 import { tryRemoteOrEnqueue } from './offlineWriteQueueIntegration';
@@ -233,14 +233,14 @@ export async function updateOpportunity(id, payload, options = {}) {
         .eq('id', id)
         .eq('user_id', userId);
 
-      const expectedIso = expectedUpdatedAtToIso(options.expectedUpdatedAt);
-      if (expectedIso) {
-        // Optimistic locking: only update if the row's updated_at still matches
-        // what the client opened the editor with. PostgREST returns the matched
-        // row in `data`; if no row matched, data is null and we treat it as a
-        // stale-record conflict (same UX as the local-only path).
-        query = query.eq('updated_at', expectedIso);
-      }
+      // Optimistic locking: only update if the row's updated_at still falls in
+      // the millisecond the client opened the editor with. PostgREST returns
+      // the matched row in `data`; if no row matched, data is null and we treat
+      // it as a stale-record conflict (same UX as the local-only path).
+      // The guard is a range, not an equality check, because the column keeps
+      // microsecond precision the client cannot represent — see
+      // `applyExpectedUpdatedAtFilter`.
+      query = applyExpectedUpdatedAtFilter(query, options.expectedUpdatedAt);
 
       const { data, error } = await query
         .select('id, name, company, priority, stage, next_step, updated_at')

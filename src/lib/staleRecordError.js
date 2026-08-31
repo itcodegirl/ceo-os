@@ -48,19 +48,47 @@ export function readUpdatedAtMs(record) {
 }
 
 /**
- * Converts an epoch-ms `expectedUpdatedAt` into an ISO string for Supabase
- * conflict checks (timestamptz columns compare as ISO). Returns null for
+ * Converts an epoch-ms `expectedUpdatedAt` into the half-open ISO range
+ * `[ms, ms + 1ms)` used for Supabase conflict checks. Returns null for
  * missing / non-positive values so callers can omit the guard and fall back
- * to the legacy "skip the check" contract. Inverse of `readUpdatedAtMs` on
- * the write path; shared by the three optimistic-locking repositories
- * (opportunities, content, weekly) that used to each inline it.
+ * to the legacy "skip the check" contract.
+ *
+ * Why a range and not an equality check: Postgres `timestamptz` keeps
+ * MICROSECOND precision (`now()` in the `set_updated_at` triggers), but
+ * JavaScript `Date` — and therefore every `updatedAt` the client carries —
+ * only resolves to milliseconds. `readUpdatedAtMs` truncates the microsecond
+ * remainder on read, so echoing that value back as `.eq('updated_at', iso)`
+ * can never match a row whose remainder is non-zero (~999 rows in 1000). That
+ * turned the optimistic-locking guard into a permanent rejection of every
+ * authenticated edit. Matching the millisecond the client actually saw
+ * restores the precision lost on read without weakening the check: the row is
+ * already pinned by id + user_id, so the range cannot match a second row, and
+ * any later write moves `updated_at` out of the window.
  */
-export function expectedUpdatedAtToIso(expectedUpdatedAt) {
+export function expectedUpdatedAtRangeIso(expectedUpdatedAt) {
   const expected = Number(expectedUpdatedAt);
   if (!Number.isFinite(expected) || expected <= 0) {
     return null;
   }
-  return new Date(expected).toISOString();
+  return {
+    fromIso: new Date(expected).toISOString(),
+    toIso: new Date(expected + 1).toISOString(),
+  };
+}
+
+/**
+ * Applies the optimistic-locking guard to a Supabase query builder, returning
+ * the builder so callers can keep chaining. A missing / non-positive expected
+ * stamp leaves the builder untouched (legacy "skip the check" contract).
+ * Shared by the optimistic-locking repositories (opportunities, content,
+ * weekly items) so the precision contract lives in exactly one place.
+ */
+export function applyExpectedUpdatedAtFilter(query, expectedUpdatedAt) {
+  const range = expectedUpdatedAtRangeIso(expectedUpdatedAt);
+  if (!range) {
+    return query;
+  }
+  return query.gte('updated_at', range.fromIso).lt('updated_at', range.toIso);
 }
 
 /**

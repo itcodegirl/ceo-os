@@ -5,7 +5,7 @@ import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime'
 import {
   StaleRecordError,
   assertRecordIsFresh,
-  expectedUpdatedAtToIso,
+  applyExpectedUpdatedAtFilter,
   readUpdatedAtMs,
 } from './staleRecordError';
 import { tryRemoteOrEnqueue } from './offlineWriteQueueIntegration';
@@ -250,11 +250,8 @@ export async function updateContentItem(id, payload, options = {}) {
         .eq('id', id)
         .eq('user_id', userId);
 
-      const expectedIso = expectedUpdatedAtToIso(options.expectedUpdatedAt);
-      if (expectedIso) {
-        // Optimistic locking — see opportunitiesRepository for the rationale.
-        query = query.eq('updated_at', expectedIso);
-      }
+      // Optimistic locking — see opportunitiesRepository for the rationale.
+      query = applyExpectedUpdatedAtFilter(query, options.expectedUpdatedAt);
 
       const { data, error } = await query
         .select(CONTENT_ITEM_COLUMNS)
