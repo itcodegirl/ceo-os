@@ -2,6 +2,29 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-08-31 - useWeeklyBrief: persistence out of setState updaters
+
+Branch `claude/useweeklybrief-setstate-sideeffects`. Closes the `useWeeklyBrief`
+state-management item deferred from the 2026-05-24 architecture audit (§7).
+
+State management (no behavior change):
+
+- `useWeeklyBrief`'s four editable collections (review notes, priorities, wins,
+  blockers) fired their persistence side effects *inside* `setState` updaters.
+  Updaters must be pure — React StrictMode double-invokes them in development,
+  which could fire duplicate repository writes. Reworked to the ref-based
+  pattern `Journal.jsx` already uses: each value's latest committed state is
+  mirrored in a ref, so each setter reads the previous value from the ref,
+  commits the optimistic next value to state and ref, then diffs and persists
+  outside any updater. The load path syncs the same refs.
+- The optimistic-locking protocol (`expectedUpdatedAt` threading, stale-record
+  recovery via silent reload) is byte-for-byte preserved and still covered by
+  the existing hook tests. Adds a StrictMode regression test that fails on the
+  old in-updater pattern (double delete) and passes on the fix (single delete),
+  plus a test that batched functional setter calls in one tick read the ref.
+- Also deduplicated the three near-identical collection setters onto a shared
+  `commitCollection` helper.
+
 ## 2026-06-26 - Architecture audit deferred-item cleanup
 
 Branch `claude/portfolio-audit-recommendations-ilzpfw`. Closes the three

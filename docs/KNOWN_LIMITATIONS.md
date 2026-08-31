@@ -62,12 +62,23 @@ closed the three bounded refactors from that deferred list:
   `Blob`/`createObjectURL`/`FileReader` paths are unit-testable apart from the
   markup.
 
-Still deferred after that follow-up (each genuinely its own PR): the
-telemetry/KMS `experimental/` quarantine (large rename), moving
-`useWeeklyBrief`'s persistence calls out of its `setState` updaters (needs a
-ref-based current-value tracker plus a careful optimistic-locking re-test), and
-subscribing the Chief acceptance signature caches to repository update events
-(bounded today by the post-generation reset).
+A later follow-up then closed the `useWeeklyBrief` item:
+
+- ✅ **`useWeeklyBrief` persistence moved out of `setState` updaters.** The four
+  editable collections (review notes, priorities, wins, blockers) now track
+  their latest committed value in refs (the same pattern `Journal.jsx` uses via
+  `entryRef`). Each setter reads the previous value from its ref, commits the
+  optimistic value to state and ref, then diffs and persists *outside* any
+  updater, so React StrictMode's dev-only double-invocation of updaters can no
+  longer fire duplicate writes. The optimistic-locking diff (`expectedUpdatedAt`
+  threading, stale-record recovery) is unchanged and covered by the existing
+  tests plus a new StrictMode regression test proving a single edit persists
+  exactly once.
+
+Still deferred after that (each genuinely its own PR): the telemetry/KMS
+`experimental/` quarantine (large rename) and subscribing the Chief acceptance
+signature caches to repository update events (bounded today by the
+post-generation reset).
 
 The May 8, 2026 senior audit pass closed these gaps on `improve/ceo-os-audit-fixes`:
 
