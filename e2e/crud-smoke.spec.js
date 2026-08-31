@@ -102,7 +102,7 @@ test.describe('CRUD smoke flows', () => {
       .click();
     await expect(page.getByRole('heading', { name: 'Content OS' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Create a new content item' }).click();
+    await page.getByRole('button', { name: 'Add a content idea or draft' }).click();
     const createDialog = page.getByRole('dialog', { name: 'Add Content Item' });
     await createDialog.getByLabel('Title', { exact: true }).fill(createdTitle);
     await createDialog.getByLabel('Platform', { exact: true }).fill('Podcast');
@@ -231,7 +231,7 @@ test.describe('CRUD smoke flows', () => {
       .click();
     await expect(page.getByRole('heading', { name: 'Content OS' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Create a new content item' }).click();
+    await page.getByRole('button', { name: 'Add a content idea or draft' }).click();
     const createDialog = page.getByRole('dialog', { name: 'Add Content Item' });
     await createDialog.getByLabel('Title', { exact: true }).fill(createdTitle);
     await createDialog.getByLabel('Platform', { exact: true }).fill('Newsletter');

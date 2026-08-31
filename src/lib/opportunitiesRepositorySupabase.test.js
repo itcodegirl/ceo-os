@@ -13,6 +13,7 @@ vi.mock('./supabaseRuntime', () => {
 });
 
 import { isStaleRecordError } from './staleRecordError';
+import { matchesExpectedUpdatedAtRange, withMicroseconds } from '../test/timestampPrecision';
 import * as runtimeModule from './supabaseRuntime';
 import { listOpportunities, updateOpportunity } from './opportunitiesRepository';
 
@@ -36,35 +37,44 @@ function buildSupabaseListClientStub({ rows = [] } = {}) {
   };
 }
 
-function buildSupabaseClientStub({ rowsByExpectedAt }) {
-  const captured = { eqs: [] };
+function buildSupabaseClientStub({ storedUpdatedAt = null, row = null } = {}) {
+  const captured = { eqs: [], rangeFilters: [] };
   return {
     captured,
     from() {
-      const filters = {};
+      const range = {};
       const builder = {
         update() {
           return builder;
         },
         eq(column, value) {
-          filters[column] = value;
           captured.eqs.push([column, value]);
+          return builder;
+        },
+        gte(column, value) {
+          captured.rangeFilters.push(['gte', column, value]);
+          if (column === 'updated_at') range.gte = value;
+          return builder;
+        },
+        lt(column, value) {
+          captured.rangeFilters.push(['lt', column, value]);
+          if (column === 'updated_at') range.lt = value;
           return builder;
         },
         select() {
           return builder;
         },
         async maybeSingle() {
-          // The stub keeps a map of "expected updated_at -> row". If the
-          // caller didn't pass an expected stamp we still let the update
-          // through (legacy contract).
-          if (filters.updated_at && !rowsByExpectedAt[filters.updated_at]) {
+          // Behaves like Postgres: the stored row carries microsecond
+          // precision and the guard is evaluated as an instant range, not as
+          // string equality against whatever the client sent.
+          if (!row) {
             return { data: null, error: null };
           }
-          const data = rowsByExpectedAt[filters.updated_at]
-            || rowsByExpectedAt['*']
-            || null;
-          return { data, error: null };
+          if (!matchesExpectedUpdatedAtRange(storedUpdatedAt, range)) {
+            return { data: null, error: null };
+          }
+          return { data: row, error: null };
         },
       };
       return builder;
@@ -113,18 +123,20 @@ describe('updateOpportunity (Supabase optimistic locking)', () => {
 
   it('passes expected updated_at to Supabase and returns the fresh row when it matches', async () => {
     const expectedMs = Date.UTC(2026, 4, 1, 12, 0, 0);
-    const expectedIso = new Date(expectedMs).toISOString();
+    // What Postgres actually holds: the same instant the client read, plus the
+    // microsecond remainder `now()` produced and `Date.parse` discarded. An
+    // equality guard against the client's millisecond value cannot match this.
+    const storedUpdatedAt = withMicroseconds(new Date(expectedMs).toISOString(), 456);
     const stub = buildSupabaseClientStub({
-      rowsByExpectedAt: {
-        [expectedIso]: {
-          id: 'opp-1',
-          name: 'Renamed',
-          company: 'Acme',
-          priority: 'High',
-          stage: 'New',
-          next_step: 'Email the team',
-          updated_at: '2026-05-01T12:01:00.000Z',
-        },
+      storedUpdatedAt,
+      row: {
+        id: 'opp-1',
+        name: 'Renamed',
+        company: 'Acme',
+        priority: 'High',
+        stage: 'New',
+        next_step: 'Email the team',
+        updated_at: '2026-05-01T12:01:00.000Z',
       },
     });
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
@@ -135,14 +147,21 @@ describe('updateOpportunity (Supabase optimistic locking)', () => {
       { expectedUpdatedAt: expectedMs },
     );
 
-    expect(stub.captured.eqs).toContainEqual(['updated_at', expectedIso]);
+    expect(stub.captured.rangeFilters).toEqual([
+      ['gte', 'updated_at', new Date(expectedMs).toISOString()],
+      ['lt', 'updated_at', new Date(expectedMs + 1).toISOString()],
+    ]);
     expect(result).toMatchObject({ name: 'Renamed' });
     expect(result.updatedAt).toBe(Date.parse('2026-05-01T12:01:00.000Z'));
   });
 
   it('throws StaleRecordError when the row was changed elsewhere', async () => {
     const expectedMs = Date.UTC(2026, 4, 1, 12, 0, 0);
-    const stub = buildSupabaseClientStub({ rowsByExpectedAt: { /* no match */ } });
+    // The row moved on by a full millisecond, so it falls outside the window.
+    const stub = buildSupabaseClientStub({
+      storedUpdatedAt: withMicroseconds(new Date(expectedMs + 1).toISOString(), 500),
+      row: { id: 'opp-1', name: 'Renamed', updated_at: '2026-05-01T12:01:00.000Z' },
+    });
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
 
     let captured;
@@ -162,16 +181,15 @@ describe('updateOpportunity (Supabase optimistic locking)', () => {
 
   it('skips the optimistic-locking filter when no expected stamp is supplied', async () => {
     const stub = buildSupabaseClientStub({
-      rowsByExpectedAt: {
-        '*': {
-          id: 'opp-1',
-          name: 'Renamed',
-          company: 'Acme',
-          priority: 'High',
-          stage: 'New',
-          next_step: 'Email',
-          updated_at: '2026-05-01T12:01:00.000Z',
-        },
+      storedUpdatedAt: withMicroseconds('2026-05-01T12:00:00.000Z', 654),
+      row: {
+        id: 'opp-1',
+        name: 'Renamed',
+        company: 'Acme',
+        priority: 'High',
+        stage: 'New',
+        next_step: 'Email',
+        updated_at: '2026-05-01T12:01:00.000Z',
       },
     });
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
@@ -180,7 +198,10 @@ describe('updateOpportunity (Supabase optimistic locking)', () => {
       name: 'Renamed', company: 'Acme', priority: 'High', stage: 'New', nextStep: 'Email',
     });
 
-    const updatedAtFilters = stub.captured.eqs.filter(([col]) => col === 'updated_at');
+    const updatedAtFilters = [
+      ...stub.captured.eqs.filter(([col]) => col === 'updated_at'),
+      ...stub.captured.rangeFilters.filter(([, col]) => col === 'updated_at'),
+    ];
     expect(updatedAtFilters).toHaveLength(0);
   });
 });

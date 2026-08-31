@@ -15,6 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
+    # `secrets` is not available to step-level `if:` conditionals, so the
+    # presence check is resolved once here (job-level `env` does allow it) and
+    # the step below tests the resulting string.
+    env:
+      HAS_SUPABASE_TEST_CONFIG: ${{ secrets.SUPABASE_TEST_URL != '' && secrets.SUPABASE_TEST_SERVICE_ROLE_KEY != '' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,7 +59,7 @@ jobs:
         run: npm run test:run
 
       - name: Run Telemetry Integration Tests (Supabase)
-        if: ${{ secrets.SUPABASE_TEST_URL != '' && secrets.SUPABASE_TEST_SERVICE_ROLE_KEY != '' }}
+        if: env.HAS_SUPABASE_TEST_CONFIG == 'true'
         env:
           SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
           SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}

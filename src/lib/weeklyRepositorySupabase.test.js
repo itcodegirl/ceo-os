@@ -14,6 +14,7 @@ vi.mock('./supabaseRuntime', () => {
 
 import { isStaleRecordError } from './staleRecordError';
 import * as runtimeModule from './supabaseRuntime';
+import { matchesExpectedUpdatedAtRange, withMicroseconds } from '../test/timestampPrecision';
 import {
   createWeeklyItem,
   deleteWeeklyItem,
@@ -25,12 +26,14 @@ function buildWeeklySupabaseClientStub({
   briefRow = { id: 'brief-1', review_notes: 'Weekly notes' },
   itemRows = [],
   createRow = null,
-  rowsByExpectedAt = {},
-  deletedRowsByExpectedAt = {},
+  storedUpdatedAt = null,
+  updateRow = null,
+  deleteRow = null,
 } = {}) {
   const captured = {
     deletes: 0,
     eqs: [],
+    rangeFilters: [],
     inserts: [],
     selects: [],
     updates: [],
@@ -41,6 +44,7 @@ function buildWeeklySupabaseClientStub({
     from(table) {
       let operation = 'list';
       const filters = {};
+      const range = {};
 
       const builder = {
         insert(payload) {
@@ -67,6 +71,16 @@ function buildWeeklySupabaseClientStub({
           captured.eqs.push([table, column, value]);
           return builder;
         },
+        gte(column, value) {
+          captured.rangeFilters.push([table, 'gte', column, value]);
+          if (column === 'updated_at') range.gte = value;
+          return builder;
+        },
+        lt(column, value) {
+          captured.rangeFilters.push([table, 'lt', column, value]);
+          if (column === 'updated_at') range.lt = value;
+          return builder;
+        },
         order() {
           return builder;
         },
@@ -75,26 +89,22 @@ function buildWeeklySupabaseClientStub({
             return { data: briefRow, error: null };
           }
 
+          // Postgres semantics: the stored row keeps microsecond precision
+          // and the guard is evaluated as an instant range.
+          const guardMatches = matchesExpectedUpdatedAtRange(storedUpdatedAt, range);
+
           if (operation === 'update') {
-            if (filters.updated_at && !rowsByExpectedAt[filters.updated_at]) {
+            if (!updateRow || !guardMatches) {
               return { data: null, error: null };
             }
-            return {
-              data: rowsByExpectedAt[filters.updated_at] || rowsByExpectedAt['*'] || null,
-              error: null,
-            };
+            return { data: updateRow, error: null };
           }
 
           if (operation === 'delete') {
-            if (filters.updated_at && !deletedRowsByExpectedAt[filters.updated_at]) {
+            if (!guardMatches) {
               return { data: null, error: null };
             }
-            return {
-              data: deletedRowsByExpectedAt[filters.updated_at]
-                || deletedRowsByExpectedAt['*']
-                || { id: filters.id },
-              error: null,
-            };
+            return { data: deleteRow || { id: filters.id }, error: null };
           }
 
           return { data: null, error: null };
@@ -182,16 +192,15 @@ describe('weeklyRepository Supabase timestamp coverage', () => {
 
   it('passes expected updated_at to Supabase item updates and returns the fresh row', async () => {
     const expectedMs = Date.UTC(2026, 4, 1, 14, 0, 0);
-    const expectedIso = new Date(expectedMs).toISOString();
+
     const stub = buildWeeklySupabaseClientStub({
-      rowsByExpectedAt: {
-        [expectedIso]: {
-          id: 'blocker-1',
-          item_type: 'blocker',
-          description: 'Waiting on partner',
-          severity: 'high',
-          updated_at: '2026-05-01T14:07:00.000Z',
-        },
+      storedUpdatedAt: withMicroseconds(new Date(expectedMs).toISOString(), 789),
+      updateRow: {
+        id: 'blocker-1',
+        item_type: 'blocker',
+        description: 'Waiting on partner',
+        severity: 'high',
+        updated_at: '2026-05-01T14:07:00.000Z',
       },
     });
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
@@ -204,7 +213,10 @@ describe('weeklyRepository Supabase timestamp coverage', () => {
       expectedUpdatedAt: expectedMs,
     });
 
-    expect(stub.captured.eqs).toContainEqual(['weekly_brief_items', 'updated_at', expectedIso]);
+    expect(stub.captured.rangeFilters).toEqual([
+      ['weekly_brief_items', 'gte', 'updated_at', new Date(expectedMs).toISOString()],
+      ['weekly_brief_items', 'lt', 'updated_at', new Date(expectedMs + 1).toISOString()],
+    ]);
     expect(updated).toMatchObject({
       id: 'blocker-1',
       text: 'Waiting on partner',
@@ -213,7 +225,11 @@ describe('weeklyRepository Supabase timestamp coverage', () => {
   });
 
   it('throws StaleRecordError when a Supabase weekly item changed before update', async () => {
-    const stub = buildWeeklySupabaseClientStub({ rowsByExpectedAt: {} });
+    // Row moved on by a full millisecond -> outside the client's window.
+    const stub = buildWeeklySupabaseClientStub({
+      storedUpdatedAt: withMicroseconds(new Date(Date.UTC(2026, 4, 1, 14, 0, 0) + 1).toISOString(), 400),
+      updateRow: { id: 'blocker-1', item_type: 'blocker', updated_at: '2026-05-01T14:07:00.000Z' },
+    });
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
 
     let captured;
@@ -235,8 +251,9 @@ describe('weeklyRepository Supabase timestamp coverage', () => {
 
   it('rejects Supabase deletes when the expected updated_at no longer matches', async () => {
     const expectedMs = Date.UTC(2026, 4, 1, 14, 0, 0);
-    const expectedIso = new Date(expectedMs).toISOString();
-    const stub = buildWeeklySupabaseClientStub({ deletedRowsByExpectedAt: {} });
+    const stub = buildWeeklySupabaseClientStub({
+      storedUpdatedAt: withMicroseconds(new Date(expectedMs + 1).toISOString(), 400),
+    });
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
 
     let captured;
@@ -251,7 +268,10 @@ describe('weeklyRepository Supabase timestamp coverage', () => {
       captured = error;
     }
 
-    expect(stub.captured.eqs).toContainEqual(['weekly_brief_items', 'updated_at', expectedIso]);
+    expect(stub.captured.rangeFilters).toEqual([
+      ['weekly_brief_items', 'gte', 'updated_at', new Date(expectedMs).toISOString()],
+      ['weekly_brief_items', 'lt', 'updated_at', new Date(expectedMs + 1).toISOString()],
+    ]);
     expect(captured).toBeDefined();
     expect(isStaleRecordError(captured)).toBe(true);
   });

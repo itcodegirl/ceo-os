@@ -9,7 +9,8 @@ import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime'
 import {
   StaleRecordError,
   assertRecordIsFresh,
-  expectedUpdatedAtToIso,
+  applyExpectedUpdatedAtFilter,
+  expectedUpdatedAtRangeIso,
   readUpdatedAtMs,
 } from './staleRecordError';
 import { archiveStorageValue, parseJsonOrPreserveCorruption } from './storageCorruption';
@@ -639,10 +640,8 @@ export async function updateWeeklyItem({
       .eq('id', normalizedItemId)
       .eq('user_id', userId);
 
-    const expectedIso = expectedUpdatedAtToIso(expectedUpdatedAt);
-    if (expectedIso) {
-      query = query.eq('updated_at', expectedIso);
-    }
+    // Optimistic locking — see opportunitiesRepository for the rationale.
+    query = applyExpectedUpdatedAtFilter(query, expectedUpdatedAt);
 
     const { data, error } = await query
       .select('id, item_type, title, description, owner, status, category, severity, sort_order, updated_at')
@@ -738,10 +737,12 @@ export async function deleteWeeklyItem({
       .eq('id', normalizedItemId)
       .eq('user_id', userId);
 
-    const expectedIso = expectedUpdatedAtToIso(expectedUpdatedAt);
-    if (expectedIso) {
-      query = query.eq('updated_at', expectedIso);
-    }
+    // Optimistic locking — see opportunitiesRepository for the rationale.
+    // Track whether a guard was actually applied: without one, a delete that
+    // matches no row means the record was already gone, which is not a
+    // stale-record conflict.
+    const hasFreshnessGuard = Boolean(expectedUpdatedAtRangeIso(expectedUpdatedAt));
+    query = applyExpectedUpdatedAtFilter(query, expectedUpdatedAt);
 
     const { data, error } = await query
       .select('id')
@@ -751,7 +752,7 @@ export async function deleteWeeklyItem({
       throw error;
     }
 
-    if (expectedIso && !data) {
+    if (hasFreshnessGuard && !data) {
       throw new StaleRecordError(
         'This weekly item was changed in another window. Reload to see the latest version before deleting.',
       );

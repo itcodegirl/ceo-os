@@ -3,7 +3,8 @@ import {
   STALE_RECORD_ERROR_CODE,
   StaleRecordError,
   assertRecordIsFresh,
-  expectedUpdatedAtToIso,
+  expectedUpdatedAtRangeIso,
+  applyExpectedUpdatedAtFilter,
   isStaleRecordError,
   readUpdatedAtMs,
 } from './staleRecordError';
@@ -95,23 +96,81 @@ describe('readUpdatedAtMs', () => {
   });
 });
 
-describe('expectedUpdatedAtToIso', () => {
-  it('converts a positive epoch-ms value into an ISO string', () => {
-    expect(expectedUpdatedAtToIso(1700000000000)).toBe(
-      new Date(1700000000000).toISOString(),
-    );
+describe('expectedUpdatedAtRangeIso', () => {
+  it('returns the half-open [ms, ms + 1ms) window for a positive epoch-ms value', () => {
+    expect(expectedUpdatedAtRangeIso(1700000000000)).toEqual({
+      fromIso: new Date(1700000000000).toISOString(),
+      toIso: new Date(1700000000001).toISOString(),
+    });
   });
 
-  it('round-trips with readUpdatedAtMs', () => {
-    const iso = expectedUpdatedAtToIso(1700000000000);
-    expect(readUpdatedAtMs({ updatedAt: iso })).toBe(1700000000000);
+  it('round-trips the lower bound with readUpdatedAtMs', () => {
+    const { fromIso } = expectedUpdatedAtRangeIso(1700000000000);
+    expect(readUpdatedAtMs({ updatedAt: fromIso })).toBe(1700000000000);
   });
 
   it('returns null for missing, zero, negative, or non-finite inputs', () => {
-    expect(expectedUpdatedAtToIso(undefined)).toBeNull();
-    expect(expectedUpdatedAtToIso(null)).toBeNull();
-    expect(expectedUpdatedAtToIso(0)).toBeNull();
-    expect(expectedUpdatedAtToIso(-5)).toBeNull();
-    expect(expectedUpdatedAtToIso('NaN')).toBeNull();
+    expect(expectedUpdatedAtRangeIso(undefined)).toBeNull();
+    expect(expectedUpdatedAtRangeIso(null)).toBeNull();
+    expect(expectedUpdatedAtRangeIso(0)).toBeNull();
+    expect(expectedUpdatedAtRangeIso(-5)).toBeNull();
+    expect(expectedUpdatedAtRangeIso('NaN')).toBeNull();
+  });
+
+  it('brackets a microsecond-precision Postgres timestamp that the client truncated', () => {
+    // Postgres compares timestamptz by instant, not by string, so the bounds
+    // are evaluated in microseconds here. (ISO strings cannot be compared
+    // lexicographically across differing fractional-digit counts:
+    // '...123Z' sorts after '...123456Z'.)
+    const toMicros = (iso) => {
+      const [, head, frac = '', zone] = /^(.*?)(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})$/.exec(iso);
+      return Date.parse(`${head}${zone}`) * 1000 + Number(`${frac}000000`.slice(0, 6));
+    };
+
+    const storedIso = '2026-05-12T10:23:45.123456+00:00';
+    const clientMs = readUpdatedAtMs({ updated_at: storedIso });
+    const { fromIso, toIso } = expectedUpdatedAtRangeIso(clientMs);
+
+    // The stored row sits inside the window the client can express...
+    expect(toMicros(storedIso)).toBeGreaterThanOrEqual(toMicros(fromIso));
+    expect(toMicros(storedIso)).toBeLessThan(toMicros(toIso));
+    // ...while a write even one millisecond later falls outside it.
+    expect(toMicros('2026-05-12T10:23:45.124000+00:00')).toBeGreaterThanOrEqual(toMicros(toIso));
+  });
+});
+
+describe('applyExpectedUpdatedAtFilter', () => {
+  function buildQueryStub() {
+    const calls = [];
+    const query = {
+      calls,
+      gte(column, value) {
+        calls.push(['gte', column, value]);
+        return query;
+      },
+      lt(column, value) {
+        calls.push(['lt', column, value]);
+        return query;
+      },
+    };
+    return query;
+  }
+
+  it('applies a gte/lt range rather than an equality filter', () => {
+    const query = buildQueryStub();
+    const result = applyExpectedUpdatedAtFilter(query, 1700000000000);
+
+    expect(result).toBe(query);
+    expect(query.calls).toEqual([
+      ['gte', 'updated_at', new Date(1700000000000).toISOString()],
+      ['lt', 'updated_at', new Date(1700000000001).toISOString()],
+    ]);
+  });
+
+  it('leaves the query untouched when no expected stamp is supplied', () => {
+    const query = buildQueryStub();
+    expect(applyExpectedUpdatedAtFilter(query, 0)).toBe(query);
+    expect(applyExpectedUpdatedAtFilter(query, undefined)).toBe(query);
+    expect(query.calls).toEqual([]);
   });
 });
