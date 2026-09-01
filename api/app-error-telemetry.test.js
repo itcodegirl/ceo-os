@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import handler from './app-error-telemetry.js';
-import * as core from '../server/appErrorTelemetryIngestCore.js';
+import * as core from '../server/experimental/telemetry/appErrorTelemetryIngestCore.js';
 
 describe('api app-error-telemetry handler', () => {
   beforeEach(() => {

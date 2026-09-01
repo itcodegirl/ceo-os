@@ -1,4 +1,4 @@
-import { handleAppErrorTelemetryIngest } from '../../server/appErrorTelemetryIngestCore.js';
+import { handleAppErrorTelemetryIngest } from '../../server/experimental/telemetry/appErrorTelemetryIngestCore.js';
 
 export async function handler(event) {
   const normalizedRawBody = typeof event.body === 'string'

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getProviderNativeKeyConfigs } from './appErrorTelemetryProviderNativeAdapters.js';
 
-describe('server/appErrorTelemetryProviderNativeAdapters', () => {
+describe('server/experimental/telemetry/appErrorTelemetryProviderNativeAdapters', () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {

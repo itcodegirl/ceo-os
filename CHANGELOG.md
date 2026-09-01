@@ -2,6 +2,37 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-08-31 - Telemetry/ops experimental/ quarantine
+
+Branch `claude/telemetry-experimental-quarantine`. Closes the largest structural
+item from the 2026-05-24 architecture audit (§4): the over-built error-telemetry
+and ops/SLO/incident surface is now quarantined behind an `experimental/`
+boundary so a reviewer meets product code first. **Pure relocation — no behavior
+change**; git detects the moves as renames.
+
+Moved (source + co-located tests):
+
+- Client: `appErrorTelemetry` + `opsSloSnapshotsRepository` →
+  `src/lib/experimental/telemetry/`; `useOpsSloTrend` → `src/hooks/experimental/`;
+  `OpsReliability` page → `src/pages/experimental/`.
+- Server: `appErrorTelemetryIngestCore` / `IngestRepository` / `KeyProvider` /
+  `KeyAuditRepository` / `ProviderNativeAdapters` and `opsIncidentLifecycleRepository`
+  → `server/experimental/telemetry/`. `server/` now holds only the Chief-of-Staff
+  proxy (product) plus `experimental/`.
+
+Import paths updated at every call site (`ErrorBoundary`, the `App` route
+registry, the moved files' own relative/CSS imports, and all co-located test
+mocks/`describe` labels).
+
+Scoping decision: the serverless entrypoints (`api/app-error-telemetry.js`,
+`netlify/functions/app-error-telemetry.js`) and the ops `scripts/*` stay at their
+deploy-/CI-pinned paths — moving them would change the deployed function URL and
+CI wiring for no readability gain — so only their imports (and the
+`test:integration:telemetry` path in `package.json`) were repointed across the
+boundary. The lazy `OpsReliability` chunk keeps its name, so route budgets are
+unaffected. This is a quarantine, not a deletion: the surface is relocated, not
+trimmed.
+
 ## 2026-08-31 - useWeeklyBrief: persistence out of setState updaters
 
 Branch `claude/useweeklybrief-setstate-sideeffects`. Closes the `useWeeklyBrief`
