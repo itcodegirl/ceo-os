@@ -59,7 +59,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # `continue-on-error` because PR creation depends on a repository
+      # setting this workflow cannot control: Settings -> Actions -> General
+      # -> Workflow permissions -> "Allow GitHub Actions to create and approve
+      # pull requests". While that is off, this step fails with "GitHub Actions
+      # is not permitted to create or approve pull requests" even though the
+      # refresh itself succeeded and the branch pushed cleanly. Letting that
+      # sink the whole job is what hid the refresh for 15 consecutive weeks:
+      # the run went red, the pushed branch went unnoticed, and the baseline
+      # drifted past the trend gate anyway. The reporting step below turns
+      # either outcome into something actionable.
       - name: Create Baseline Refresh PR
+        id: create_pr
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "chore(perf): refresh route performance baseline (${{ github.event_name }})"
@@ -88,3 +100,70 @@ jobs:
                   if you want to validate before merge.
           branch: "chore/release-route-baseline-refresh"
           delete-branch: true
+
+      # Turns the three possible endings into something a human can act on:
+      # a linked PR, an explicit "nothing drifted", or a one-click compare URL
+      # when repository policy blocked PR creation. Only a refresh that never
+      # reached a reviewable branch fails the job, so the weekly run stops
+      # crying wolf about a permission no workflow change can grant.
+      - name: Report Refresh Outcome
+        env:
+          PR_OUTCOME: ${{ steps.create_pr.outcome }}
+          PR_URL: ${{ steps.create_pr.outputs.pull-request-url }}
+          PR_OPERATION: ${{ steps.create_pr.outputs.pull-request-operation }}
+          REFRESH_BRANCH: chore/release-route-baseline-refresh
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ "$PR_OUTCOME" = "success" ]; then
+            if [ -n "$PR_URL" ]; then
+              {
+                echo "### Route baseline refresh"
+                echo
+                echo "Pull request ${PR_OPERATION:-opened}: $PR_URL"
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              {
+                echo "### Route baseline refresh"
+                echo
+                echo "No pull request needed — the committed baseline already matches the current build."
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
+
+          # PR creation failed. If the refresh branch exists and differs from
+          # the default branch, the refreshed baseline is still on the remote
+          # and reviewable by hand — the only thing lost is the automatic PR.
+          branch_sha="$(git ls-remote origin "refs/heads/$REFRESH_BRANCH" | cut -f1)"
+          base_sha="$(git ls-remote origin "refs/heads/$DEFAULT_BRANCH" | cut -f1)"
+
+          if [ -n "$branch_sha" ] && [ "$branch_sha" != "$base_sha" ]; then
+            compare_url="$REPO_URL/compare/$DEFAULT_BRANCH...$REFRESH_BRANCH?expand=1"
+            echo "::warning::Baseline refreshed and pushed to $REFRESH_BRANCH, but this workflow is not permitted to open the pull request. Open it here: $compare_url"
+            {
+              echo "### Route baseline refresh — one step left"
+              echo
+              echo "The baseline was refreshed and pushed to \`$REFRESH_BRANCH\`, but this"
+              echo "workflow could not open the pull request for it."
+              echo
+              echo "**[Open the refresh PR]($compare_url)**"
+              echo
+              echo "To let future runs open it automatically, enable"
+              echo "*Settings -> Actions -> General -> Workflow permissions ->*"
+              echo "*\"Allow GitHub Actions to create and approve pull requests\"*."
+              echo "Until then this run stays green and reports the link here each week,"
+              echo "because the refresh itself succeeded."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::error::Route baseline refresh failed before it produced a reviewable branch."
+          {
+            echo "### Route baseline refresh failed"
+            echo
+            echo "The refresh did not reach a reviewable branch. See the step logs above."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
