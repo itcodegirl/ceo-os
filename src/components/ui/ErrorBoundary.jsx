@@ -1,6 +1,6 @@
 import { Component } from 'react';
 import Button from './Button';
-import { emitAppErrorTelemetry } from '../../lib/appErrorTelemetry';
+import { emitAppErrorTelemetry } from '../../lib/experimental/telemetry/appErrorTelemetry';
 
 class ErrorBoundary extends Component {
   constructor(props) {

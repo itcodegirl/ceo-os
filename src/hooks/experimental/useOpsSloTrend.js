@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getOpsSloSnapshotsSource,
   listOpsSloSnapshots,
-} from '../lib/opsSloSnapshotsRepository';
+} from '../../lib/experimental/telemetry/opsSloSnapshotsRepository';
 
 export function useOpsSloTrend({
   limit = 20,
