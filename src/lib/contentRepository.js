@@ -347,6 +347,16 @@ export function clearLocalContentDemoData() {
   return next;
 }
 
+/**
+ * Counts local content items that are NOT part of the demo seed — see
+ * `countNonDemoLocalOpportunities` for why this exists.
+ */
+export function countNonDemoLocalContentItems() {
+  return readLocalContentItems()
+    .filter((item) => !DEMO_CONTENT_ITEM_IDS.has(String(item.id)))
+    .length;
+}
+
 export function resetLocalContentDemoData() {
   const seeded = getDemoLocalItems();
   writeLocalContentItems(seeded);

@@ -7,6 +7,7 @@ import {
 import {
   WEEKLY_BRIEF_UPDATED_EVENT,
   clearLocalWeeklyDemoData,
+  countNonDemoLocalWeeklyRecords,
   createWeeklyItem,
   deleteWeeklyItem,
   getWeeklyBriefByWeek,
@@ -363,5 +364,23 @@ describe('src/lib/weeklyRepository', () => {
     expect(brief.priorities).toEqual([
       expect.objectContaining({ id: 'real-priority', title: 'Real weekly priority' }),
     ]);
+  });
+
+  // Guards the "Load demo workspace" confirmation. The reset swaps the whole
+  // week payload, so review notes are lost alongside the items even though
+  // notes carry no id — both must be counted.
+  it('counts the weekly records and review notes a demo reset would destroy', async () => {
+    saveWorkspaceSetupMode('demo');
+    const baseline = countNonDemoLocalWeeklyRecords(weekStart);
+
+    await createWeeklyItem({
+      weekStart,
+      itemType: 'priority',
+      item: { id: 'priority-real', title: 'Real priority', status: 'Planned' },
+    });
+    expect(countNonDemoLocalWeeklyRecords(weekStart)).toBe(baseline + 1);
+
+    await saveWeeklyBriefReviewNotes({ weekStart, reviewNotes: 'My own retro notes' });
+    expect(countNonDemoLocalWeeklyRecords(weekStart)).toBe(baseline + 2);
   });
 });

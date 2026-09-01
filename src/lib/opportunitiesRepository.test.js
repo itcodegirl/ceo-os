@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   OPPORTUNITIES_UPDATED_EVENT,
   clearLocalOpportunityDemoData,
+  countNonDemoLocalOpportunities,
   createOpportunity,
   deleteOpportunity,
   listOpportunities,
@@ -296,5 +297,23 @@ describe('src/lib/opportunitiesRepository', () => {
     const items = await listOpportunities();
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ id: created.id, name: 'Real founder pipeline' });
+  });
+
+  // Guards the "Load demo workspace" confirmation: a demo-seeded device has
+  // nothing to lose and must not be prompted, while a record the user created
+  // must be counted so the reset asks before destroying it.
+  it('counts only the local opportunities a demo reset would destroy', async () => {
+    saveWorkspaceSetupMode('demo');
+    expect(countNonDemoLocalOpportunities()).toBe(0);
+
+    await createOpportunity({
+      name: 'Real pipeline deal',
+      company: 'CodeHerWay',
+      priority: 'High',
+      stage: 'New',
+      nextStep: 'Send intro',
+    });
+
+    expect(countNonDemoLocalOpportunities()).toBe(1);
   });
 });

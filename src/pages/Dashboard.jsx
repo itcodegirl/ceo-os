@@ -4,6 +4,7 @@ import PageHeader from '../components/ui/PageHeader';
 import SourceStatusNotice from '../components/ui/SourceStatusNotice';
 import ErrorBoundary from '../components/ui/ErrorBoundary';
 import PanelErrorFallback from '../components/ui/PanelErrorFallback';
+import LoadDemoWorkspaceButton from '../components/ui/LoadDemoWorkspaceButton';
 import FocusModeChips from '../components/dashboard/FocusModeChips';
 import RemindersPanel from '../components/dashboard/RemindersPanel';
 import TodayFocusPanel from '../components/dashboard/TodayFocusPanel';
@@ -68,7 +69,6 @@ function Dashboard() {
   const {
     hasChoice: hasWorkspaceSetupChoice,
     startBlankWorkspace,
-    loadDemoWorkspace,
   } = useWorkspaceSetup();
   const {
     reminderDraft,
@@ -297,16 +297,6 @@ function Dashboard() {
       });
   }, [showToast, startBlankWorkspace]);
 
-  const handleLoadDemoWorkspace = useCallback(() => {
-    Promise.resolve(loadDemoWorkspace())
-      .then(() => {
-        showToast('Demo workspace loaded on this device.');
-      })
-      .catch(() => {
-        showToast('Unable to load demo workspace right now.');
-      });
-  }, [loadDemoWorkspace, showToast]);
-
   return (
     <section
       className={`dashboard-page focus-home-page focus-home-page--${modeClassName}`}
@@ -337,9 +327,10 @@ function Dashboard() {
             <Button type="button" onClick={handleStartBlankWorkspace} icon={{ name: 'check', size: 14 }}>
               Start blank
             </Button>
-            <Button type="button" variant="ghost" onClick={handleLoadDemoWorkspace} icon={{ name: 'section', size: 14 }}>
-              Load demo workspace
-            </Button>
+            <LoadDemoWorkspaceButton
+              onLoaded={() => showToast('Demo workspace loaded on this device.')}
+              onError={() => showToast('Unable to load demo workspace right now.')}
+            />
           </div>
           <p className="helper-text">
             Restore from a JSON backup or connect a Supabase workspace from Settings &gt; Workspace data.

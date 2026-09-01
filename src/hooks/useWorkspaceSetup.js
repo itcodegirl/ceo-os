@@ -65,6 +65,27 @@ export function useWorkspaceSetup() {
     refreshState();
   }, [refreshState]);
 
+  /**
+   * How many local records `loadDemoWorkspace` would destroy. The demo reset
+   * replaces each local store outright, so anything the user created is lost;
+   * callers confirm before calling when this is above zero. A device holding
+   * only demo seed returns 0, which keeps the first-run choice prompt-free.
+   *
+   * Returns null when the stores cannot be read. Callers must treat that as
+   * "unknown, so ask" rather than "nothing at risk" — failing open on a
+   * destructive action is how data gets lost silently.
+   */
+  const countLocalRecordsAtRisk = useCallback(async () => {
+    try {
+      const { opportunities, content, weekly } = await loadWorkspaceSetupRepositories();
+      return opportunities.countNonDemoLocalOpportunities()
+        + content.countNonDemoLocalContentItems()
+        + weekly.countNonDemoLocalWeeklyRecords();
+    } catch {
+      return null;
+    }
+  }, []);
+
   return useMemo(() => ({
     mode: state.mode,
     hasChoice: state.hasChoice,
@@ -72,8 +93,10 @@ export function useWorkspaceSetup() {
     isBlankMode: state.mode === WORKSPACE_SETUP_MODES.blank,
     startBlankWorkspace,
     loadDemoWorkspace,
+    countLocalRecordsAtRisk,
     clearDemoData: startBlankWorkspace,
   }), [
+    countLocalRecordsAtRisk,
     loadDemoWorkspace,
     startBlankWorkspace,
     state.hasChoice,
