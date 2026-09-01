@@ -831,6 +831,30 @@ export function clearLocalWeeklyDemoData(weekStart = getCurrentWeekStart()) {
   return store[normalizedWeekStart];
 }
 
+/**
+ * Counts the week's local records that are NOT part of the demo seed — the
+ * priorities, wins and blockers a "Load demo workspace" reset would replace,
+ * plus the review notes it would overwrite (reset swaps the whole payload, so
+ * notes are lost too even though they carry no id). See
+ * `countNonDemoLocalOpportunities` for why callers need this.
+ */
+export function countNonDemoLocalWeeklyRecords(weekStart = getCurrentWeekStart()) {
+  const normalizedWeekStart = typeof weekStart === 'string' && weekStart
+    ? weekStart
+    : getCurrentWeekStart();
+  const current = resolveLocalWeekPayload(normalizedWeekStart);
+
+  const itemCount = current.priorities.filter((item) => !DEMO_PRIORITY_IDS.has(String(item.id))).length
+    + current.wins.filter((item) => !DEMO_WIN_IDS.has(String(item.id))).length
+    + current.blockers.filter((item) => !DEMO_BLOCKER_IDS.has(String(item.id))).length;
+
+  const hasOwnNotes = typeof current.reviewNotes === 'string'
+    && current.reviewNotes.trim() !== ''
+    && current.reviewNotes !== createDemoWeekPayload().reviewNotes;
+
+  return itemCount + (hasOwnNotes ? 1 : 0);
+}
+
 export function resetLocalWeeklyDemoData(weekStart = getCurrentWeekStart()) {
   const normalizedWeekStart = typeof weekStart === 'string' && weekStart
     ? weekStart

@@ -336,6 +336,18 @@ export function clearLocalOpportunityDemoData() {
   return next;
 }
 
+/**
+ * Counts local opportunities that are NOT part of the demo seed — i.e. the
+ * records a "Load demo workspace" reset would destroy. Callers use this to
+ * decide whether that action needs confirmation; a first-run device holding
+ * only demo records returns 0 and is not worth prompting about.
+ */
+export function countNonDemoLocalOpportunities() {
+  return readLocalOpportunities()
+    .filter((item) => !DEMO_OPPORTUNITY_IDS.has(String(item.id)))
+    .length;
+}
+
 export function resetLocalOpportunityDemoData() {
   const seeded = getDemoLocalItems();
   writeLocalOpportunities(seeded);

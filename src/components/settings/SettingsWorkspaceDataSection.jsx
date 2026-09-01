@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import SectionCard from '../ui/SectionCard';
 import Button from '../ui/Button';
+import LoadDemoWorkspaceButton from '../ui/LoadDemoWorkspaceButton';
 import { useWorkspaceSetup } from '../../hooks/useWorkspaceSetup';
 import { useOfflineWriteQueueSize } from '../../hooks/useOfflineWriteQueue';
 import { formatCount, useWorkspaceBackup } from '../../hooks/useWorkspaceBackup';
@@ -33,7 +34,6 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
     hasChoice: hasWorkspaceSetupChoice,
     isDemoMode,
     startBlankWorkspace,
-    loadDemoWorkspace,
     clearDemoData,
   } = useWorkspaceSetup();
   const pendingSyncCount = useOfflineWriteQueueSize();
@@ -71,9 +71,7 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
           <Button type="button" size="small" onClick={startBlankWorkspace} icon={{ name: 'check', size: 14 }}>
             Start blank
           </Button>
-          <Button type="button" size="small" variant="ghost" onClick={loadDemoWorkspace} icon={{ name: 'section', size: 14 }}>
-            Load demo workspace
-          </Button>
+          <LoadDemoWorkspaceButton size="small" />
           <Button
             type="button"
             size="small"

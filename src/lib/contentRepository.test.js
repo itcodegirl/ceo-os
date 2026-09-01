@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CONTENT_ITEMS_UPDATED_EVENT,
   clearLocalContentDemoData,
+  countNonDemoLocalContentItems,
   createContentItem,
   deleteContentItem,
   listContentItems,
@@ -246,5 +247,19 @@ describe('src/lib/contentRepository', () => {
     const items = await listContentItems();
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ id: created.id, title: 'Real founder note' });
+  });
+
+  it('counts only the local content items a demo reset would destroy', async () => {
+    saveWorkspaceSetupMode('demo');
+    expect(countNonDemoLocalContentItems()).toBe(0);
+
+    await createContentItem({
+      title: 'Real draft',
+      platform: 'Newsletter',
+      contentType: 'Post',
+      status: 'Idea',
+    });
+
+    expect(countNonDemoLocalContentItems()).toBe(1);
   });
 });

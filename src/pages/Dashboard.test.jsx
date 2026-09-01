@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -47,6 +47,7 @@ describe('src/pages/Dashboard', () => {
       isDemoMode: true,
       startBlankWorkspace: vi.fn(),
       loadDemoWorkspace: vi.fn(),
+      countLocalRecordsAtRisk: vi.fn().mockResolvedValue(0),
     });
 
     useWeeklyBrief.mockReturnValue({
@@ -346,7 +347,7 @@ describe('src/pages/Dashboard', () => {
     expect(screen.getByText('Quick win waiting: close one tiny loop before opening a new one.')).toBeInTheDocument();
   });
 
-  it('offers a first-run local workspace choice before the user commits to demo data', () => {
+  it('offers a first-run local workspace choice before the user commits to demo data', async () => {
     const startBlankWorkspace = vi.fn();
     const loadDemoWorkspace = vi.fn();
     useWorkspaceSetup.mockReturnValue({
@@ -354,6 +355,9 @@ describe('src/pages/Dashboard', () => {
       isDemoMode: true,
       startBlankWorkspace,
       loadDemoWorkspace,
+      // A first-run device holds only demo seed, so nothing is at risk and
+      // "Load demo workspace" runs without a confirmation prompt.
+      countLocalRecordsAtRisk: vi.fn().mockResolvedValue(0),
     });
 
     render(
@@ -375,7 +379,7 @@ describe('src/pages/Dashboard', () => {
     expect(startBlankWorkspace).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
-    expect(loadDemoWorkspace).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(loadDemoWorkspace).toHaveBeenCalledTimes(1));
   });
 
   it('promotes a pending reminder into a weekly priority via the per-item action', async () => {

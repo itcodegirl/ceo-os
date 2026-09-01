@@ -41,6 +41,7 @@ jobs:
         run: npm run lint
 
       - name: Run Build
+        id: build
         run: npm run build
 
       - name: Check Route Performance Budgets
@@ -49,7 +50,12 @@ jobs:
       - name: Check Route Performance Trend Baseline
         run: npm run check:route-budgets:trend
 
+      # Runs whenever a build exists, not only when the budget checks passed.
+      # Previously a failing trend gate skipped this step, so the diff report
+      # explaining which route grew was unavailable in exactly the run that
+      # needed it, and the PR comment read "report was not generated".
       - name: Generate Route Size Diff Report
+        if: always() && steps.build.conclusion == 'success'
         run: npm run report:route-budgets
 
       - name: Check Crud Template Legacy Props Deadline
