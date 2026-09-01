@@ -2,14 +2,14 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
-vi.mock('../hooks/useOpsSloTrend', () => ({
+vi.mock('../../hooks/experimental/useOpsSloTrend', () => ({
   useOpsSloTrend: vi.fn(),
 }));
 
 import OpsReliability from './OpsReliability';
-import { useOpsSloTrend } from '../hooks/useOpsSloTrend';
+import { useOpsSloTrend } from '../../hooks/experimental/useOpsSloTrend';
 
-describe('src/pages/OpsReliability', () => {
+describe('src/pages/experimental/OpsReliability', () => {
   it('renders stats and trend rows from snapshot data', () => {
     useOpsSloTrend.mockReturnValue({
       snapshots: [

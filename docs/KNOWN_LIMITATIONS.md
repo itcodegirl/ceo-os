@@ -11,7 +11,7 @@ Use this as the honest interview framing for CodeHerWay CEO OS. The project is s
 - In-session shell settings stay aligned with the Settings page, but authenticated multi-device and multi-tab settings reconciliation still needs broader QA.
 - Chief of Staff AI generation depends on deployed server secrets and proxy configuration. Without those, the app falls back to a deterministic local template. The fallback is visibly labeled — failure is honest, not hidden.
 - Local browser storage is intentionally resilient for demos and solo use, and Settings supports local JSON backup/import. Local backup import does not migrate data into Supabase.
-- Operational telemetry (KMS adapters, asymmetric key rotation, ops incident lifecycle) is implemented but is **out of scope for portfolio framing** — it's defensible engineering but more elaborate than a single-founder app requires. A future cleanup PR will move it behind an `experimental/telemetry/` boundary; the main tree keeps CSP, RLS, fail-closed proxy, rate limiting, and a thin HMAC ingest.
+- Operational telemetry (KMS adapters, asymmetric key rotation, ops incident lifecycle) is implemented but is **out of scope for portfolio framing** — it's defensible engineering but more elaborate than a single-founder app requires. It now lives behind an `experimental/telemetry/` boundary (`src/lib/experimental/telemetry/`, `src/hooks/experimental/`, `src/pages/experimental/`, `server/experimental/telemetry/`) so a reader meets product code first; the serverless entrypoints (`api/`, `netlify/functions/`) and ops scripts stay at their deploy-/CI-pinned paths and import across the boundary. The main tree keeps CSP, RLS, fail-closed proxy, rate limiting, and a thin HMAC ingest.
 
 ## Items deferred from the May 2026 audit follow-up
 
@@ -25,10 +25,12 @@ out of scope for that PR:
 - **Cmd+K command palette.** The "Keyboard shortcuts" Settings toggle was
   removed because it was disabled and unwired. Restoring a real command
   palette is the bigger feature it was placeholder for.
-- **Telemetry / KMS / ops-incident scope reduction.** The audit
-  recommended moving `server/appErrorTelemetry*` behind an
-  `experimental/telemetry/` boundary. Not done in this PR — too large a
-  surface to refactor safely without a focused PR.
+- **Telemetry / KMS / ops-incident scope reduction.** ✅ Done in a later
+  focused PR: `server/appErrorTelemetry*`, the ops-incident lifecycle, the
+  client emitter/SLO surface, and the `OpsReliability` page now sit behind an
+  `experimental/telemetry/` boundary (pure relocation, no behavior change).
+  Note this was a *quarantine*, not a *reduction*: the elaborate surface is
+  moved, not deleted — trimming it further remains optional.
 - **Screenshot + walkthrough re-capture.** The visual proof artifacts need
   to be regenerated against the current UI. README now flags them as out
   of date so reviewers are not misled.
@@ -75,10 +77,10 @@ A later follow-up then closed the `useWeeklyBrief` item:
   tests plus a new StrictMode regression test proving a single edit persists
   exactly once.
 
-Still deferred after that (each genuinely its own PR): the telemetry/KMS
-`experimental/` quarantine (large rename) and subscribing the Chief acceptance
-signature caches to repository update events (bounded today by the
-post-generation reset).
+The telemetry/KMS `experimental/` quarantine (the large rename) has since been
+completed in its own PR. The one remaining deferred audit item is subscribing
+the Chief acceptance signature caches to repository update events (bounded today
+by the post-generation reset).
 
 The May 8, 2026 senior audit pass closed these gaps on `improve/ceo-os-audit-fixes`:
 

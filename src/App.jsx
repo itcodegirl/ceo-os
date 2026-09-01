@@ -12,7 +12,7 @@ const Opportunities = lazy(() => import('./pages/Opportunities'));
 const ContentOS = lazy(() => import('./pages/ContentOS'));
 const WeeklyBrief = lazy(() => import('./pages/WeeklyBrief'));
 const ChiefOfStaff = lazy(() => import('./pages/ChiefOfStaff'));
-const OpsReliability = lazy(() => import('./pages/OpsReliability'));
+const OpsReliability = lazy(() => import('./pages/experimental/OpsReliability'));
 const Settings = lazy(() => import('./pages/Settings'));
 const SignIn = lazy(() => import('./pages/SignIn'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));

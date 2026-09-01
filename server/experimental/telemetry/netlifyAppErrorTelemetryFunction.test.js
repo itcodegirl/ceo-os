@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { handler } from '../netlify/functions/app-error-telemetry.js';
+import { handler } from '../../../netlify/functions/app-error-telemetry.js';
 import * as core from './appErrorTelemetryIngestCore.js';
 
 describe('netlify app-error-telemetry function', () => {

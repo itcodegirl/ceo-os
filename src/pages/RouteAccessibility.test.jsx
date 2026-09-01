@@ -9,7 +9,7 @@ import Opportunities from './Opportunities';
 import ContentOS from './ContentOS';
 import WeeklyBrief from './WeeklyBrief';
 import ChiefOfStaff from './ChiefOfStaff';
-import OpsReliability from './OpsReliability';
+import OpsReliability from './experimental/OpsReliability';
 import Settings from './Settings';
 
 const ROUTE_CASES = [

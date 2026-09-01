@@ -4,7 +4,7 @@ import {
   recordTelemetryKeyVerificationAudit,
 } from './appErrorTelemetryKeyAuditRepository.js';
 
-describe('server/appErrorTelemetryKeyAuditRepository', () => {
+describe('server/experimental/telemetry/appErrorTelemetryKeyAuditRepository', () => {
   const originalEnv = { ...process.env };
   const originalFetch = global.fetch;
 

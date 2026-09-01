@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { transitionOpsIncidentLifecycleState } from './opsIncidentLifecycleRepository.js';
 
-describe('server/opsIncidentLifecycleRepository', () => {
+describe('server/experimental/telemetry/opsIncidentLifecycleRepository', () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {

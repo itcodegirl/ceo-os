@@ -1,5 +1,5 @@
-import { parseJsonOrPreserveCorruption } from './storageCorruption';
-import { safeLocalStorageSetItem } from './utils';
+import { parseJsonOrPreserveCorruption } from '../../storageCorruption';
+import { safeLocalStorageSetItem } from '../../utils';
 
 export const APP_ERROR_TELEMETRY_EVENT = 'ceo-os:app-error';
 
