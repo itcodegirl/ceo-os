@@ -35,7 +35,13 @@ This is the single biggest visible gap in a 2026 hiring filter. The honest answe
 - Page components are next, but they currently lean on `valibot` payload schemas at write boundaries to validate user input — the runtime validation isn't structurally weaker than TS prop checks for these surfaces, just less ambient.
 - Migrating in one PR would mean ~150 files moving through a churn that breaks blame on every line. The plan is to migrate `lib/` → `hooks/` → `components/` → `pages/` in stages, with `strict: true` from the first commit.
 
-The current `jsconfig.json` already runs `tsc -p jsconfig.json --noEmit` in CI, so structural type errors that JSDoc + ambient type packages can catch are caught.
+The current `jsconfig.json` runs `tsc -p jsconfig.json --noEmit` in CI, but it is worth being precise about what that gate does and does not verify, because the name oversells it:
+
+- `checkJs` is `false`, there are zero `.ts`/`.tsx` files, and zero files carry JSDoc `@param`/`@returns`/`@typedef` annotations. Run as configured, `tsc` parses the project and reports **no diagnostics at all**.
+- What it therefore catches is syntax and project-configuration breakage — not type errors. No structural type checking is happening today.
+- Running the same project with `--checkJs` surfaces **622 diagnostics** (measured 2026-09-01). That is the backlog the staged migration above would work through, not a set of problems CI is currently holding back.
+
+This is a real gap rather than a hidden one, and it plausibly explains how a millisecond-versus-microsecond timestamp confusion survived in the Supabase concurrency guard: nothing was checking. Turning `checkJs` on wholesale would fail CI immediately, so it belongs to the staged migration — `lib/` first, with `strict: true` from the first commit — rather than a flag flip.
 
 ## Cross-domain pub/sub via DOM events
 

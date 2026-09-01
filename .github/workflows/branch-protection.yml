@@ -12,15 +12,30 @@ on:
         required: true
         default: Unit + E2E
 
+# `administration` is NOT a valid key here. It is a GitHub App permission, not
+# one the workflow `GITHUB_TOKEN` can be granted, and listing it made GitHub
+# reject this file at parse time: every run reported failure with zero jobs and
+# zero seconds elapsed, so this workflow has never executed a single step and
+# main was never actually protected. Same root cause as the `secrets`-in-a-
+# step-level-`if:` bug that kept the PR test suite from ever starting.
 permissions:
   contents: read
-  administration: write
 
 jobs:
   apply:
     name: Apply Protection Rule
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
+    # Branch protection is repository administration, which a GITHUB_TOKEN can
+    # never hold no matter what `permissions:` says — the script itself warns
+    # that it needs "a token with repository administration permissions". So it
+    # runs on an explicitly-provisioned PAT or App token instead.
+    #
+    # `secrets` is not available to step-level `if:`, so the presence check is
+    # resolved once here where it is available.
+    env:
+      HAS_ADMIN_TOKEN: ${{ secrets.BRANCH_PROTECTION_TOKEN != '' }}
 
     steps:
       - name: Checkout
@@ -31,9 +46,15 @@ jobs:
         with:
           node-version: 22
 
+      - name: Require an administration-capable token
+        if: env.HAS_ADMIN_TOKEN != 'true'
+        run: |
+          echo "::error::BRANCH_PROTECTION_TOKEN is not configured. Branch protection is a repository-administration API, which the default GITHUB_TOKEN cannot call. Create a fine-grained personal access token (or GitHub App installation token) with Administration: read and write on this repository, save it as the BRANCH_PROTECTION_TOKEN secret, and re-run."
+          exit 1
+
       - name: Apply branch protection
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.BRANCH_PROTECTION_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           BRANCH: ${{ inputs.branch }}
           REQUIRED_CHECK: ${{ inputs.required_check }}
