@@ -1,5 +1,5 @@
-import { opsSloSnapshotMock } from '../data/opsSloSnapshotMock';
-import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
+import { opsSloSnapshotMock } from '../../../data/opsSloSnapshotMock';
+import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from '../../supabaseRuntime';
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';

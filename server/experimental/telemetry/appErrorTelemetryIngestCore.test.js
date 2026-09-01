@@ -5,7 +5,7 @@ import * as telemetryRepository from './appErrorTelemetryIngestRepository.js';
 import * as keyAuditRepository from './appErrorTelemetryKeyAuditRepository.js';
 import { resetTelemetryKeyProviderCacheForTests } from './appErrorTelemetryKeyProvider.js';
 
-describe('server/appErrorTelemetryIngestCore', () => {
+describe('server/experimental/telemetry/appErrorTelemetryIngestCore', () => {
   const originalEnv = { ...process.env };
 
   function createValidPayload() {

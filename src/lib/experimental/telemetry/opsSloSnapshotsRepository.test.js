@@ -4,7 +4,7 @@ import {
   listOpsSloSnapshots,
 } from './opsSloSnapshotsRepository';
 
-describe('src/lib/opsSloSnapshotsRepository', () => {
+describe('src/lib/experimental/telemetry/opsSloSnapshotsRepository', () => {
   it('returns local fallback snapshots when supabase is unavailable', async () => {
     const rows = await listOpsSloSnapshots({ limit: 2 });
 

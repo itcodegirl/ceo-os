@@ -1,4 +1,4 @@
-import { handleAppErrorTelemetryIngest } from '../server/appErrorTelemetryIngestCore.js';
+import { handleAppErrorTelemetryIngest } from '../server/experimental/telemetry/appErrorTelemetryIngestCore.js';
 
 function normalizeRawBody(body) {
   if (typeof body === 'string') {

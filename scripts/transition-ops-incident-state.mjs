@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { transitionOpsIncidentLifecycleState } from '../server/opsIncidentLifecycleRepository.js';
+import { transitionOpsIncidentLifecycleState } from '../server/experimental/telemetry/opsIncidentLifecycleRepository.js';
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';

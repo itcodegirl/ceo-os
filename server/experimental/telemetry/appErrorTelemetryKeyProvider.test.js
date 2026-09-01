@@ -5,7 +5,7 @@ import {
   resetTelemetryKeyProviderCacheForTests,
 } from './appErrorTelemetryKeyProvider.js';
 
-describe('server/appErrorTelemetryKeyProvider', () => {
+describe('server/experimental/telemetry/appErrorTelemetryKeyProvider', () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {

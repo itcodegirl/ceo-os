@@ -9,7 +9,7 @@ import {
   resetAppErrorTelemetryStateForTests,
 } from './appErrorTelemetry';
 
-describe('src/lib/appErrorTelemetry', () => {
+describe('src/lib/experimental/telemetry/appErrorTelemetry', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.restoreAllMocks();

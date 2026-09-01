@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
-import ErrorBoundary from '../components/ui/ErrorBoundary';
-import PageHeader from '../components/ui/PageHeader';
-import SectionCard from '../components/ui/SectionCard';
-import SourceStatusNotice from '../components/ui/SourceStatusNotice';
-import PageLoading from '../components/ui/PageLoading';
-import StatCard from '../components/ui/StatCard';
-import { useOpsSloTrend } from '../hooks/useOpsSloTrend';
-import { buildSourceNotice } from '../lib/uiCopy';
-import '../styles/ops-reliability.css';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
+import PageHeader from '../../components/ui/PageHeader';
+import SectionCard from '../../components/ui/SectionCard';
+import SourceStatusNotice from '../../components/ui/SourceStatusNotice';
+import PageLoading from '../../components/ui/PageLoading';
+import StatCard from '../../components/ui/StatCard';
+import { useOpsSloTrend } from '../../hooks/experimental/useOpsSloTrend';
+import { buildSourceNotice } from '../../lib/uiCopy';
+import '../../styles/ops-reliability.css';
 
 function formatPercent(value) {
   if (!Number.isFinite(value)) {

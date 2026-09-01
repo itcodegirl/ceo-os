@@ -4,7 +4,7 @@ import {
   persistAppErrorTelemetryBatch,
 } from './appErrorTelemetryIngestRepository.js';
 
-describe('server/appErrorTelemetryIngestRepository', () => {
+describe('server/experimental/telemetry/appErrorTelemetryIngestRepository', () => {
   const originalEnv = { ...process.env };
   const originalFetch = global.fetch;
 

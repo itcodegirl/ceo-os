@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { persistAppErrorTelemetryBatch } from '../server/appErrorTelemetryIngestRepository.js';
+import { persistAppErrorTelemetryBatch } from '../server/experimental/telemetry/appErrorTelemetryIngestRepository.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');

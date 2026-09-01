@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
-vi.mock('./lib/appErrorTelemetry', () => ({
+vi.mock('./lib/experimental/telemetry/appErrorTelemetry', () => ({
   emitAppErrorTelemetry: vi.fn(),
 }));
 
