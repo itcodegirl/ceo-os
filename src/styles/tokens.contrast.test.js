@@ -272,6 +272,13 @@ const PAIRS = [
   // Action button (fixed in this PR — was --accent-soft producing ~1.1:1 in light)
   { text: '--accent-soft-strong', bg: '--bg-accent-subtle', theme: 'dark', min: 4.5 },
   { text: '--accent-soft-strong', bg: '--bg-accent-subtle', theme: 'light', min: 4.5 },
+  // --accent is used as body-size link text (e.g. .focus-home__empty-hint-link
+  // at --fs-body-sm), so it needs the 4.5 normal-text threshold rather than the
+  // 3.0 large-text one. This pair was previously unasserted while the
+  // neighbouring --accent-soft-strong pair was, which is how light --accent sat
+  // at 3.95:1 without any gate noticing.
+  { text: '--accent', bg: '--bg', theme: 'dark', min: 4.5 },
+  { text: '--accent', bg: '--bg', theme: 'light', min: 4.5 },
   // Content status pills (fixed in this PR — were --info-soft / --warning-soft / --success-soft)
   { text: '--pill-low-text', bg: '--pill-low-bg', theme: 'dark', min: 4.5 },
   { text: '--pill-low-text', bg: '--pill-low-bg', theme: 'light', min: 4.5 },
