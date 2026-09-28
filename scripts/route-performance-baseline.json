@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-08-31",
+  "generatedAt": "2026-09-28",
   "governance": {
     "refreshMode": "release-only",
-    "githubEventName": "local"
+    "githubEventName": "schedule"
   },
   "routes": {
     "Dashboard": {
       "js": {
-        "rawKb": 24.9,
-        "gzipKb": 7.84
+        "rawKb": 24.74,
+        "gzipKb": 7.83
       },
       "css": {
         "rawKb": 10.46,
@@ -37,7 +37,7 @@
     },
     "WeeklyBrief": {
       "js": {
-        "rawKb": 17.17,
+        "rawKb": 17.18,
         "gzipKb": 5.26
       },
       "css": {
@@ -48,7 +48,7 @@
     "ChiefOfStaff": {
       "js": {
         "rawKb": 51.52,
-        "gzipKb": 15.51
+        "gzipKb": 15.52
       },
       "css": {
         "rawKb": 5.58,
@@ -57,8 +57,8 @@
     },
     "Settings": {
       "js": {
-        "rawKb": 20.01,
-        "gzipKb": 6.53
+        "rawKb": 19.91,
+        "gzipKb": 6.52
       }
     }
   }
