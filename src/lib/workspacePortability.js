@@ -1,6 +1,7 @@
 import { CAPTURE_NOTES_UPDATED_EVENT } from './captureRepository';
 import { CONTENT_ITEMS_UPDATED_EVENT } from './contentRepository';
 import { JOURNAL_ENTRIES_UPDATED_EVENT } from './journalRepository';
+import { NOTEBOOK_PAGES_STORAGE_KEY, NOTEBOOK_PAGES_UPDATED_EVENT } from './notebook/notebookPagesRepository';
 import { OFFLINE_QUEUE_STORAGE_KEY, OFFLINE_QUEUE_UPDATED_EVENT } from './offlineWriteQueue';
 import { OPPORTUNITIES_UPDATED_EVENT } from './opportunitiesRepository';
 import { REMINDERS_UPDATED_EVENT } from './remindersRepository';
@@ -64,6 +65,13 @@ export const WORKSPACE_BACKUP_KEY_DEFINITIONS = Object.freeze([
     storageType: STORAGE_TYPES.json,
     eventName: JOURNAL_ENTRIES_UPDATED_EVENT,
     summaryType: 'objectValues',
+  },
+  {
+    key: NOTEBOOK_PAGES_STORAGE_KEY,
+    label: 'Notebook pages',
+    storageType: STORAGE_TYPES.json,
+    eventName: NOTEBOOK_PAGES_UPDATED_EVENT,
+    summaryType: 'notebookPages',
   },
   {
     key: 'ceo-os-reminders',
@@ -222,6 +230,13 @@ function countWeeklyBriefItems(value) {
   }, 0);
 }
 
+function countNotebookPages(value) {
+  const store = value && typeof value === 'object' && value.data && typeof value.data === 'object'
+    ? value.data
+    : value;
+  return Array.isArray(store?.pages) ? store.pages.length : 0;
+}
+
 function countRecords(definition, validation) {
   if (definition.countAsRecord === false || !validation.isValid) {
     return 0;
@@ -240,6 +255,10 @@ function countRecords(definition, validation) {
 
   if (definition.summaryType === 'weeklyBriefs') {
     return countWeeklyBriefItems(value);
+  }
+
+  if (definition.summaryType === 'notebookPages') {
+    return countNotebookPages(value);
   }
 
   if (definition.summaryType === 'text') {

@@ -6,7 +6,10 @@ Use this as the honest interview framing for CodeHerWay CEO OS. The project is s
 
 - **Screenshots in `docs/assets/screenshots/` are out of date** and do not match the current UI. They predate the calm-OS audit cycle and the restored Chief of Staff action chips. A re-capture pass is the cheapest next portfolio improvement.
 - Authentication exists as a backend path, but the end-to-end account onboarding, sign-in, account recovery, and multi-user UX still need product hardening.
-- Supabase persistence is implemented as an upgrade path for Opportunities, Content OS, Weekly Brief, and Settings. **Capture, Journal, and Reminders are deliberately local-only** — they have no Supabase tables and never sync, even when the user is signed in. The in-product copy on those pages now says so explicitly. To make a record part of the synced workspace, promote it (e.g. Capture sticky → Opportunity).
+- Supabase persistence is implemented as an upgrade path for Opportunities, Content OS, Weekly Brief, Settings, and the Notebook. **Capture and Reminders are deliberately local-only** — they have no Supabase tables and never sync, even when the user is signed in. The in-product copy on those pages now says so explicitly. To make a record part of the synced workspace, promote it (e.g. Capture sticky → Opportunity).
+- **Notebook sync needs the `notebook_pages` migration applied** (`supabase/migrations/20261001_notebook_pages.sql`). Without Supabase configured, or while signed out, pages stay on this device. Pages synced for one account are cached in this browser and stay visible after sign-out; a different account signing in on the same browser never pushes or deletes them, but can see them locally.
+- **Notebook conflict handling is per page, not per block.** When two devices edit the same page between syncs, the learner chooses one whole version ("keep this version" / "use the other version"); there is no automatic merge of edits to different blocks.
+- **Notebook pages accept text and links only.** Pasted or embedded images are not supported (the CSP's `img-src` is `'self' data:`).
 - Local-first workflows still need a complete authenticated regression pass against a real Supabase environment.
 - In-session shell settings stay aligned with the Settings page, but authenticated multi-device and multi-tab settings reconciliation still needs broader QA.
 - Chief of Staff AI generation depends on deployed server secrets and proxy configuration. Without those, the app falls back to a deterministic local template. The fallback is visibly labeled — failure is honest, not hidden.
@@ -68,7 +71,7 @@ A later follow-up then closed the `useWeeklyBrief` item:
 
 - ✅ **`useWeeklyBrief` persistence moved out of `setState` updaters.** The four
   editable collections (review notes, priorities, wins, blockers) now track
-  their latest committed value in refs (the same pattern `Journal.jsx` uses via
+  their latest committed value in refs (the pattern the former `Journal.jsx` used via
   `entryRef`). Each setter reads the previous value from its ref, commits the
   optimistic value to state and ref, then diffs and persists *outside* any
   updater, so React StrictMode's dev-only double-invocation of updaters can no
@@ -132,8 +135,8 @@ These items remain intentionally outside the current scope and are good candidat
 - **Account product completeness.** Authentication, account recovery, local-to-cloud migration, and multi-device UX need a full product pass before this should be sold as a complete account-based SaaS.
 - **Authenticated conflict coverage beyond the focused repository tests.** Supabase-backed Opportunity, Content OS, and Weekly Brief item rows now carry `updated_at` through their covered paths, but Settings, Chief workspace, and a real authenticated staging pass across mutable tables still need validation.
 - **Schema migrations across all persisted domains.** Weekly Brief has the first versioned envelope, and local backup import validates known storage keys before writing. Capture, Journal, Settings, Chief workspace, Opportunities, Content OS, reminders, and offline queue payloads still need the same migration discipline before future schema-changing imports or local-to-cloud migration can be automated safely.
-- **Offline write replay coverage.** Opportunities and Content OS replay through the queue today. Weekly Brief, Chief workspace, Settings, Capture, Journal, and reminders still use explicit local/error states rather than queued replay.
-- **Local-to-cloud migration.** Local JSON backup/import helps with data portability, but it intentionally does not merge local records into Supabase or resolve conflicts between local and remote workspaces.
+- **Offline write replay coverage.** Opportunities, Content OS, and Notebook pages replay through the queue today. Weekly Brief, Chief workspace, Settings, Capture, and reminders still use explicit local/error states rather than queued replay.
+- **Local-to-cloud migration.** Local JSON backup/import helps with data portability, but it intentionally does not merge local records into Supabase or resolve conflicts between local and remote workspaces. The Notebook is the exception: its pages written while signed out upload on the next signed-in sync, with the same conflict choice as two-device edits.
 - **Fuzzy dedup in Chief of Staff acceptance.** Exact-match dedup is in place; titles like "Q3 launch" vs "Q3 Launch Plan" still pass through. A similarity heuristic would help, but it has to balance recall against false positives that could block legitimate distinct items.
 - **Light-mode polish across the remaining page-specific surfaces.** Focus Home, the corruption banner, the weekly autosave dot, the journal prompts, and the Chief notes-limit warning are tuned; production demos may still surface a few minor surface tweaks.
 

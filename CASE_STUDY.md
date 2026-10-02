@@ -190,6 +190,15 @@ npm run test:e2e
 - Focus Home reminder input copy now connects helper and progress context through accessible descriptions.
 - Playwright coverage now includes a 390px mobile navigation flow through Capture and browser-back behavior.
 
+## 20) The Journal becomes the Notebook (October 1, 2026)
+
+The plain-textarea Journal grew into a rich-text **Notebook** with four sections — Personal (one page per day, keeping the Journal's four prompts), Professional, Learning (My Notes, My Version / explain it back, folded reflections, a source link), and Inventions & CodeHerWay (idea, checklist, research) — so personal reflection, professional notes, study, and venture work live in one place instead of four tools.
+
+- **No lost history.** Existing Journal entries are copied into Personal pages on the first read anywhere in the app; the original storage key is kept as a backup. `/journal` redirects to `/notebook`.
+- **Focus Home unchanged.** An adapter exposes today's Personal page as the same `{ feelsHeavy, oneNextThing, … }` plain-text shape, so `focusHomeLogic` and suggestions needed no changes, and the adapter never imports the editor.
+- **Sync without silent overwrites.** Pages save locally on every pause and sync to Supabase underneath; pushes are serialized per page behind an `updated_at` guard, and a two-device edit asks "keep this version / use the other version." A mutation check confirmed the serialization test fails without the fix.
+- **Bundle discipline.** Tiptap lives only in the lazy Notebook chunk (budgeted at 445 / 142 kB). Building it exposed a `vendor-react` chunk rule that matched `@tiptap/react` and would have nearly tripled the vendor chunk every route loads (190 kB to 501 kB); the rule is now anchored to the real package.
+
 ## 19) CEO OS audit follow-up (May 7, 2026)
 
 A focused cloud-readiness pass that stays inside the current scope boundaries:

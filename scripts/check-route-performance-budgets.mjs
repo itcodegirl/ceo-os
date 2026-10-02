@@ -89,6 +89,18 @@ const routeBudgets = [
     js: { rawKb: 22.0, gzipKb: 7.0 },
     css: null,
   },
+  {
+    route: 'Notebook',
+    // New route (Journal -> Notebook). Measured 413.0 / 130.4 kB JS and
+    // 10.3 / 2.5 kB CSS: almost all of it is the Tiptap/ProseMirror rich-text
+    // editor, which is the feature itself and loads only when the Notebook
+    // route is opened. vite.config.js anchors the vendor-react rule so the
+    // editor can never leak into the shared vendor chunk every route
+    // downloads. Ceilings leave ~8% headroom; adding editor extensions should
+    // be a deliberate bump.
+    js: { rawKb: 445, gzipKb: 142 },
+    css: { rawKb: 11.5, gzipKb: 2.9 },
+  },
 ];
 
 function toKb(bytes) {

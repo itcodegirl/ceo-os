@@ -6,7 +6,7 @@ import path from 'node:path';
 const distAssetsDir = path.resolve(process.cwd(), 'dist', 'assets');
 const defaultBaselinePath = path.resolve(process.cwd(), 'scripts', 'route-performance-baseline.json');
 const defaultOutputPath = path.resolve(process.cwd(), 'artifacts', 'route-size-report.md');
-const routes = ['Dashboard', 'Opportunities', 'ContentOS', 'WeeklyBrief', 'ChiefOfStaff', 'Settings'];
+const routes = ['Dashboard', 'Opportunities', 'ContentOS', 'WeeklyBrief', 'ChiefOfStaff', 'Settings', 'Notebook'];
 
 function toKb(bytes) {
   return bytes / 1024;

@@ -10,6 +10,7 @@ export const STORAGE_DOMAINS = Object.freeze({
   chiefResponses: 'chiefResponses',
   contentItems: 'contentItems',
   journalEntries: 'journalEntries',
+  notebookPages: 'notebookPages',
   opportunities: 'opportunities',
   reminders: 'reminders',
   settings: 'settings',
@@ -50,6 +51,17 @@ export const DOMAIN_MODELS = Object.freeze({
     date: 'YYYY-MM-DD',
     prompts: 'Record<string,string>',
     updatedAt: 'number',
+  }),
+  NotebookPage: Object.freeze({
+    id: 'string',
+    section: 'personal|professional|learning|ventures',
+    title: 'string',
+    pageDate: 'YYYY-MM-DD|empty',
+    sourceUrl: 'string',
+    blocks: 'Record<string,TiptapJSON>',
+    createdAt: 'string',
+    updatedAt: 'number',
+    sync: '{ ownerId, remoteUpdatedAt, pending, conflict, revision }',
   }),
   Opportunity: Object.freeze({
     id: 'string',
@@ -113,6 +125,11 @@ export const STORAGE_SCHEMAS = Object.freeze({
   [STORAGE_DOMAINS.journalEntries]: Object.freeze({
     key: 'ceo-os-journal-entries',
     model: 'Record<string,JournalEntry>',
+    version: CURRENT_DATA_SCHEMA_VERSION,
+  }),
+  [STORAGE_DOMAINS.notebookPages]: Object.freeze({
+    key: 'ceo-os-notebook-pages',
+    model: '{ pages: NotebookPage[], deletedPageIds: string[], journalImported: boolean }',
     version: CURRENT_DATA_SCHEMA_VERSION,
   }),
   [STORAGE_DOMAINS.opportunities]: Object.freeze({

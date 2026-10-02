@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout';
 import Dashboard from './Dashboard';
 import Capture from './Capture';
-import Journal from './Journal';
+import Notebook from './Notebook';
 import Opportunities from './Opportunities';
 import ContentOS from './ContentOS';
 import WeeklyBrief from './WeeklyBrief';
@@ -26,8 +26,8 @@ const ROUTE_CASES = [
     heading: 'Capture',
   },
   {
-    path: '/journal',
-    heading: 'Journal',
+    path: '/notebook',
+    heading: 'Notebook',
   },
   {
     path: '/content',
@@ -64,7 +64,7 @@ describe('src/pages route accessibility', () => {
             <Route path="/" element={<AppLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="capture" element={<Capture />} />
-              <Route path="journal" element={<Journal />} />
+              <Route path="notebook" element={<Notebook />} />
               <Route path="opportunities" element={<Opportunities />} />
               <Route path="content" element={<ContentOS />} />
               <Route path="weekly-brief" element={<WeeklyBrief />} />

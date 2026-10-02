@@ -13,7 +13,7 @@ import { expect, test } from '@playwright/test';
 const primaryRoutes = [
   { path: '/', name: 'Focus Home' },
   { path: '/capture', name: 'Capture' },
-  { path: '/journal', name: 'Journal' },
+  { path: '/notebook', name: 'Notebook' },
   { path: '/opportunities', name: 'Opportunities' },
   { path: '/content', name: 'Content OS' },
   { path: '/weekly-brief', name: 'Weekly Brief' },
