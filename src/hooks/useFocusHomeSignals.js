@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 import { CAPTURE_NOTES_UPDATED_EVENT, listCaptureNotes } from '../lib/captureRepository';
+import { getTodayJournalDateKey } from '../lib/journalRepository';
 import {
-  JOURNAL_ENTRIES_UPDATED_EVENT,
-  getJournalEntryByDate,
-  getTodayJournalDateKey,
-} from '../lib/journalRepository';
+  NOTEBOOK_PAGES_STORAGE_KEY,
+  NOTEBOOK_PAGES_UPDATED_EVENT,
+  getDailySignalEntry,
+} from '../lib/notebook/notebookPagesRepository';
 import { REMINDERS_UPDATED_EVENT, listReminders } from '../lib/remindersRepository';
 import { shallowEqualRecordArrays, shallowEqualRecords } from '../lib/stateUtils';
 import { useSilentRefresh } from './useSilentRefresh';
@@ -12,18 +13,21 @@ import { useSilentRefresh } from './useSilentRefresh';
 // Module-scope constants keep useSilentRefresh's subscription deps stable.
 const FOCUS_HOME_SIGNAL_EVENTS = [
   CAPTURE_NOTES_UPDATED_EVENT,
-  JOURNAL_ENTRIES_UPDATED_EVENT,
+  NOTEBOOK_PAGES_UPDATED_EVENT,
   REMINDERS_UPDATED_EVENT,
 ];
 const FOCUS_HOME_SIGNAL_STORAGE_KEYS = [
   'ceo-os-capture-notes',
-  'ceo-os-journal-entries',
+  NOTEBOOK_PAGES_STORAGE_KEY,
   'ceo-os-reminders',
 ];
 
+// `journalEntry` keeps its name and shape ({ onMyMind, feelsHeavy,
+// oneNextThing, todaySuccess }): it is now today's Notebook Personal page as
+// plain text, so focusHomeLogic and suggestions read it unchanged.
 export function useFocusHomeSignals() {
   const [captureNotes, setCaptureNotes] = useState(() => listCaptureNotes());
-  const [journalEntry, setJournalEntry] = useState(() => getJournalEntryByDate(getTodayJournalDateKey()));
+  const [journalEntry, setJournalEntry] = useState(() => getDailySignalEntry(getTodayJournalDateKey()));
   const [reminders, setReminders] = useState(() => listReminders());
 
   // Reference-stable updaters: skip setState when the next value is
@@ -40,7 +44,7 @@ export function useFocusHomeSignals() {
 
   const syncJournalEntry = useCallback(() => {
     setJournalEntry((current) => {
-      const next = getJournalEntryByDate(getTodayJournalDateKey());
+      const next = getDailySignalEntry(getTodayJournalDateKey());
       return shallowEqualRecords(current, next) ? current : next;
     });
   }, []);

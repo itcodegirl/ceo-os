@@ -4,7 +4,7 @@ import path from 'node:path';
 
 const distAssetsDir = path.resolve(process.cwd(), 'dist', 'assets');
 const baselinePath = path.resolve(process.cwd(), 'scripts', 'route-performance-baseline.json');
-const routes = ['Dashboard', 'Opportunities', 'ContentOS', 'WeeklyBrief', 'ChiefOfStaff', 'Settings'];
+const routes = ['Dashboard', 'Opportunities', 'ContentOS', 'WeeklyBrief', 'ChiefOfStaff', 'Settings', 'Notebook'];
 
 function parseArgs(argv) {
   return new Set(Array.isArray(argv) ? argv : []);

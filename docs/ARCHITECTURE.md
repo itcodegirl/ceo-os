@@ -23,6 +23,17 @@ The trust story is built on three layers:
 2. **Forward-compat migrations.** `src/lib/storageMigrations.js` ships a registry stub keyed by domain × `fromVersion`. Today the registry is empty (every domain ships v1, no work to do), but the pattern is in place so the next schema bump only requires registering a `(fromVersion) => nextData` migrator. Reads run the chain transparently.
 3. **Corruption preservation.** `src/lib/storageCorruption.js` parses JSON and, on parse failure, **preserves** the corrupt blob under `${key}__corrupt_<ts>` (capped at 3 backups per key) and emits `ceo-os:storage-corruption`. The non-blocking `StorageCorruptionBanner` tells the user we kept a copy. Data loss is loud, not silent.
 
+### The Notebook: local working copy, sync underneath
+
+`src/lib/notebook/notebookPagesRepository.js` deliberately differs from the opportunities/content repositories, which pick one source per call. Notebook pages autosave on every pause in typing and are read synchronously by Focus Home and System Pulse (today's Personal page feeds the "feels heavy without a next thing" signal), so:
+
+- The local store is always the working copy. Reads and saves are synchronous and work offline; a one-time import copies the old Journal entries into Personal pages on the first read anywhere.
+- When signed in, `syncNotebookPages()` (run app-wide on mount, focus, and reconnect by `useNotebookBackgroundSync`) pulls the account's `notebook_pages` rows and pushes pages marked pending.
+- Each page remembers the server `updated_at` it last saw. Pushes go through the shared `applyExpectedUpdatedAtFilter` guard and are **serialized per page**, so rapid autosaves can't race into false conflicts. A real two-device edit becomes an explicit "keep this version / use the other version" choice, never a silent overwrite.
+- Before any pull, the open page's autosave is flushed (`registerNotebookSyncFlush`), so a remote change can never replace writing that was still waiting for its debounce.
+- Transient network failures queue a `notebook-page:push` (payload: page id only, so a replay always sends the latest local copy) through the shared offline write queue.
+- The Tiptap editor is imported only by Notebook components, keeping it in the lazy Notebook route chunk. `vite.config.js` anchors the `vendor-react` rule to the real `react` package so `@tiptap/react` can't be pulled into the vendor chunk every route loads.
+
 ## Optimistic concurrency
 
 Local Opportunities, Content OS, and Weekly Brief items stamp `updatedAt` on every write. The shared `assertRecordIsFresh` helper rejects stale saves with a typed `StaleRecordError`. `useCrudPage` surfaces the error as a friendly form message — *"This record was changed in another window."* — and refreshes the list under the open modal so closing it reveals the up-to-date row.

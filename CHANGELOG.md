@@ -2,6 +2,40 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-10-01 - Notebook replaces the Journal
+
+Branch `claude/notebook-foundation`. The plain Journal becomes a rich-text
+**Notebook** with four sections, each with its own page template:
+
+- **Personal** — one page per day with the original four Journal prompts, the
+  "Make a reminder from this" action, and a day picker. Existing Journal
+  entries are imported once (the old storage key is kept as a backup).
+- **Professional** — Notes, plus folded Wins / Challenges / Next steps.
+- **Learning** — My Notes and My Version (explain it back), folded What
+  clicked / What confused me / Key takeaways, and a source link.
+- **Inventions & CodeHerWay** — The idea, a To-do checklist, and folded Why it
+  matters / Research & notes.
+
+Engineering:
+
+- `src/lib/notebook/` — section templates, a framework-free autosave
+  controller (800 ms debounce, failed saves keep the writing), plain-text
+  helpers, and `notebookPagesRepository`: a local working copy with Supabase
+  sync (per-page serialized pushes, `updated_at` guard, explicit conflict
+  choice, deletion tombstones, offline-queue replay).
+- Supabase migration `20261001_notebook_pages.sql` (RLS, one Personal page per
+  user per day). New `notebookPages` storage domain and backup entry.
+- Tiptap editor (bold, italic, underline, highlight, heading, lists,
+  checklist, quote, inline code, code block, link) ported from the Study
+  Journal; roving-focus toolbar; Escape leaves the editor.
+- Focus Home and System Pulse read today's Personal page through a plain-text
+  adapter, so `focusHomeLogic` is unchanged. System Pulse is hidden on the
+  Notebook route.
+- `/journal` redirects to `/notebook`. Notebook added to the route budgets,
+  routing smoke, a11y sweep, and performance smoke. `vendor-react` chunk rule
+  anchored so `@tiptap/react` stays in the lazy Notebook chunk.
+- Notebook paper tokens for both themes, covered by the contrast test.
+
 ## 2026-08-31 - Telemetry/ops experimental/ quarantine
 
 Branch `claude/telemetry-experimental-quarantine`. Closes the largest structural

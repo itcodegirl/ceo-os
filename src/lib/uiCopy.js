@@ -10,10 +10,10 @@ export const SOURCE_STATE_OFFLINE = 'Offline';
 export const SOURCE_NOTICE_OFFLINE = `Data source: ${SOURCE_STATE_OFFLINE}. No cloud replay queue is active.`;
 export const AUTOSAVE_PAUSED_COPY = 'Autosave is paused until this workspace saves successfully again.';
 
-// Capture, Journal, and Reminders are deliberately local-only — they have no
-// Supabase table and never sync, even when the user signs in. Other domains
-// (Opportunities, Content OS, Weekly Brief, Settings) DO have a Supabase
-// path. This copy makes the difference honest at the point of use rather
+// Capture and Reminders are deliberately local-only — they have no Supabase
+// table and never sync, even when the user signs in. Other domains
+// (Opportunities, Content OS, Weekly Brief, Settings, and the Notebook that
+// replaced the Journal) DO have a Supabase path. This copy makes the difference honest at the point of use rather
 // than leaving the user to infer it from the global Sync pill.
 export const SOURCE_NOTICE_LOCAL_FIRST_ONLY = 'This surface stays on this device — it is not part of the synced workspace.';
 

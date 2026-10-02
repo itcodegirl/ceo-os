@@ -7,7 +7,7 @@ import { APP_ROUTES, filterRoutesByMetaMode, toNestedRoutePath } from './lib/rou
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Capture = lazy(() => import('./pages/Capture'));
-const Journal = lazy(() => import('./pages/Journal'));
+const Notebook = lazy(() => import('./pages/Notebook'));
 const Opportunities = lazy(() => import('./pages/Opportunities'));
 const ContentOS = lazy(() => import('./pages/ContentOS'));
 const WeeklyBrief = lazy(() => import('./pages/WeeklyBrief'));
@@ -20,7 +20,7 @@ const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const ROUTE_COMPONENTS = {
   'focus-home': Dashboard,
   capture: Capture,
-  journal: Journal,
+  notebook: Notebook,
   opportunities: Opportunities,
   content: ContentOS,
   'weekly-brief': WeeklyBrief,
@@ -67,6 +67,8 @@ function App() {
                 />
               );
             })}
+            {/* The Journal became the Notebook's Personal section; keep old links working. */}
+            <Route path="journal" element={<Navigate to="/notebook" replace />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

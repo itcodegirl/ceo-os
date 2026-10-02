@@ -15,8 +15,13 @@ not just feature output. Every UX decision is filtered through one question:
   drafts. Includes ADHD-supportive states and an "I'm overwhelmed" reset.
 - **Capture** — sticky-note workspace for fast brain-dump input, with composer
   rehydration through localStorage so a long brain-dump survives reloads.
-- **Journal** — private daily prompts with debounced autosave and a
-  one-next-thing prompt that can promote straight to a reminder.
+- **Notebook** — one rich-text notebook (Tiptap) with four sections:
+  **Personal** (a page per day with the original Journal prompts, including
+  the one-next-thing prompt that promotes straight to a reminder),
+  **Professional**, **Learning** (My Notes, My Version / explain it back, and
+  folded reflections, plus a source link), and **Inventions & CodeHerWay**
+  (idea, checklist, research). Pages autosave on this device and sync to the
+  signed-in account. Existing Journal entries are imported into Personal pages.
 - **Weekly Brief** — priorities, blockers, wins, and a close-of-week reflection
   that feeds Focus Home momentum and the next-move recommendation.
 - **Opportunities** — an executive-grade relationship pipeline with optimistic
@@ -36,10 +41,15 @@ not just feature output. Every UX decision is filtered through one question:
 
 What makes this stand out beyond a typical portfolio app:
 
-- **Repository pattern across 8 domains.** Same contract for opportunities,
-  content, weekly brief, settings, chief, capture, journal, and reminders:
-  normalize → read/write from the active source (`local` vs `supabase`) →
-  emit cross-tab events for lightweight synchronization.
+- **Repository pattern across 9 domains.** Same contract for opportunities,
+  content, weekly brief, settings, chief, capture, journal, reminders, and
+  notebook pages: normalize → read/write from the active source (`local` vs
+  `supabase`) → emit cross-tab events for lightweight synchronization.
+- **Local-first sync for the Notebook.** Pages save to this browser on every
+  pause in typing and sync to Supabase underneath, with per-page serialized
+  pushes, an `updated_at` guard, and an explicit "keep mine / use the other
+  version" choice when two devices edit the same page — never a silent
+  overwrite. The editor is lazy-loaded with the Notebook route only.
 - **Versioned-envelope local storage.** `src/lib/dataSchema.js` declares each
   domain's schema version; `versionedStorage` writes
   `{ schemaVersion, domain, model, data }` and rejects envelopes whose `domain`
@@ -101,7 +111,8 @@ For portfolio demos or recruiter screenshares:
    and reminders. The daily operating rhythm and support tools (mode chips,
    "I'm overwhelmed" reset, momentum) sit below in a calm footer / drawer.
 2. **Capture** — add one sticky note as `idea`, then edit text/category inline.
-3. **Journal** — answer one prompt; watch the debounced autosave status.
+3. **Notebook** — answer one Personal prompt and watch the autosave status;
+   then open **Learning**, create a page, and write in My Version.
 4. **Weekly Brief + Opportunities** — add one blocker or in-progress item;
    return to Focus Home and see the recommendation update.
 5. **Chief of Staff** — paste notes, reload once to show local persistence,
