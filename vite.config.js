@@ -21,7 +21,10 @@ export default defineConfig({
           }
           if (id.includes('react-router')) return 'vendor-router'
           if (id.includes('react-dom') || id.includes('/scheduler/')) return 'vendor-react'
-          if (id.match(/\/react\//)) return 'vendor-react'
+          // Anchored to the package root: a bare /react/ also matched
+          // node_modules/@tiptap/react/ and pulled the whole editor into the
+          // vendor chunk every route loads.
+          if (id.match(/\/node_modules\/react\//)) return 'vendor-react'
           if (id.includes('@supabase')) return 'vendor-supabase'
           if (id.includes('valibot')) return 'vendor-valibot'
           return undefined

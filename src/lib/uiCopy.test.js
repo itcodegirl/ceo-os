@@ -23,7 +23,7 @@ describe('src/lib/uiCopy', () => {
     expect(AUTOSAVE_PAUSED_COPY).toBe('Autosave is paused until this workspace saves successfully again.');
   });
 
-  it('exposes a local-first-only notice for Capture / Journal / Reminders', async () => {
+  it('exposes a local-first-only notice for Capture / Reminders', async () => {
     const { SOURCE_NOTICE_LOCAL_FIRST_ONLY } = await import('./uiCopy');
     expect(SOURCE_NOTICE_LOCAL_FIRST_ONLY)
       .toBe('This surface stays on this device — it is not part of the synced workspace.');

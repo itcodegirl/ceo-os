@@ -4,7 +4,7 @@ import { useSystemPulse } from './useSystemPulse';
 
 const repositoryState = vi.hoisted(() => ({
   listCaptureNotes: vi.fn(() => []),
-  getJournalEntryByDate: vi.fn(() => null),
+  getDailySignalEntry: vi.fn(() => null),
   getTodayJournalDateKey: vi.fn(() => '2026-04-30'),
   listContentItems: vi.fn(() => Promise.resolve([])),
   listOpportunities: vi.fn(() => Promise.resolve([])),
@@ -20,9 +20,13 @@ vi.mock('../lib/captureRepository', () => ({
 }));
 
 vi.mock('../lib/journalRepository', () => ({
-  JOURNAL_ENTRIES_UPDATED_EVENT: 'ceo-os:journal-entries-updated',
-  getJournalEntryByDate: (...args) => repositoryState.getJournalEntryByDate(...args),
   getTodayJournalDateKey: (...args) => repositoryState.getTodayJournalDateKey(...args),
+}));
+
+vi.mock('../lib/notebook/notebookPagesRepository', () => ({
+  NOTEBOOK_PAGES_STORAGE_KEY: 'ceo-os-notebook-pages',
+  NOTEBOOK_PAGES_UPDATED_EVENT: 'ceo-os:notebook-pages-updated',
+  getDailySignalEntry: (...args) => repositoryState.getDailySignalEntry(...args),
 }));
 
 vi.mock('../lib/contentRepository', () => ({
@@ -77,7 +81,7 @@ describe('useSystemPulse', () => {
     window.cancelAnimationFrame = vi.fn();
 
     repositoryState.listCaptureNotes.mockReturnValue([]);
-    repositoryState.getJournalEntryByDate.mockReturnValue(null);
+    repositoryState.getDailySignalEntry.mockReturnValue(null);
     repositoryState.getTodayJournalDateKey.mockReturnValue('2026-04-30');
     repositoryState.listContentItems.mockResolvedValue([]);
     repositoryState.listOpportunities.mockResolvedValue([]);
