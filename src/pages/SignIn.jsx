@@ -4,6 +4,7 @@ import PageHeader from '../components/ui/PageHeader';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import { useAuthSession } from '../hooks/useAuthSession';
+import { getSafeRedirectPath } from '../lib/safeRedirect';
 import { isSupabaseConfigured, signInWithMagicLink } from '../lib/supabase';
 import '../styles/forms.css';
 
@@ -20,13 +21,14 @@ function SignIn() {
   const [sentTo, setSentTo] = useState('');
 
   // If a session already exists, send the user back to the home route.
-  // Respect ?redirectTo=... so deep links reroute correctly post-sign-in.
+  // Respect ?redirectTo=... so deep links reroute correctly post-sign-in,
+  // but only for same-origin relative paths (no open redirects).
   useEffect(() => {
     if (!isAuthenticated) {
       return;
     }
     const params = new URLSearchParams(location.search);
-    const target = params.get('redirectTo') || '/';
+    const target = getSafeRedirectPath(params.get('redirectTo'));
     navigate(target, { replace: true });
   }, [isAuthenticated, location.search, navigate]);
 
