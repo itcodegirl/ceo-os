@@ -17,11 +17,23 @@ function getFocusableElements(root) {
   });
 }
 
-function Modal({ isOpen, title, onClose, children }) {
+/**
+ * Accessible dialog. `initialFocusRef` picks the element focused on open
+ * (default: the first focusable one); each `className` is added to the panel,
+ * and to the overlay with an `-overlay` suffix, so a caller can restyle the
+ * dialog, e.g. as a side or bottom sheet.
+ */
+function Modal({ isOpen, title, onClose, children, className = '', initialFocusRef }) {
   const titleId = useId();
   const overlayRef = useRef(null);
   const panelRef = useRef(null);
   const focusReturnRef = useRef(null);
+  // Read through a ref so a parent passing a new onClose each render does not
+  // re-run the open effect (which would move focus back to the start).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -35,7 +47,7 @@ function Modal({ isOpen, title, onClose, children }) {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
 
@@ -64,6 +76,10 @@ function Modal({ isOpen, title, onClose, children }) {
     };
 
     const requestInitialFocus = () => {
+      if (initialFocusRef?.current) {
+        initialFocusRef.current.focus();
+        return;
+      }
       if (panelRef.current) {
         const focusable = getFocusableElements(panelRef.current);
         const firstFocusable = focusable[0];
@@ -94,7 +110,7 @@ function Modal({ isOpen, title, onClose, children }) {
         mainContent?.focus?.();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, initialFocusRef]);
 
   if (!isOpen) {
     return null;
@@ -105,19 +121,19 @@ function Modal({ isOpen, title, onClose, children }) {
 
   const handleOverlayClick = (event) => {
     if (event.target === overlayRef.current) {
-      onClose?.();
+      onCloseRef.current?.();
     }
   };
 
   return (
     <div
       ref={overlayRef}
-      className="modal-overlay"
+      className={['modal-overlay', ...className.split(/\s+/).filter(Boolean).map((name) => `${name}-overlay`)].join(' ')}
       onMouseDown={handleOverlayClick}
     >
       <div
         ref={panelRef}
-        className="modal-panel"
+        className={`modal-panel ${className}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-labelledby={hasTitle ? titleId : undefined}

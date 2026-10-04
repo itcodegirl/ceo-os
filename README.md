@@ -22,6 +22,8 @@ not just feature output. Every UX decision is filtered through one question:
   folded reflections, plus a source link), and **Inventions & CodeHerWay**
   (idea, checklist, research). Pages autosave on this device and sync to the
   signed-in account. Existing Journal entries are imported into Personal pages.
+  Select any writing to turn it into a **card**, **question**, or **idea**;
+  they collect in a panel beside the page and link back to their source.
 - **Weekly Brief** — priorities, blockers, wins, and a close-of-week reflection
   that feeds Focus Home momentum and the next-move recommendation.
 - **Opportunities** — an executive-grade relationship pipeline with optimistic
@@ -41,9 +43,9 @@ not just feature output. Every UX decision is filtered through one question:
 
 What makes this stand out beyond a typical portfolio app:
 
-- **Repository pattern across 9 domains.** Same contract for opportunities,
-  content, weekly brief, settings, chief, capture, journal, reminders, and
-  notebook pages: normalize → read/write from the active source (`local` vs
+- **Repository pattern across 10 domains.** Same contract for opportunities,
+  content, weekly brief, settings, chief, capture, journal, reminders,
+  notebook pages, and notebook cards / questions / ideas: normalize → read/write from the active source (`local` vs
   `supabase`) → emit cross-tab events for lightweight synchronization.
 - **Local-first sync for the Notebook.** Pages save to this browser on every
   pause in typing and sync to Supabase underneath, with per-page serialized
