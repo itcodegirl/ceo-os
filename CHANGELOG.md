@@ -2,6 +2,18 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-10-04 - Supabase security hardening
+
+Branch `claude/supabase-security-hardening`. Migration
+`20261004_security_hardening.sql`, from the Supabase security advisor after
+the project's first full schema apply:
+
+- `prune_old_app_error_telemetry_events` (SECURITY DEFINER) was executable by
+  anyone through `/rest/v1/rpc/`: the original migration revoked EXECUTE from
+  `anon` and `authenticated`, but Postgres grants it to `PUBLIC` by default.
+  It is now callable by `service_role` only.
+- `set_updated_at()` has a pinned, empty `search_path`.
+
 ## 2026-10-04 - Notebook to-dos and synced reminders
 
 Branch `claude/notebook-lists` (stacked on `claude/notebook-study-items`).
