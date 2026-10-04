@@ -2,6 +2,48 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-10-04 - Notebook cards, questions, and ideas
+
+Branch `claude/notebook-study-items` (stacked on `claude/notebook-foundation`).
+Writing in the Notebook can now be turned into things to come back to:
+
+- **Selection menu.** Selecting text in any block shows Highlight, Underline,
+  Make card, Question, and Idea. The create actions open a composer prefilled
+  from the selection; nothing is saved until the learner presses Save.
+- **Cards** (prompt and answer, with a duplicate-prompt warning), **questions**
+  (answered / unanswered, optional answer), and **ideas** (title, category,
+  description). Each remembers the page and block it came from.
+- **Panel** beside the page with Cards / Questions / Ideas tabs and counts, a
+  "This page / All pages" switch (other pages' items link back to their page),
+  edit and delete, and **Show source**, which opens a folded block if needed and
+  selects the original passage. It collapses to a strip of counts; below
+  1100px it opens as a side sheet, and on phones the sheet and composers rise
+  from the bottom.
+
+Engineering:
+
+- `src/lib/notebook/items/` — models and validation ported from the Study
+  Journal, the SM-2 scheduler (`srAlgorithm`, `cardSchedule`) so cards carry
+  review metadata from creation, and `notebookItemsRepository`: local-first
+  with Supabase sync like pages. Items upload only after their page exists in
+  the account (foreign key), follow a Personal page whose id changes when it
+  merges with the same day from another device, and keep both versions when
+  edited on two devices.
+- Supabase migration `20261002_notebook_items.sql`: `notebook_cards`,
+  `notebook_questions`, `notebook_ideas` with RLS (including a check that the
+  linked page belongs to the same user). `page_id ... on delete set null`, so
+  deleting a page keeps its items.
+- New storage domains and backup entries; offline-queue replay for item
+  pushes and deletions; background sync runs pages first, then items.
+- `Modal` gains optional `className` (applied to the panel and, suffixed
+  `-overlay`, to the overlay) and `initialFocusRef`, and no longer re-runs its
+  open effect when a parent passes a new `onClose` each render.
+- The notebook's section list becomes a compact row below 1600px so the page
+  and the panel keep their width beside the app sidebar.
+- Guard test: writing, highlighting, clearing, or deleting notes never creates
+  or removes an item. Notebook route budget raised to 520 / 164 kB JS and
+  21 / 4.2 kB CSS (selection menu positioning, panel, composers).
+
 ## 2026-10-01 - Notebook replaces the Journal
 
 Branch `claude/notebook-foundation`. The plain Journal becomes a rich-text

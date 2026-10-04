@@ -2,6 +2,7 @@ import { CAPTURE_NOTES_UPDATED_EVENT } from './captureRepository';
 import { CONTENT_ITEMS_UPDATED_EVENT } from './contentRepository';
 import { JOURNAL_ENTRIES_UPDATED_EVENT } from './journalRepository';
 import { NOTEBOOK_PAGES_STORAGE_KEY, NOTEBOOK_PAGES_UPDATED_EVENT } from './notebook/notebookPagesRepository';
+import { NOTEBOOK_ITEMS_STORAGE_KEYS, NOTEBOOK_ITEMS_UPDATED_EVENT } from './notebook/items/notebookItemsRepository';
 import { OFFLINE_QUEUE_STORAGE_KEY, OFFLINE_QUEUE_UPDATED_EVENT } from './offlineWriteQueue';
 import { OPPORTUNITIES_UPDATED_EVENT } from './opportunitiesRepository';
 import { REMINDERS_UPDATED_EVENT } from './remindersRepository';
@@ -72,6 +73,27 @@ export const WORKSPACE_BACKUP_KEY_DEFINITIONS = Object.freeze([
     storageType: STORAGE_TYPES.json,
     eventName: NOTEBOOK_PAGES_UPDATED_EVENT,
     summaryType: 'notebookPages',
+  },
+  {
+    key: NOTEBOOK_ITEMS_STORAGE_KEYS.card,
+    label: 'Notebook cards',
+    storageType: STORAGE_TYPES.json,
+    eventName: NOTEBOOK_ITEMS_UPDATED_EVENT,
+    summaryType: 'notebookItems',
+  },
+  {
+    key: NOTEBOOK_ITEMS_STORAGE_KEYS.question,
+    label: 'Notebook questions',
+    storageType: STORAGE_TYPES.json,
+    eventName: NOTEBOOK_ITEMS_UPDATED_EVENT,
+    summaryType: 'notebookItems',
+  },
+  {
+    key: NOTEBOOK_ITEMS_STORAGE_KEYS.idea,
+    label: 'Notebook ideas',
+    storageType: STORAGE_TYPES.json,
+    eventName: NOTEBOOK_ITEMS_UPDATED_EVENT,
+    summaryType: 'notebookItems',
   },
   {
     key: 'ceo-os-reminders',
@@ -230,11 +252,12 @@ function countWeeklyBriefItems(value) {
   }, 0);
 }
 
-function countNotebookPages(value) {
+// Notebook stores are versioned envelopes around { pages } or { items }.
+function countNotebookRecords(value, listName) {
   const store = value && typeof value === 'object' && value.data && typeof value.data === 'object'
     ? value.data
     : value;
-  return Array.isArray(store?.pages) ? store.pages.length : 0;
+  return Array.isArray(store?.[listName]) ? store[listName].length : 0;
 }
 
 function countRecords(definition, validation) {
@@ -258,7 +281,11 @@ function countRecords(definition, validation) {
   }
 
   if (definition.summaryType === 'notebookPages') {
-    return countNotebookPages(value);
+    return countNotebookRecords(value, 'pages');
+  }
+
+  if (definition.summaryType === 'notebookItems') {
+    return countNotebookRecords(value, 'items');
   }
 
   if (definition.summaryType === 'text') {

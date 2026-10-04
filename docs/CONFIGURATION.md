@@ -101,6 +101,7 @@ tables are:
 - `weekly_briefs`
 - `weekly_brief_items`
 - `notebook_pages`
+- `notebook_cards`, `notebook_questions`, `notebook_ideas`
 - `profiles`
 - `chief_sessions`
 - `chief_outputs`

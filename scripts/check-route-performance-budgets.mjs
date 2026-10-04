@@ -98,8 +98,12 @@ const routeBudgets = [
     // editor can never leak into the shared vendor chunk every route
     // downloads. Ceilings leave ~8% headroom; adding editor extensions should
     // be a deliberate bump.
-    js: { rawKb: 445, gzipKb: 142 },
-    css: { rawKb: 11.5, gzipKb: 2.9 },
+    // Bumped for cards, questions, and ideas: measured 481.6 / 151.5 kB JS
+    // and 19.3 / 3.9 kB CSS. The growth is the selection menu (Tiptap's
+    // BubbleMenu plus Floating UI for positioning), the panel, and the
+    // composers; still Notebook-only, other routes are unchanged.
+    js: { rawKb: 520, gzipKb: 164 },
+    css: { rawKb: 21, gzipKb: 4.2 },
   },
 ];
 

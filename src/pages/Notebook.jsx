@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
@@ -18,6 +18,24 @@ import '../styles/forms.css';
 import '../styles/notebook.css';
 
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+// Only the panel's open/closed choice is remembered between visits.
+const PANEL_COLLAPSED_KEY = 'ceo-os-notebook-panel-collapsed';
+
+function readPanelCollapsed() {
+  try {
+    return window.localStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writePanelCollapsed(collapsed) {
+  try {
+    window.localStorage.setItem(PANEL_COLLAPSED_KEY, String(collapsed));
+  } catch {
+    // A preference only; the panel still works without it.
+  }
+}
 
 function Notebook() {
   const [searchParams] = useSearchParams();
@@ -25,6 +43,12 @@ function Notebook() {
   const { showToast } = useToast();
   const [creatingPage, setCreatingPage] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [panel, setPanel] = useState(() => ({ tab: 'card', scope: 'page', collapsed: readPanelCollapsed() }));
+
+  const changePanel = useCallback((changes) => {
+    setPanel((current) => ({ ...current, ...changes }));
+    if (typeof changes.collapsed === 'boolean') writePanelCollapsed(changes.collapsed);
+  }, []);
 
   const requestedSection = searchParams.get('section');
   const section = getNotebookSection(isNotebookSectionId(requestedSection) ? requestedSection : NOTEBOOK_SECTION_IDS.personal);
@@ -62,6 +86,8 @@ function Notebook() {
         ) : null}
         onReload={() => setReloadToken((token) => token + 1)}
         onDeleted={() => navigate(notebookHref(section.id))}
+        panel={panel}
+        onPanelChange={changePanel}
       />
     );
   } else if (page === null) {

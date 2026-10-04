@@ -107,6 +107,20 @@ function emitUpdated(detail = {}) {
   window.dispatchEvent(new CustomEvent(NOTEBOOK_PAGES_UPDATED_EVENT, { detail }));
 }
 
+// Listeners told when a page's id changes (a Personal page merged into the
+// same day's page from another device), so things that link to it follow.
+const pageIdListeners = new Set();
+
+export function onNotebookPageIdChanged(listener) {
+  pageIdListeners.add(listener);
+  return () => pageIdListeners.delete(listener);
+}
+
+function notifyPageIdChanged(previousId, nextId) {
+  if (previousId === nextId) return;
+  pageIdListeners.forEach((listener) => listener(previousId, nextId));
+}
+
 function updatePageInStore(store, page) {
   return { ...store, pages: store.pages.map((existing) => (existing.id === page.id ? page : existing)) };
 }
@@ -371,6 +385,7 @@ function markConflict(pageId, row) {
     },
   };
   writeStore({ ...store, pages: store.pages.map((existing) => (existing.id === pageId ? next : existing)) });
+  notifyPageIdChanged(pageId, next.id);
   emitUpdated({ type: 'conflict', id: next.id, source: 'supabase' });
 }
 
@@ -485,6 +500,7 @@ async function adoptRemoteDaily(localId, row, session, options) {
   if (!localHasWriting || sameContent(local, row)) {
     const pages = applyRemoteRow({ ...store, pages: store.pages.filter((page) => page.id !== localId) }, row, session.userId);
     writeStore({ ...store, pages });
+    notifyPageIdChanged(localId, row.id);
     emitUpdated({ type: 'sync', id: row.id, source: 'supabase' });
     return getNotebookPage(row.id);
   }
@@ -496,6 +512,7 @@ async function adoptRemoteDaily(localId, row, session, options) {
       sync: { ...local.sync, ownerId: session.userId, remoteUpdatedAt: toMs(row.updated_at), pending: true, conflict: null },
     };
     writeStore({ ...store, pages: store.pages.map((page) => (page.id === localId ? adopted : page)) });
+    notifyPageIdChanged(localId, row.id);
     emitUpdated({ type: 'sync', id: row.id, source: 'supabase' });
     return pushPage(row.id, session, options);
   }

@@ -6,15 +6,25 @@ import NotebookEditor from './NotebookEditor';
 /**
  * One writing block on a notebook page. Folded blocks (progressive disclosure)
  * show a toggle in their heading and a "has notes" hint while closed.
- * `action` renders under the editor (e.g. Personal's "Make a reminder").
+ * `action` renders under the editor (e.g. Personal's "Make a reminder");
+ * `selectionMenu` floats over selected text. A new `revealToken` opens a
+ * folded block so the source passage of a card can be shown in it.
  */
-function NotebookBlock({ block, initialContent, active, onChange, onFocus, onReady, action }) {
+function NotebookBlock({ block, initialContent, active, onChange, onFocus, onReady, action, selectionMenu, revealToken }) {
   const titleId = useId();
   const hintId = useId();
   const bodyId = useId();
   const headingRef = useRef(null);
   const [open, setOpen] = useState(() => !block.folded || hasWriting(initialContent));
   const [hasText, setHasText] = useState(() => hasWriting(initialContent));
+  const [seenRevealToken, setSeenRevealToken] = useState(revealToken);
+
+  // Opened during render (not in an effect) so a caller using flushSync can
+  // select the revealed text right after.
+  if (revealToken !== seenRevealToken) {
+    setSeenRevealToken(revealToken);
+    if (revealToken) setOpen(true);
+  }
 
   const handleChange = useCallback((doc) => {
     onChange(block.key, doc);
@@ -67,6 +77,7 @@ function NotebookBlock({ block, initialContent, active, onChange, onFocus, onRea
           onReady={handleReady}
           onLeave={focusHeading}
         />
+        {selectionMenu}
         {action ? <div className="notebook-block__action">{action}</div> : null}
       </div>
     </section>
