@@ -15,6 +15,7 @@ export const STORAGE_DOMAINS = Object.freeze({
   notebookPages: 'notebookPages',
   notebookQuestions: 'notebookQuestions',
   opportunities: 'opportunities',
+  reminderDeletions: 'reminderDeletions',
   reminders: 'reminders',
   settings: 'settings',
   weeklyBriefs: 'weeklyBriefs',
@@ -115,8 +116,15 @@ export const DOMAIN_MODELS = Object.freeze({
     id: 'string',
     text: 'string',
     isDone: 'boolean',
-    completedAt: 'number|null',
+    completedAt: 'string',
+    createdAt: 'string',
+    snoozedUntil: 'string',
+    sourceType: 'notebook-page|empty',
+    sourceId: 'string',
+    sourceTitle: 'string',
+    sourceHref: 'string',
     updatedAt: 'number',
+    sync: '{ ownerId, remoteUpdatedAt, pending }',
   }),
   Settings: Object.freeze({
     workspaceName: 'string',
@@ -189,6 +197,13 @@ export const STORAGE_SCHEMAS = Object.freeze({
   [STORAGE_DOMAINS.opportunities]: Object.freeze({
     key: 'ceo-os-opportunities',
     model: 'Opportunity[]',
+    version: CURRENT_DATA_SCHEMA_VERSION,
+  }),
+  // Ids of synced reminders deleted on this device, kept until the deletion
+  // reaches the account so a pull cannot bring them back.
+  [STORAGE_DOMAINS.reminderDeletions]: Object.freeze({
+    key: 'ceo-os-reminder-deletions',
+    model: 'string[]',
     version: CURRENT_DATA_SCHEMA_VERSION,
   }),
   [STORAGE_DOMAINS.reminders]: Object.freeze({

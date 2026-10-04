@@ -14,9 +14,10 @@
 import { buildCreateId } from '../../utils';
 import { STORAGE_DOMAINS } from '../../dataSchema';
 import { readVersionedLocalStorage, writeVersionedLocalStorage } from '../../versionedStorage';
-import { getSupabaseRuntime } from '../../supabaseRuntime';
+import { getSyncSession } from '../../syncSession';
 import { tryRemoteOrEnqueue } from '../../offlineWriteQueueIntegration';
 import { applyExpectedUpdatedAtFilter } from '../../staleRecordError';
+import { relinkReminderSource } from '../../remindersRepository';
 import { getNotebookPage, onNotebookPageIdChanged } from '../notebookPagesRepository';
 import {
   createNotebookItem,
@@ -155,7 +156,8 @@ export function deleteItem(kind, id) {
 }
 
 // When a Personal page is merged into the same day's page from another
-// device, its id changes; items made from it follow it.
+// device, its id changes; items and to-dos made from it follow it.
+onNotebookPageIdChanged(relinkReminderSource);
 onNotebookPageIdChanged((previousId, nextId) => {
   for (const kind of NOTEBOOK_ITEM_KINDS) {
     const store = readStore(kind);
@@ -241,20 +243,6 @@ function fromRow(kind, row, userId, existing) {
     updatedAt: toMs(row.updated_at),
     sync: { ownerId: userId, remoteUpdatedAt: toMs(row.updated_at), pending: false },
   });
-}
-
-async function getSyncSession() {
-  const runtime = await getSupabaseRuntime();
-  if (!runtime) return null;
-  const client = await runtime.getSupabaseClient();
-  if (!client) return null;
-  try {
-    const userId = await runtime.requireSupabaseUserId();
-    return userId ? { client, userId } : null;
-  } catch (error) {
-    if (error?.code === 'SUPABASE_AUTH_REQUIRED') return null;
-    throw error;
-  }
 }
 
 function isOwnedBy(item, userId) {

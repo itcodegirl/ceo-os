@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Button from '../ui/Button';
 import { isReminderSnoozed } from '../../lib/remindersRepository';
 
@@ -105,6 +106,15 @@ function ReminderRow({
         )}
       </label>
       <div className="focus-reminder-list__actions">
+        {!isEditing && item.sourceHref ? (
+          <Link
+            className="focus-reminder-list__source"
+            to={item.sourceHref}
+            aria-label={`${item.sourceTitle || 'Notebook'}: open the page this reminder came from`}
+          >
+            {item.sourceTitle || 'Notebook'}
+          </Link>
+        ) : null}
         {!isEditing && typeof onEditReminder === 'function' && !item.isDone ? (
           <button
             type="button"

@@ -13,7 +13,7 @@ vi.mock('../../supabaseRuntime', () => {
 });
 
 import * as runtimeModule from '../../supabaseRuntime';
-import { isoToMicros, withMicroseconds } from '../../../test/timestampPrecision';
+import { createFakeSupabase, FAKE_USER_ID as USER } from '../../../test/fakeSupabase';
 import { getOfflineQueue } from '../../offlineWriteQueue';
 import {
   createNotebookPage,
@@ -37,116 +37,6 @@ import {
   updateItem,
 } from './notebookItemsRepository';
 
-const USER = 'user-1';
-const ITEM_TABLES = ['notebook_cards', 'notebook_questions', 'notebook_ideas'];
-
-/**
- * In-memory stand-in for the notebook tables, behaving like PostgREST +
- * Postgres where it matters here: server-stamped microsecond `updated_at`,
- * the ms-range update guard, primary keys, the page foreign key, and
- * `on delete set null` (which also re-stamps the item, via its trigger).
- */
-function createFakeSupabase() {
-  const tables = Object.fromEntries(['notebook_pages', ...ITEM_TABLES].map((name) => [name, []]));
-  let clock = Date.parse('2026-10-04T10:00:00.000Z');
-  let failNext = null;
-  let loseNextResponse = false;
-  const stamp = () => {
-    clock += 1000;
-    return withMicroseconds(new Date(clock).toISOString(), 417);
-  };
-  const clone = (row) => JSON.parse(JSON.stringify(row));
-
-  function from(table) {
-    const rows = tables[table];
-    const state = { op: 'select', filters: [], payload: null };
-    const matches = (row) => state.filters.every(([kind, column, value]) => {
-      if (kind === 'eq') return row[column] === value;
-      if (kind === 'gte') return isoToMicros(row[column]) >= isoToMicros(value);
-      return isoToMicros(row[column]) < isoToMicros(value);
-    });
-    const respond = (data) => {
-      if (!loseNextResponse) return { data, error: null };
-      loseNextResponse = false;
-      return { data: null, error: new TypeError('Failed to fetch') };
-    };
-
-    const run = () => {
-      if (failNext) {
-        const error = failNext;
-        failNext = null;
-        return { data: null, error };
-      }
-      if (state.op === 'select') return { data: rows.filter(matches).map(clone), error: null };
-      if (state.op === 'insert') {
-        const next = state.payload;
-        if (rows.some((row) => row.id === next.id)) return { data: null, error: { code: '23505', message: 'duplicate key value' } };
-        if (next.page_id && !tables.notebook_pages.some((page) => page.id === next.page_id)) {
-          return { data: null, error: { code: '23503', message: 'violates foreign key constraint' } };
-        }
-        const now = stamp();
-        const row = { ...clone(next), created_at: now, updated_at: now };
-        rows.push(row);
-        return respond([clone(row)]);
-      }
-      if (state.op === 'update') {
-        const hits = rows.filter(matches);
-        hits.forEach((row) => Object.assign(row, clone(state.payload), { updated_at: stamp() }));
-        return respond(hits.map(clone));
-      }
-      for (let index = rows.length - 1; index >= 0; index -= 1) {
-        if (!matches(rows[index])) continue;
-        const [removed] = rows.splice(index, 1);
-        if (table === 'notebook_pages') {
-          ITEM_TABLES.forEach((itemTable) => tables[itemTable]
-            .filter((item) => item.page_id === removed.id)
-            .forEach((item) => Object.assign(item, { page_id: null, updated_at: stamp() })));
-        }
-      }
-      return { data: null, error: null };
-    };
-
-    const builder = {
-      select: () => builder,
-      insert: (payload) => { state.op = 'insert'; state.payload = payload; return builder; },
-      update: (payload) => { state.op = 'update'; state.payload = payload; return builder; },
-      delete: () => { state.op = 'delete'; return builder; },
-      eq: (column, value) => { state.filters.push(['eq', column, value]); return builder; },
-      gte: (column, value) => { state.filters.push(['gte', column, value]); return builder; },
-      lt: (column, value) => { state.filters.push(['lt', column, value]); return builder; },
-      async maybeSingle() {
-        const result = run();
-        return result.error ? result : { data: result.data?.[0] ?? null, error: null };
-      },
-      async single() {
-        const result = run();
-        if (result.error) return result;
-        return result.data?.length ? { data: result.data[0], error: null } : { data: null, error: { code: 'PGRST116' } };
-      },
-      then(resolve, reject) {
-        return Promise.resolve(run()).then(resolve, reject);
-      },
-    };
-    return builder;
-  }
-
-  return {
-    client: { from },
-    tables,
-    failNextWith(error) { failNext = error; },
-    loseNextResponse() { loseNextResponse = true; },
-    editElsewhere(table, id, changes) {
-      Object.assign(tables[table].find((row) => row.id === id), changes, { updated_at: stamp() });
-    },
-    insertElsewhere(table, row) {
-      const now = stamp();
-      tables[table].push({ user_id: USER, page_id: null, source_text: null, source_block: null, created_at: now, updated_at: now, ...row });
-    },
-    deleteElsewhere(table, id) {
-      from(table).delete().eq('id', id).then(() => {});
-    },
-  };
-}
 
 let fake;
 
@@ -255,7 +145,7 @@ describe('notebook items account sync', () => {
   it('brings in items made on another device and applies their edits', async () => {
     await settle();
     signIn();
-    fake.insertElsewhere('notebook_questions', { id: 'q-remote', text: 'Which niche first?', answer: null, status: 'unanswered' });
+    fake.insertElsewhere('notebook_questions', { page_id: null, source_text: null, source_block: null, id: 'q-remote', text: 'Which niche first?', answer: null, status: 'unanswered' });
     await syncNotebookItems();
     expect(getNotebookItem('question', 'q-remote')).toMatchObject({ text: 'Which niche first?', answer: '', status: 'unanswered' });
 

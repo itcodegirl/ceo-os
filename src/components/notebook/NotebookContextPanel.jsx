@@ -6,18 +6,26 @@ import Button from '../ui/Button';
 import { ITEM_LABELS, itemName, NOTEBOOK_ITEM_KINDS, QUESTION_STATUS_LABELS, truncate } from '../../lib/notebook/items/itemModels';
 import { deleteItem } from '../../lib/notebook/items/notebookItemsRepository';
 import { getNotebookPage } from '../../lib/notebook/notebookPagesRepository';
-import { notebookHref } from '../../lib/notebook/notebookRoutes';
+import { notebookPageHref } from '../../lib/notebook/notebookRoutes';
 import { getNotebookBlock } from '../../lib/notebook/notebookSections';
+import { REMINDER_SOURCE_NOTEBOOK_PAGE } from '../../lib/remindersRepository';
 import KindIcon from './KindIcon';
+import { PANEL_LABEL, PANEL_TABS } from '../../lib/notebook/notebookPanel';
+import NotebookTodoList from './NotebookTodoList';
+
+function tabLabel(tab) {
+  return tab === 'list' ? 'Lists' : ITEM_LABELS[tab].plural;
+}
+
+/** Open to-dos made on this page, or open reminders anywhere. */
+function countOpenTodos(reminders, page, scope) {
+  return reminders.filter((reminder) => !reminder.isDone && (
+    scope === 'all' || (reminder.sourceType === REMINDER_SOURCE_NOTEBOOK_PAGE && reminder.sourceId === page?.id)
+  )).length;
+}
 
 function blockTitleFor(page, blockKey) {
   return getNotebookBlock(page.section, blockKey)?.title ?? page.title;
-}
-
-function pageHref(page) {
-  return page.section === 'personal'
-    ? notebookHref(page.section, { date: page.pageDate })
-    : notebookHref(page.section, { page: page.id });
 }
 
 function ItemBody({ kind, item }) {
@@ -93,7 +101,7 @@ function NotebookItem({ kind, item, currentPage, scope, onEdit, onRevealSource, 
         {origin !== undefined ? (
           <p className="notebook-item__origin">
             {origin
-              ? <>From <Link to={pageHref(origin)}>{origin.title}</Link></>
+              ? <>From <Link to={notebookPageHref(origin)}>{origin.title}</Link></>
               : 'From a deleted page'}
           </p>
         ) : null}
@@ -134,13 +142,49 @@ const EMPTY_HINTS = {
   idea: 'Select a spark of an idea and choose Idea, or jot one down here.',
 };
 
+function ItemTabBody({ kind, items, page, scope, newButtonId, onCreate, onEdit, onRevealSource }) {
+  const labels = ITEM_LABELS[kind];
+  return (
+    <>
+      <Button id={newButtonId} size="small" variant="ghost" className="notebook-panel__new" onClick={() => onCreate(kind)}>
+        <Plus aria-hidden="true" />
+        {labels.create}
+      </Button>
+      {items.length === 0 ? (
+        <div className="notebook-panel__empty">
+          <KindIcon kind={kind} />
+          <p>{scope === 'all' ? `No ${labels.plural.toLowerCase()} yet.` : EMPTY_HINTS[kind]}</p>
+        </div>
+      ) : (
+        <ul className="notebook-panel__list">
+          {items.map((item) => (
+            <NotebookItem
+              key={item.id}
+              kind={kind}
+              item={item}
+              currentPage={page}
+              scope={scope}
+              onEdit={onEdit}
+              onRevealSource={onRevealSource}
+              // The removed item's buttons go with it; focus the list's stable control.
+              onRemoved={() => document.getElementById(newButtonId)?.focus()}
+            />
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 /**
- * The right-hand panel: cards, questions, and ideas, one tab at a time, for
- * this page or across the whole notebook. On narrow screens the same panel
- * opens in a sheet (see NotebookPageView).
+ * The right-hand panel: cards, questions, ideas, and to-dos, one tab at a
+ * time, for this page or across the whole notebook. On narrow screens the
+ * same panel opens in a sheet (see NotebookPageView).
  */
 function NotebookContextPanel({
   items,
+  reminders,
+  todoSource,
   page,
   tab,
   onTabChange,
@@ -157,25 +201,27 @@ function NotebookContextPanel({
   const panelId = `${baseId}-panel`;
   const tabId = (kind) => `${baseId}-tab-${kind}`;
   const pageItems = (kind) => items[kind].filter((item) => page && item.pageId === page.id);
-  const shown = scope === 'all' ? items[tab] : pageItems(tab);
-  const labels = ITEM_LABELS[tab];
+  const isList = tab === 'list';
+  const countFor = (kind) => (kind === 'list'
+    ? countOpenTodos(reminders, page, scope)
+    : (scope === 'all' ? items[kind] : pageItems(kind)).length);
 
   const moveTab = (event) => {
-    const index = NOTEBOOK_ITEM_KINDS.indexOf(tab);
-    const last = NOTEBOOK_ITEM_KINDS.length - 1;
+    const index = PANEL_TABS.indexOf(tab);
+    const last = PANEL_TABS.length - 1;
     const nextIndex = { ArrowRight: index === last ? 0 : index + 1, ArrowLeft: index === 0 ? last : index - 1, Home: 0, End: last }[event.key];
     if (nextIndex === undefined) return;
     event.preventDefault();
-    const next = NOTEBOOK_ITEM_KINDS[nextIndex];
+    const next = PANEL_TABS[nextIndex];
     onTabChange(next);
     document.getElementById(tabId(next))?.focus();
   };
 
   return (
-    <aside className={`notebook-panel notebook-panel--${variant}`} aria-label="Cards, questions, and ideas">
+    <aside className={`notebook-panel notebook-panel--${variant}`} aria-label={PANEL_LABEL}>
       <div className="notebook-panel__header">
         <div className="notebook-panel__scope" role="group" aria-label="Show items from">
-          {[['page', 'This page'], ['all', 'All pages']].map(([value, label]) => (
+          {[['page', 'This page'], ['all', isList ? 'All open' : 'All pages']].map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -188,13 +234,13 @@ function NotebookContextPanel({
           ))}
         </div>
         {onCollapse ? (
-          <button type="button" className="notebook-icon-button" aria-label="Hide the cards, questions, and ideas panel" title="Hide panel" onClick={onCollapse}>
+          <button type="button" className="notebook-icon-button" aria-label="Hide the cards, questions, ideas, and lists panel" title="Hide panel" onClick={onCollapse}>
             <PanelRightClose aria-hidden="true" />
           </button>
         ) : null}
       </div>
       <div role="tablist" aria-label="Item types" className="notebook-panel__tabs" onKeyDown={moveTab}>
-        {NOTEBOOK_ITEM_KINDS.map((kind) => (
+        {PANEL_TABS.map((kind) => (
           <button
             key={kind}
             type="button"
@@ -208,39 +254,25 @@ function NotebookContextPanel({
             onClick={() => onTabChange(kind)}
           >
             <KindIcon kind={kind} />
-            <span>{ITEM_LABELS[kind].plural}</span>
-            <span className="notebook-panel__count">
-              {(scope === 'all' ? items[kind] : pageItems(kind)).length}
-            </span>
+            <span>{tabLabel(kind)}</span>
+            <span className="notebook-panel__count">{countFor(kind)}</span>
           </button>
         ))}
       </div>
       <div role="tabpanel" id={panelId} aria-labelledby={tabId(tab)} className="notebook-panel__body">
-        <Button id={newButtonId} size="small" variant="ghost" className="notebook-panel__new" onClick={() => onCreate(tab)}>
-          <Plus aria-hidden="true" />
-          {labels.create}
-        </Button>
-        {shown.length === 0 ? (
-          <div className="notebook-panel__empty">
-            <KindIcon kind={tab} />
-            <p>{scope === 'all' ? `No ${labels.plural.toLowerCase()} yet.` : EMPTY_HINTS[tab]}</p>
-          </div>
+        {isList ? (
+          <NotebookTodoList reminders={reminders} page={page} source={todoSource} scope={scope} newButtonId={newButtonId} />
         ) : (
-          <ul className="notebook-panel__list">
-            {shown.map((item) => (
-              <NotebookItem
-                key={item.id}
-                kind={tab}
-                item={item}
-                currentPage={page}
-                scope={scope}
-                onEdit={onEdit}
-                onRevealSource={onRevealSource}
-                // The removed item's buttons go with it; focus the list's stable control.
-                onRemoved={() => document.getElementById(newButtonId)?.focus()}
-              />
-            ))}
-          </ul>
+          <ItemTabBody
+            kind={tab}
+            items={scope === 'all' ? items[tab] : pageItems(tab)}
+            page={page}
+            scope={scope}
+            newButtonId={newButtonId}
+            onCreate={onCreate}
+            onEdit={onEdit}
+            onRevealSource={onRevealSource}
+          />
         )}
       </div>
     </aside>
@@ -250,13 +282,14 @@ function NotebookContextPanel({
 /** The collapsed panel: counts stay visible, and each one reopens the panel on its tab. */
 export function NotebookContextStrip({ counts, onExpand, label = 'Show' }) {
   return (
-    <div className="notebook-panel-strip" role="group" aria-label="Cards, questions, and ideas">
-      {NOTEBOOK_ITEM_KINDS.map((kind) => {
-        const name = `${label} ${ITEM_LABELS[kind].plural.toLowerCase()} (${counts[kind]})`;
+    <div className="notebook-panel-strip" role="group" aria-label={PANEL_LABEL}>
+      {PANEL_TABS.map((kind) => {
+        const noun = kind === 'list' ? 'to-dos' : ITEM_LABELS[kind].plural.toLowerCase();
+        const name = `${label} ${noun} (${counts[kind]})`;
         return (
           <button key={kind} type="button" className="notebook-panel-strip__button" data-kind={kind} aria-label={name} title={name} onClick={() => onExpand(kind)}>
             <KindIcon kind={kind} />
-            <span className="notebook-panel-strip__label" aria-hidden="true">{ITEM_LABELS[kind].plural}</span>
+            <span className="notebook-panel-strip__label" aria-hidden="true">{tabLabel(kind)}</span>
             <span className="notebook-panel-strip__count" aria-hidden="true">{counts[kind]}</span>
           </button>
         );

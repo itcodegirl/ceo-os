@@ -1,14 +1,17 @@
 import { useEffect } from 'react';
 import { syncNotebookPages } from '../lib/notebook/notebookPagesRepository';
 import { syncNotebookItems } from '../lib/notebook/items/notebookItemsRepository';
+import { syncReminders } from '../lib/remindersRepository';
 
 const MIN_SYNC_INTERVAL_MS = 15_000;
 
 /**
- * Keeps notebook pages, and the cards, questions, and ideas made from them,
- * in step with the signed-in account from anywhere in the app (so Focus Home
- * reflects writing done on another device). Runs on mount, when the tab
- * regains focus, and when the browser comes back online. Does nothing when Supabase is not configured or the user is signed out.
+ * Keeps notebook pages, the cards, questions, and ideas made from them, and
+ * reminders (including notebook to-dos) in step with the signed-in account
+ * from anywhere in the app (so Focus Home reflects writing done on another
+ * device). Runs on mount, when the tab regains focus, and when the browser
+ * comes back online. Does nothing when Supabase is not configured or the user
+ * is signed out.
  */
 export function useNotebookBackgroundSync() {
   useEffect(() => {
@@ -25,7 +28,7 @@ export function useNotebookBackgroundSync() {
       // must exist in the account before its items can be uploaded.
       syncNotebookPages()
         .catch(() => {})
-        .then(() => syncNotebookItems())
+        .then(() => Promise.allSettled([syncNotebookItems(), syncReminders()]))
         .catch(() => {
           // Everything stays saved on this device and marked pending; the next
           // focus/online event (or the offline queue) retries.

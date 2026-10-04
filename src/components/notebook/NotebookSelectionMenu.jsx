@@ -1,6 +1,6 @@
 import { useEditorState } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
-import { Highlighter, Underline } from 'lucide-react';
+import { Highlighter, ListChecks, Underline } from 'lucide-react';
 import { useRef } from 'react';
 import { useRovingFocus } from '../../hooks/useRovingFocus';
 import { getSelectedText } from '../../lib/notebook/editorSelection';
@@ -23,8 +23,10 @@ function shouldShowSelectionMenu({ editor, element, view, state, from, to }) {
 
 /**
  * Floats above selected writing. Highlight and underline apply immediately;
- * the create actions open a composer with the selection as its source and
- * never save anything on their own. Ported from the Study Journal.
+ * the card / question / idea actions open a composer with the selection as
+ * its source and never save anything on their own. To-do adds the selection
+ * to this page's to-dos right away (it is a reminder, editable in Lists).
+ * Ported from the Study Journal.
  */
 function NotebookSelectionMenu({ editor, blockKey, blockTitle, onCreate }) {
   const toolbarRef = useRef(null);
@@ -110,6 +112,17 @@ function NotebookSelectionMenu({ editor, blockKey, blockTitle, onCreate }) {
             <span>{ITEM_LABELS[kind].fromSelection}</span>
           </button>
         ))}
+        <button
+          type="button"
+          data-roving-item
+          className="notebook-selection-menu__button notebook-selection-menu__button--create"
+          aria-label="Add the selection as a to-do"
+          onMouseDown={keepEditorSelection}
+          onClick={() => create('todo')}
+        >
+          <ListChecks aria-hidden="true" />
+          <span>To-do</span>
+        </button>
       </div>
     </BubbleMenu>
   );

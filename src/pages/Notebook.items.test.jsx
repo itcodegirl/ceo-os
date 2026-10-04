@@ -6,6 +6,7 @@ import { NOTEBOOK_ITEM_KINDS } from '../lib/notebook/items/itemModels';
 import { createItem, listNotebookItems } from '../lib/notebook/items/notebookItemsRepository';
 import { createNotebookPage, listSectionPages, saveNotebookPage } from '../lib/notebook/notebookPagesRepository';
 import { textToDoc } from '../lib/notebook/notebookText';
+import { createReminder, listReminders, toggleReminder } from '../lib/remindersRepository';
 
 function renderNotebook(path) {
   return render(
@@ -28,7 +29,7 @@ function learningPage(blocks = {}) {
 }
 
 function panel() {
-  return screen.getByRole('complementary', { name: 'Cards, questions, and ideas' });
+  return screen.getByRole('complementary', { name: 'Cards, questions, ideas, and lists' });
 }
 
 function allItems() {
@@ -142,8 +143,8 @@ describe('notebook cards, questions, and ideas', () => {
     createItem('question', { draft: { text: 'Who is the buyer?', answer: '', status: 'unanswered' }, pageId: page.id });
     renderNotebook(`/notebook?section=learning&page=${page.id}`);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide the cards, questions, and ideas panel' }));
-    expect(screen.queryByRole('complementary', { name: 'Cards, questions, and ideas' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the cards, questions, ideas, and lists panel' }));
+    expect(screen.queryByRole('complementary', { name: 'Cards, questions, ideas, and lists' })).not.toBeInTheDocument();
     expect(window.localStorage.getItem('ceo-os-notebook-panel-collapsed')).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Show questions (1)' }));
@@ -171,5 +172,72 @@ describe('notebook cards, questions, and ideas', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm delete' }));
     expect(listSectionPages('learning')).toEqual([]);
     expect(allItems().map((item) => item.id)).toEqual([kept.id]);
+  });
+});
+
+describe('notebook to-dos (Lists tab)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("adds, completes, and deletes this page's to-dos, which are reminders linked to the page", () => {
+    const page = learningPage();
+    renderNotebook(`/notebook?section=learning&page=${page.id}`);
+
+    fireEvent.click(within(panel()).getByRole('tab', { name: /Lists/ }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Add' }));
+    expect(within(panel()).getByRole('alert')).toHaveTextContent('Write the to-do first.');
+
+    fireEvent.change(within(panel()).getByLabelText('New to-do for this page'), { target: { value: 'Draft the pricing page' } });
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Add' }));
+
+    expect(listReminders()[0]).toMatchObject({
+      text: 'Draft the pricing page',
+      sourceType: 'notebook-page',
+      sourceId: page.id,
+      sourceTitle: 'Pricing',
+      sourceHref: `/notebook?section=learning&page=${page.id}`,
+    });
+    expect(within(panel()).getByRole('tab', { name: /Lists/ })).toHaveTextContent('1');
+
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Draft the pricing page' }));
+    expect(listReminders()[0].isDone).toBe(true);
+    expect(within(panel()).getByRole('tab', { name: /Lists/ })).toHaveTextContent('0');
+
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Delete to-do: Draft the pricing page' }));
+    expect(listReminders()).toEqual([]);
+  });
+
+  it('All open lists every open reminder, linking notebook to-dos back to their page', () => {
+    const pricing = learningPage();
+    const hiring = createNotebookPage({ section: 'learning', title: 'Hiring' });
+    createReminder({ text: 'Write the job post', source: { type: 'notebook-page', id: hiring.id, title: 'Hiring', href: `/notebook?section=learning&page=${hiring.id}` } });
+    createReminder({ text: 'Call the bank' });
+    toggleReminder(createReminder({ text: 'Already done' }).id, true);
+    renderNotebook(`/notebook?section=learning&page=${pricing.id}`);
+
+    fireEvent.click(within(panel()).getByRole('tab', { name: /Lists/ }));
+    expect(within(panel()).queryByText('Write the job post')).not.toBeInTheDocument();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'All open' }));
+
+    expect(within(panel()).getByText('Write the job post')).toBeInTheDocument();
+    expect(within(panel()).getByText('Call the bank')).toBeInTheDocument();
+    expect(within(panel()).queryByText('Already done')).not.toBeInTheDocument();
+    expect(within(panel()).getByRole('link', { name: 'Hiring' })).toHaveAttribute('href', `/notebook?section=learning&page=${hiring.id}`);
+  });
+
+  it("makes the Personal page's next thing into a reminder linked to that day", async () => {
+    renderNotebook('/notebook');
+    await screen.findByRole('textbox', { name: 'What is one thing I can do next?' });
+    act(() => {
+      editorFor('What is one thing I can do next?').commands.insertContent('Email the accountant');
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Make a reminder from this' }));
+
+    expect(listReminders()[0]).toMatchObject({
+      text: 'Email the accountant',
+      sourceType: 'notebook-page',
+      sourceHref: expect.stringMatching(/^\/notebook\?section=personal&date=\d{4}-\d{2}-\d{2}$/),
+    });
   });
 });

@@ -34,7 +34,7 @@ test.describe('Notebook cards, questions, and ideas', () => {
     await expect(dialog).toBeHidden();
     await expect(notes).toBeFocused();
 
-    const panel = page.getByRole('complementary', { name: 'Cards, questions, and ideas' });
+    const panel = page.getByRole('complementary', { name: 'Cards, questions, ideas, and lists' });
     await expect(panel.getByRole('heading', { name: 'What does value pricing charge for?' })).toBeVisible();
 
     await page.reload();
@@ -46,14 +46,14 @@ test.describe('Notebook cards, questions, and ideas', () => {
   test('the panel moves into a sheet when the window narrows', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openNewLearningPage(page, 'Hiring');
-    const inlinePanel = page.getByRole('complementary', { name: 'Cards, questions, and ideas' });
+    const inlinePanel = page.getByRole('complementary', { name: 'Cards, questions, ideas, and lists' });
     await expect(inlinePanel).toBeVisible();
 
     await page.setViewportSize({ width: 800, height: 900 });
     await expect(inlinePanel).toBeHidden();
     await page.getByRole('button', { name: 'Open ideas (0)' }).click();
 
-    const sheet = page.getByRole('dialog', { name: 'Cards, questions, and ideas' });
+    const sheet = page.getByRole('dialog', { name: 'Cards, questions, ideas, and lists' });
     await expect(sheet.getByRole('tab', { name: /Ideas/ })).toHaveAttribute('aria-selected', 'true');
     await sheet.getByRole('button', { name: 'New idea' }).click();
     const composer = page.getByRole('dialog', { name: 'Save an idea' });
@@ -63,5 +63,27 @@ test.describe('Notebook cards, questions, and ideas', () => {
     await expect(page.getByRole('button', { name: 'Open ideas (1)' })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('a selection becomes a to-do on this page and on Focus Home, linked back', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openNewLearningPage(page, 'Launch plan');
+
+    const notes = page.getByRole('textbox', { name: 'My Notes' });
+    await notes.click();
+    await page.keyboard.type('Book the venue');
+    await page.keyboard.press('Shift+Home');
+    await page.getByRole('toolbar', { name: 'Selection actions in My Notes' })
+      .getByRole('button', { name: 'Add the selection as a to-do' }).click();
+
+    const panel = page.getByRole('complementary', { name: 'Cards, questions, ideas, and lists' });
+    await expect(panel.getByRole('tab', { name: /Lists/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(panel.getByRole('checkbox', { name: 'Book the venue' })).not.toBeChecked();
+
+    await page.getByRole('link', { name: 'Focus Home' }).first().click();
+    const source = page.getByRole('link', { name: 'Launch plan: open the page this reminder came from' });
+    await expect(source).toBeVisible();
+    await source.click();
+    await expect(page.getByLabel('Page title')).toHaveValue('Launch plan');
   });
 });

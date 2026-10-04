@@ -16,7 +16,7 @@
 import { buildCreateId } from '../utils';
 import { STORAGE_DOMAINS } from '../dataSchema';
 import { readVersionedLocalStorage, writeVersionedLocalStorage } from '../versionedStorage';
-import { getSupabaseRuntime } from '../supabaseRuntime';
+import { getSyncSession } from '../syncSession';
 import { tryRemoteOrEnqueue } from '../offlineWriteQueueIntegration';
 import { applyExpectedUpdatedAtFilter, assertRecordIsFresh } from '../staleRecordError';
 import { getTodayJournalDateKey, listJournalEntries } from '../journalRepository';
@@ -333,21 +333,6 @@ function sameContent(page, row) {
   return page.title === remote.title
     && page.sourceUrl === remote.sourceUrl
     && canonicalJson(page.blocks) === canonicalJson(remote.blocks);
-}
-
-/** Resolves the signed-in Supabase session, or null when sync is unavailable. */
-async function getSyncSession() {
-  const runtime = await getSupabaseRuntime();
-  if (!runtime) return null;
-  const client = await runtime.getSupabaseClient();
-  if (!client) return null;
-  try {
-    const userId = await runtime.requireSupabaseUserId();
-    return userId ? { client, userId } : null;
-  } catch (error) {
-    if (error?.code === 'SUPABASE_AUTH_REQUIRED') return null;
-    throw error;
-  }
 }
 
 function isOwnedBy(page, userId) {
