@@ -102,6 +102,7 @@ tables are:
 - `weekly_brief_items`
 - `notebook_pages`
 - `notebook_cards`, `notebook_questions`, `notebook_ideas`
+- `reminders`
 - `profiles`
 - `chief_sessions`
 - `chief_outputs`
@@ -113,12 +114,15 @@ tables are:
 
 ## Local-only surfaces
 
-Capture and Reminders are intentionally local-only — there are no Supabase
-tables for them, and they never sync even when the user is signed in. The
-in-product copy on those pages says so explicitly. If you want a record to
-participate in the synced workspace, promote it (Capture sticky →
-Opportunity / Content draft / Reminder, Reminder → Weekly priority) so it
-lands in one of the synced repositories.
+Capture is intentionally local-only — there is no Supabase table for it, and
+it never syncs even when the user is signed in. The in-product copy on that
+page says so explicitly. If you want a record to participate in the synced
+workspace, promote it (Capture sticky → Opportunity / Content draft /
+Reminder) so it lands in one of the synced repositories.
+
+Reminders (including Notebook to-dos) are local-first with account sync, like
+the Notebook: `remindersRepository.syncReminders()` pushes and pulls the
+`reminders` table, and reminders saved before sync existed upload once.
 
 The Notebook (which replaced the Journal) is local-first with account sync:
 every page saves to this browser immediately, and when the user is signed in

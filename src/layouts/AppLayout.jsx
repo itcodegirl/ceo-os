@@ -43,6 +43,12 @@ import {
   replayNotebookItemDeletion,
   syncNotebookItem,
 } from '../lib/notebook/items/notebookItemsRepository';
+import {
+  REMINDER_QUEUE_KIND_DELETE,
+  REMINDER_QUEUE_KIND_PUSH,
+  replayReminderDeletion,
+  syncReminder,
+} from '../lib/remindersRepository';
 import { useNotebookBackgroundSync } from '../hooks/useNotebookBackgroundSync';
 
 // Replay handlers for the offline write queue. The `skipQueue: true` option
@@ -71,6 +77,10 @@ const OFFLINE_QUEUE_HANDLERS = {
     syncNotebookItem(kind, id, { skipQueue: true }),
   [NOTEBOOK_ITEM_QUEUE_KIND_DELETE]: (payload) =>
     replayNotebookItemDeletion(payload),
+  [REMINDER_QUEUE_KIND_PUSH]: ({ id } = {}) =>
+    syncReminder(id, { skipQueue: true }),
+  [REMINDER_QUEUE_KIND_DELETE]: (payload) =>
+    replayReminderDeletion(payload),
 };
 
 function AppShellInner() {

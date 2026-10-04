@@ -7,14 +7,17 @@ import Modal from '../ui/Modal';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useNotebookAutosave } from '../../hooks/useNotebookAutosave';
 import { useNotebookItems } from '../../hooks/useNotebookItems';
+import { useReminders } from '../../hooks/useReminders';
 import { useToast } from '../../hooks/useToast';
 import { findTextRange } from '../../lib/notebook/editorSelection';
-import { NOTEBOOK_ITEM_KINDS } from '../../lib/notebook/items/itemModels';
+import { NOTEBOOK_ITEM_KINDS, truncate } from '../../lib/notebook/items/itemModels';
 import { normalizeLinkHref } from '../../lib/notebook/links';
 import { deleteNotebookPage, resolveNotebookConflict } from '../../lib/notebook/notebookPagesRepository';
+import { PANEL_LABEL } from '../../lib/notebook/notebookPanel';
+import { notebookPageHref } from '../../lib/notebook/notebookRoutes';
 import { getNotebookBlock } from '../../lib/notebook/notebookSections';
 import { getPlainText, hasWriting } from '../../lib/notebook/notebookText';
-import { createReminder } from '../../lib/remindersRepository';
+import { createReminder, REMINDER_SOURCE_NOTEBOOK_PAGE } from '../../lib/remindersRepository';
 import EditorToolbar from './EditorToolbar';
 import ItemComposer from './ItemComposer';
 import NotebookBlock from './NotebookBlock';
@@ -95,6 +98,7 @@ function NotebookPageView({ page, section, headerMeta, onReload, onDeleted, pane
   const isDaily = section.pageMode === 'daily';
   const { update, updateFields } = autosave;
   const items = useNotebookItems();
+  const reminders = useReminders();
   const isNarrow = useMediaQuery(NARROW_QUERY);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [composer, setComposer] = useState(null);
@@ -116,6 +120,14 @@ function NotebookPageView({ page, section, headerMeta, onReload, onDeleted, pane
     });
   }, []);
 
+  // Links a to-do back to this page, for the Lists tab and Focus Home.
+  const todoSource = {
+    type: REMINDER_SOURCE_NOTEBOOK_PAGE,
+    id: page.id,
+    title: title.trim() || page.title,
+    href: notebookPageHref(page),
+  };
+
   const makeReminderFromNextThing = () => {
     const text = getPlainText(latestDocs.current.oneNextThing);
     if (!text) {
@@ -123,7 +135,7 @@ function NotebookPageView({ page, section, headerMeta, onReload, onDeleted, pane
       return;
     }
     try {
-      createReminder({ text });
+      createReminder({ text, source: todoSource });
       showToast('Reminder created from your next thing.');
     } catch {
       showToast('Unable to create a reminder right now.');
@@ -169,13 +181,31 @@ function NotebookPageView({ page, section, headerMeta, onReload, onDeleted, pane
     requestAnimationFrame(() => showSource(item));
   };
 
-  const counts = Object.fromEntries(NOTEBOOK_ITEM_KINDS.map((kind) => [
-    kind,
-    items[kind].filter((item) => item.pageId === page.id).length,
-  ]));
+  const counts = {
+    ...Object.fromEntries(NOTEBOOK_ITEM_KINDS.map((kind) => [
+      kind,
+      items[kind].filter((item) => item.pageId === page.id).length,
+    ])),
+    list: reminders.filter((reminder) => (
+      !reminder.isDone && reminder.sourceType === REMINDER_SOURCE_NOTEBOOK_PAGE && reminder.sourceId === page.id
+    )).length,
+  };
+
+  const addTodoFromSelection = (source) => {
+    try {
+      createReminder({ text: truncate(source.text, 500), source: todoSource });
+    } catch {
+      showToast('Could not save this to-do on this device.');
+      return;
+    }
+    onPanelChange({ tab: 'list', scope: 'page', collapsed: false });
+    showToast("Added to this page's to-dos. It shows on Focus Home too.");
+  };
 
   const panelProps = {
     items,
+    reminders,
+    todoSource,
     page,
     tab: panel.tab,
     onTabChange: (tab) => onPanelChange({ tab }),
@@ -284,7 +314,9 @@ function NotebookPageView({ page, section, headerMeta, onReload, onDeleted, pane
                   editor={editors[block.key]}
                   blockKey={block.key}
                   blockTitle={block.title}
-                  onCreate={(kind, source, editor) => openComposer({ kind, source, editor })}
+                  onCreate={(kind, source, editor) => (kind === 'todo'
+                    ? addTodoFromSelection(source)
+                    : openComposer({ kind, source, editor }))}
                 />
               ) : null}
               action={block.key === 'oneNextThing' ? (
@@ -329,7 +361,7 @@ function NotebookPageView({ page, section, headerMeta, onReload, onDeleted, pane
       <NotebookContextStrip counts={counts} onExpand={(tab) => onPanelChange({ tab, scope: 'page', collapsed: false })} />
     ) : null}
     {isNarrow && sheetOpen ? (
-      <Modal isOpen title="Cards, questions, and ideas" onClose={() => setSheetOpen(false)} className="notebook-panel-sheet">
+      <Modal isOpen title={PANEL_LABEL} onClose={() => setSheetOpen(false)} className="notebook-panel-sheet">
         <NotebookContextPanel {...panelProps} variant="sheet" />
       </Modal>
     ) : null}

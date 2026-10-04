@@ -2,6 +2,26 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-10-04 - Notebook to-dos and synced reminders
+
+Branch `claude/notebook-lists` (stacked on `claude/notebook-study-items`).
+
+- **Lists tab** in the Notebook panel: add, complete, and delete this page's
+  to-dos, or switch to **All open** to see every open reminder, with notebook
+  to-dos linking back to their page.
+- **To-do** in the selection menu adds the selected text as a to-do on this
+  page. "Make a reminder from this" on a Personal page now links back to that
+  day too.
+- **Focus Home** shows a link from a notebook to-do to the page it came from.
+- **Reminders sync** to the signed-in account (migration
+  `20261003_reminders.sql`, RLS). The API stays synchronous: the local copy
+  is the working copy and `syncReminders()` runs underneath with the notebook
+  background sync. Reminders saved before sync existed upload once; a
+  two-device change keeps the latest one; deletions are remembered until they
+  reach the account; pushes and deletions replay from the offline queue.
+- Shared `syncSession` helper and a shared PostgREST-like test fake
+  (`src/test/fakeSupabase.js`) for the local-first repositories.
+
 ## 2026-10-04 - Notebook cards, questions, and ideas
 
 Branch `claude/notebook-study-items` (stacked on `claude/notebook-foundation`).

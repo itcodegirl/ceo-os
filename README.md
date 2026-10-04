@@ -23,7 +23,9 @@ not just feature output. Every UX decision is filtered through one question:
   (idea, checklist, research). Pages autosave on this device and sync to the
   signed-in account. Existing Journal entries are imported into Personal pages.
   Select any writing to turn it into a **card**, **question**, or **idea**;
-  they collect in a panel beside the page and link back to their source.
+  they collect in a panel beside the page and link back to their source. A
+  **Lists** tab holds the page's to-dos (or every open one); they are
+  reminders, so they also show on Focus Home with a link back to the page.
 - **Weekly Brief** — priorities, blockers, wins, and a close-of-week reflection
   that feeds Focus Home momentum and the next-move recommendation.
 - **Opportunities** — an executive-grade relationship pipeline with optimistic
