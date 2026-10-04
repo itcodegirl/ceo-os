@@ -2,6 +2,33 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-10-03 - npm audit remediation (16 -> 0 advisories)
+
+Branch `claude/npm-audit-remediation`. Clears all 16 `npm audit` advisories
+(1 low, 5 moderate, 10 high) that were on `main` before the Notebook work and
+had nothing to do with it. No semver-major bumps and no application source changes.
+
+- `npm audit fix` (no `--force`) changed only the lockfile and cleared 13
+  advisories: `react-router`/`react-router-dom` 7.14.1 -> 7.18.4, `valibot`
+  1.3.1 -> 1.5.0, `ws` 8.20.0 -> 8.22.0, `undici` 7.25.0 -> 7.30.0, `postcss`
+  8.5.10 -> 8.5.28, `nanoid` 3.3.11 -> 3.3.19, `js-yaml` 4.1.1 -> 4.3.2,
+  `brace-expansion` 1.1.14 -> 1.1.21, `@babel/core` 7.29.0 -> 7.29.7,
+  `browserslist` 4.28.2 -> 4.29.3, `baseline-browser-mapping` 2.10.20 -> 2.11.27.
+- `vitest` + `@vitest/coverage-v8` 4.1.4 -> 4.1.11 (which also moves `@vitest/mocker`).
+  `npm audit fix` cannot move these on its own, because `@vitest/coverage-v8` pins
+  an exact `vitest` peer, so the two are bumped together in `package.json`.
+- `vite` 8.0.8 -> 8.0.16 rather than the 8.3.2 that `npm audit fix` chose.
+  Vite 8.3 brings rolldown 1.2, which merges small shared chunks into the
+  ChiefOfStaff route chunk (15.52 -> 16.11 kB gzip, over its 16 kB budget). The
+  total bundle still shrinks with 8.3. 8.0.16 is the smallest patched release, and
+  it keeps every route within budget without loosening one.
+
+Shipped-bundle impact: only `react-router(-dom)` and `valibot` reach the
+browser. The router bump matters because `SignIn` forwards `?redirectTo=` into
+`navigate()`, which is the pattern behind the backslash open-redirect advisory.
+Everything else is dev, build, or test tooling, or is Node-only (`ws` is
+pulled in by `@supabase/realtime-js` but is not bundled for the browser).
+
 ## 2026-08-31 - Telemetry/ops experimental/ quarantine
 
 Branch `claude/telemetry-experimental-quarantine`. Closes the largest structural
