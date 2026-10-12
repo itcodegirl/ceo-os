@@ -23,12 +23,12 @@ export const APP_ROUTES = [
     description: 'Capture ideas, tasks, opportunities, and journal fragments fast with sticky-note simplicity.',
   },
   {
-    id: 'journal',
-    label: 'Journal',
-    path: '/journal',
+    id: 'notebook',
+    label: 'Notebook',
+    path: '/notebook',
     icon: 'journal',
     group: 'today',
-    description: 'Reflect with calm prompts, name what feels heavy, and choose one supportive next move.',
+    description: 'Daily reflection plus professional, learning, and CodeHerWay pages in one rich-text notebook.',
   },
   {
     id: 'weekly-brief',

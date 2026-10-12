@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIsMountedRef } from './useIsMountedRef';
 import { CAPTURE_NOTES_UPDATED_EVENT, listCaptureNotes } from '../lib/captureRepository';
-import {
-  getJournalEntryByDate,
-  getTodayJournalDateKey,
-  JOURNAL_ENTRIES_UPDATED_EVENT,
-} from '../lib/journalRepository';
+import { getTodayJournalDateKey } from '../lib/journalRepository';
+import { getDailySignalEntry, NOTEBOOK_PAGES_UPDATED_EVENT } from '../lib/notebook/notebookPagesRepository';
 import { CONTENT_ITEMS_UPDATED_EVENT, listContentItems } from '../lib/contentRepository';
 import { OPPORTUNITIES_UPDATED_EVENT, listOpportunities } from '../lib/opportunitiesRepository';
 import { REMINDERS_UPDATED_EVENT, listReminders } from '../lib/remindersRepository';
@@ -108,7 +105,7 @@ export function useSystemPulse() {
       ]);
       const captureNotes = listCaptureNotes();
       const reminders = listReminders();
-      const journalEntry = getJournalEntryByDate(getTodayJournalDateKey());
+      const journalEntry = getDailySignalEntry(getTodayJournalDateKey());
 
       if (!isMountedRef.current || requestId !== requestIdRef.current) {
         return;
@@ -176,7 +173,7 @@ export function useSystemPulse() {
     window.addEventListener(CONTENT_ITEMS_UPDATED_EVENT, handleAnyDataUpdate);
     window.addEventListener(WEEKLY_BRIEF_UPDATED_EVENT, handleAnyDataUpdate);
     window.addEventListener(CAPTURE_NOTES_UPDATED_EVENT, handleAnyDataUpdate);
-    window.addEventListener(JOURNAL_ENTRIES_UPDATED_EVENT, handleAnyDataUpdate);
+    window.addEventListener(NOTEBOOK_PAGES_UPDATED_EVENT, handleAnyDataUpdate);
     window.addEventListener(REMINDERS_UPDATED_EVENT, handleAnyDataUpdate);
 
     return () => {
@@ -184,7 +181,7 @@ export function useSystemPulse() {
       window.removeEventListener(CONTENT_ITEMS_UPDATED_EVENT, handleAnyDataUpdate);
       window.removeEventListener(WEEKLY_BRIEF_UPDATED_EVENT, handleAnyDataUpdate);
       window.removeEventListener(CAPTURE_NOTES_UPDATED_EVENT, handleAnyDataUpdate);
-      window.removeEventListener(JOURNAL_ENTRIES_UPDATED_EVENT, handleAnyDataUpdate);
+      window.removeEventListener(NOTEBOOK_PAGES_UPDATED_EVENT, handleAnyDataUpdate);
       window.removeEventListener(REMINDERS_UPDATED_EVENT, handleAnyDataUpdate);
     };
   }, [loadPulse]);

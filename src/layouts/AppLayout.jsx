@@ -31,6 +31,25 @@ import {
   deleteContentItem,
   updateContentItem,
 } from '../lib/contentRepository';
+import {
+  NOTEBOOK_PAGE_QUEUE_KIND_DELETE,
+  NOTEBOOK_PAGE_QUEUE_KIND_PUSH,
+  replayNotebookPageDeletion,
+  syncNotebookPage,
+} from '../lib/notebook/notebookPagesRepository';
+import {
+  NOTEBOOK_ITEM_QUEUE_KIND_DELETE,
+  NOTEBOOK_ITEM_QUEUE_KIND_PUSH,
+  replayNotebookItemDeletion,
+  syncNotebookItem,
+} from '../lib/notebook/items/notebookItemsRepository';
+import {
+  REMINDER_QUEUE_KIND_DELETE,
+  REMINDER_QUEUE_KIND_PUSH,
+  replayReminderDeletion,
+  syncReminder,
+} from '../lib/remindersRepository';
+import { useNotebookBackgroundSync } from '../hooks/useNotebookBackgroundSync';
 
 // Replay handlers for the offline write queue. The `skipQueue: true` option
 // ensures a failed replay doesn't enqueue itself a second time — the
@@ -49,6 +68,19 @@ const OFFLINE_QUEUE_HANDLERS = {
     updateContentItem(id, payload, { skipQueue: true, expectedUpdatedAt }),
   [CONTENT_QUEUE_KIND_DELETE]: ({ id } = {}) =>
     deleteContentItem(id, { skipQueue: true }),
+  // Notebook replays push the page's *latest* local copy, not a stale payload.
+  [NOTEBOOK_PAGE_QUEUE_KIND_PUSH]: ({ id } = {}) =>
+    syncNotebookPage(id, { skipQueue: true }),
+  [NOTEBOOK_PAGE_QUEUE_KIND_DELETE]: (payload) =>
+    replayNotebookPageDeletion(payload),
+  [NOTEBOOK_ITEM_QUEUE_KIND_PUSH]: ({ kind, id } = {}) =>
+    syncNotebookItem(kind, id, { skipQueue: true }),
+  [NOTEBOOK_ITEM_QUEUE_KIND_DELETE]: (payload) =>
+    replayNotebookItemDeletion(payload),
+  [REMINDER_QUEUE_KIND_PUSH]: ({ id } = {}) =>
+    syncReminder(id, { skipQueue: true }),
+  [REMINDER_QUEUE_KIND_DELETE]: (payload) =>
+    replayReminderDeletion(payload),
 };
 
 function AppShellInner() {
@@ -60,6 +92,7 @@ function AppShellInner() {
   // Mounted at the shell so the html data-theme attribute is set on every
   // authenticated render and stays in sync with OS preference changes.
   useThemePreference();
+  useNotebookBackgroundSync();
 
   useOfflineQueueDrain({
     handlerByKind: OFFLINE_QUEUE_HANDLERS,
@@ -84,8 +117,9 @@ function AppShellInner() {
     // own panels, so the System Pulse strip there is duplicate chrome that
     // works against the calm-OS thesis. Settings and Ops Reliability are
     // configuration/diagnostic surfaces that don't need the cross-system
-    // signal at all.
-    return path !== '/' && path !== '/settings' && path !== '/ops-reliability';
+    // signal at all. The Notebook is a writing surface: the strip would be
+    // chrome above the page, and it reloads on every autosave.
+    return path !== '/' && path !== '/settings' && path !== '/ops-reliability' && path !== '/notebook';
   }, [location.pathname]);
 
   usePageMeta(appName);

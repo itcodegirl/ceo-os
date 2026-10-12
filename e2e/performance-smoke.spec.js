@@ -60,6 +60,11 @@ test.describe('Performance smoke profile', () => {
       page,
       linkLabel: 'Settings',
     });
+    // The heaviest route (lazy-loaded rich-text editor).
+    timings.notebookTransitionMs = await navigateAndMeasure({
+      page,
+      linkLabel: 'Notebook',
+    });
     timings.dashboardReturnTransitionMs = await navigateAndMeasure({
       page,
       linkLabel: 'Focus Home',

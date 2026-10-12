@@ -25,12 +25,15 @@ Confirm GitHub Actions CI is green for the branch before merge.
 
 Validate core flows without changing source code:
 
-- Navigate all primary routes: `Focus Home`, `Capture`, `Journal`, `Opportunities`, `Content OS`, `Weekly Brief`, `Chief of Staff`, `Ops Reliability`, and `Settings`.
+- Navigate all primary routes: `Focus Home`, `Capture`, `Notebook`, `Opportunities`, `Content OS`, `Weekly Brief`, `Chief of Staff`, `Ops Reliability`, and `Settings`. The old `/journal` URL must redirect to `/notebook`.
 - Refresh each direct route and confirm the app shell renders instead of a platform 404.
 - Confirm loading, empty, and populated states render correctly.
 - On `Capture`, confirm stale edit/delete recovery does not emit fake sticky-note updates.
 - On `Capture`, confirm the sticky-note helper switches away from autosave reassurance when a save error is active.
-- On `Journal`, confirm the save status switches to paused copy when autosave fails.
+- On `Notebook`, confirm today's Personal page shows any pre-existing Journal entry, writing autosaves and survives a refresh, and a failed save shows the "not saved" status and alert while keeping the text.
+- On `Notebook`, select text in a block and use **Make card**, **Question**, and **Idea**; confirm each composer is prefilled from the selection, the item appears in the panel, **Show source** selects the passage (opening a folded block), and below 1100px the panel opens as a sheet.
+- On `Notebook`, select text and choose **To-do**; confirm it appears in the **Lists** tab and on `Focus Home` with a link that opens the page, and that **All open** lists every open reminder.
+- On `Notebook`, when signed in on two browsers, confirm a page edited on both shows the "changed on another device" choice instead of overwriting either version.
 - Confirm skip-link and route focus restoration still work from keyboard-only navigation.
 - Confirm route-level error recovery returns to Focus Home and does not trap navigation after one view fails.
 - Confirm source-status messaging appears correctly for local-first and Supabase-enabled environments.

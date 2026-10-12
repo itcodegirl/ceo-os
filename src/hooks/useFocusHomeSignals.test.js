@@ -4,7 +4,7 @@ import { useFocusHomeSignals } from './useFocusHomeSignals';
 
 const repositoryState = vi.hoisted(() => ({
   listCaptureNotes: vi.fn(() => []),
-  getJournalEntryByDate: vi.fn(() => null),
+  getDailySignalEntry: vi.fn(() => null),
   getTodayJournalDateKey: vi.fn(() => '2026-05-01'),
   listReminders: vi.fn(() => []),
 }));
@@ -15,9 +15,13 @@ vi.mock('../lib/captureRepository', () => ({
 }));
 
 vi.mock('../lib/journalRepository', () => ({
-  JOURNAL_ENTRIES_UPDATED_EVENT: 'ceo-os:journal-entries-updated',
-  getJournalEntryByDate: (...args) => repositoryState.getJournalEntryByDate(...args),
   getTodayJournalDateKey: (...args) => repositoryState.getTodayJournalDateKey(...args),
+}));
+
+vi.mock('../lib/notebook/notebookPagesRepository', () => ({
+  NOTEBOOK_PAGES_STORAGE_KEY: 'ceo-os-notebook-pages',
+  NOTEBOOK_PAGES_UPDATED_EVENT: 'ceo-os:notebook-pages-updated',
+  getDailySignalEntry: (...args) => repositoryState.getDailySignalEntry(...args),
 }));
 
 vi.mock('../lib/remindersRepository', () => ({
@@ -30,13 +34,13 @@ describe('useFocusHomeSignals', () => {
     vi.clearAllMocks();
     repositoryState.listCaptureNotes.mockReturnValue([]);
     repositoryState.getTodayJournalDateKey.mockReturnValue('2026-05-01');
-    repositoryState.getJournalEntryByDate.mockReturnValue(null);
+    repositoryState.getDailySignalEntry.mockReturnValue(null);
     repositoryState.listReminders.mockReturnValue([]);
   });
 
   it('loads the current local-first signals on mount', () => {
     repositoryState.listCaptureNotes.mockReturnValue([{ id: 'note-1', text: 'Idea' }]);
-    repositoryState.getJournalEntryByDate.mockReturnValue({ oneNextThing: 'Send update' });
+    repositoryState.getDailySignalEntry.mockReturnValue({ oneNextThing: 'Send update' });
     repositoryState.listReminders.mockReturnValue([{ id: 'reminder-1', text: 'Follow up' }]);
 
     const { result } = renderHook(() => useFocusHomeSignals());
@@ -44,12 +48,12 @@ describe('useFocusHomeSignals', () => {
     expect(result.current.captureNotes).toEqual([{ id: 'note-1', text: 'Idea' }]);
     expect(result.current.journalEntry).toEqual({ oneNextThing: 'Send update' });
     expect(result.current.reminders).toEqual([{ id: 'reminder-1', text: 'Follow up' }]);
-    expect(repositoryState.getJournalEntryByDate).toHaveBeenCalledWith('2026-05-01');
+    expect(repositoryState.getDailySignalEntry).toHaveBeenCalledWith('2026-05-01');
   });
 
   it('refreshes the matching signal when repository update events fire', () => {
     repositoryState.listCaptureNotes.mockReturnValue([]);
-    repositoryState.getJournalEntryByDate.mockReturnValue(null);
+    repositoryState.getDailySignalEntry.mockReturnValue(null);
     repositoryState.listReminders.mockReturnValue([]);
 
     const { result } = renderHook(() => useFocusHomeSignals());
@@ -60,9 +64,9 @@ describe('useFocusHomeSignals', () => {
     });
     expect(result.current.captureNotes).toEqual([{ id: 'note-2', text: 'New idea' }]);
 
-    repositoryState.getJournalEntryByDate.mockReturnValue({ feelsHeavy: 'Too many asks' });
+    repositoryState.getDailySignalEntry.mockReturnValue({ feelsHeavy: 'Too many asks' });
     act(() => {
-      window.dispatchEvent(new CustomEvent('ceo-os:journal-entries-updated'));
+      window.dispatchEvent(new CustomEvent('ceo-os:notebook-pages-updated'));
     });
     expect(result.current.journalEntry).toEqual({ feelsHeavy: 'Too many asks' });
 
@@ -90,7 +94,7 @@ describe('useFocusHomeSignals', () => {
 
     try {
       repositoryState.listCaptureNotes.mockReturnValue([{ id: 'note-1', text: 'Initial note' }]);
-      repositoryState.getJournalEntryByDate.mockReturnValue({ onMyMind: 'Initial journal' });
+      repositoryState.getDailySignalEntry.mockReturnValue({ onMyMind: 'Initial journal' });
       repositoryState.listReminders.mockReturnValue([{ id: 'reminder-1', text: 'Initial reminder' }]);
 
       const { result } = renderHook(() => useFocusHomeSignals());
@@ -101,7 +105,7 @@ describe('useFocusHomeSignals', () => {
       expect(typeof capturedDocumentHandlers.visibilitychange).toBe('function');
 
       repositoryState.listCaptureNotes.mockReturnValue([{ id: 'note-2', text: 'Focus refresh note' }]);
-      repositoryState.getJournalEntryByDate.mockReturnValue({ oneNextThing: 'Focus refresh journal' });
+      repositoryState.getDailySignalEntry.mockReturnValue({ oneNextThing: 'Focus refresh journal' });
       repositoryState.listReminders.mockReturnValue([{ id: 'reminder-2', text: 'Focus refresh reminder' }]);
 
       act(() => {
@@ -113,7 +117,7 @@ describe('useFocusHomeSignals', () => {
       expect(result.current.reminders).toEqual([{ id: 'reminder-2', text: 'Focus refresh reminder' }]);
 
       repositoryState.listCaptureNotes.mockReturnValue([{ id: 'note-3', text: 'Storage refresh note' }]);
-      repositoryState.getJournalEntryByDate.mockReturnValue({ feelsHeavy: 'Storage refresh journal' });
+      repositoryState.getDailySignalEntry.mockReturnValue({ feelsHeavy: 'Storage refresh journal' });
       repositoryState.listReminders.mockReturnValue([{ id: 'reminder-3', text: 'Storage refresh reminder' }]);
 
       act(() => {
@@ -125,7 +129,7 @@ describe('useFocusHomeSignals', () => {
       expect(result.current.reminders).toEqual([{ id: 'reminder-3', text: 'Storage refresh reminder' }]);
 
       repositoryState.listCaptureNotes.mockReturnValue([{ id: 'note-4', text: 'Visible refresh note' }]);
-      repositoryState.getJournalEntryByDate.mockReturnValue({ todaySuccess: 'Visible refresh journal' });
+      repositoryState.getDailySignalEntry.mockReturnValue({ todaySuccess: 'Visible refresh journal' });
       repositoryState.listReminders.mockReturnValue([{ id: 'reminder-4', text: 'Visible refresh reminder' }]);
 
       act(() => {
@@ -152,7 +156,7 @@ describe('useFocusHomeSignals', () => {
     // focus / visibility / storage event.
     repositoryState.listCaptureNotes.mockImplementation(() => [{ id: 'note-1', text: 'Idea' }]);
     repositoryState.listReminders.mockImplementation(() => [{ id: 'r-1', text: 'Follow up' }]);
-    repositoryState.getJournalEntryByDate.mockImplementation(() => ({ oneNextThing: 'Send update' }));
+    repositoryState.getDailySignalEntry.mockImplementation(() => ({ oneNextThing: 'Send update' }));
 
     const { result } = renderHook(() => useFocusHomeSignals());
 
@@ -162,7 +166,7 @@ describe('useFocusHomeSignals', () => {
 
     act(() => {
       window.dispatchEvent(new CustomEvent('ceo-os:capture-notes-updated'));
-      window.dispatchEvent(new CustomEvent('ceo-os:journal-entries-updated'));
+      window.dispatchEvent(new CustomEvent('ceo-os:notebook-pages-updated'));
       window.dispatchEvent(new CustomEvent('ceo-os:reminders-updated'));
     });
 

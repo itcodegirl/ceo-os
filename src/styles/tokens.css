@@ -201,6 +201,17 @@
   --duration-base: 200ms;
   --duration-deliberate: 280ms;
   --easing-standard: ease;
+
+  /* Notebook paper. Solid colors so the contrast test can measure them; the
+   * ruled lines and margin are decorative (never the only carrier of meaning). */
+  --notebook-paper: #0c1a2e;
+  --notebook-ink: #e6f0fb;
+  --notebook-muted: #a6bfd6;
+  --notebook-placeholder: #8fa9c2;
+  --notebook-rule: rgba(132, 178, 224, 0.13);
+  --notebook-margin: rgba(255, 140, 150, 0.32);
+  --notebook-mark: #4d3f12;
+  --notebook-code-bg: rgba(132, 178, 224, 0.12);
 }
 
 /*
@@ -340,5 +351,14 @@
   --bg-count-badge: rgba(28, 114, 178, 0.18);
 
   --gradient-signal: linear-gradient(180deg, #5fa8d8, #1f7fc6);
+
+  --notebook-paper: #fffdf8;
+  --notebook-ink: #1f2633;
+  --notebook-muted: #4f5a6b;
+  --notebook-placeholder: #5f6b7d;
+  --notebook-rule: rgba(90, 120, 170, 0.16);
+  --notebook-margin: rgba(214, 92, 92, 0.35);
+  --notebook-mark: #fde68a;
+  --notebook-code-bg: rgba(31, 38, 51, 0.06);
 }
 

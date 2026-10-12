@@ -286,6 +286,23 @@ const PAIRS = [
   { text: '--pill-medium-text', bg: '--pill-medium-bg', theme: 'light', min: 4.5 },
   { text: '--pill-high-text', bg: '--pill-high-bg', theme: 'dark', min: 4.5 },
   { text: '--pill-high-text', bg: '--pill-high-bg', theme: 'light', min: 4.5 },
+  // Notebook paper: writing, block kickers/meta, placeholders, and highlighted text
+  { text: '--notebook-ink', bg: '--notebook-paper', theme: 'dark', min: 4.5 },
+  { text: '--notebook-ink', bg: '--notebook-paper', theme: 'light', min: 4.5 },
+  { text: '--notebook-muted', bg: '--notebook-paper', theme: 'dark', min: 4.5 },
+  { text: '--notebook-muted', bg: '--notebook-paper', theme: 'light', min: 4.5 },
+  { text: '--notebook-placeholder', bg: '--notebook-paper', theme: 'dark', min: 4.5 },
+  { text: '--notebook-placeholder', bg: '--notebook-paper', theme: 'light', min: 4.5 },
+  { text: '--notebook-ink', bg: '--notebook-mark', theme: 'dark', min: 4.5 },
+  { text: '--notebook-ink', bg: '--notebook-mark', theme: 'light', min: 4.5 },
+  // Notebook panel: count badges and pressed scope/format buttons. (Panel and
+  // menu surfaces are gradients, which this parser does not resolve.)
+  { text: '--text-strong', bg: '--bg-count-badge', theme: 'dark', min: 4.5 },
+  { text: '--text-strong', bg: '--bg-count-badge', theme: 'light', min: 4.5 },
+  { text: '--text-strong', bg: '--bg-accent-subtle', theme: 'dark', min: 4.5 },
+  { text: '--text-strong', bg: '--bg-accent-subtle', theme: 'light', min: 4.5 },
+  { text: '--accent-soft-strong', bg: '--bg-accent-soft', theme: 'dark', min: 4.5 },
+  { text: '--accent-soft-strong', bg: '--bg-accent-soft', theme: 'light', min: 4.5 },
 ];
 
 describe('design-token contrast (regression)', () => {

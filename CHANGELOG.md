@@ -2,32 +2,113 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
-## 2026-10-03 - npm audit remediation (16 -> 0 advisories)
+## 2026-10-04 - Supabase security hardening
 
-Branch `claude/npm-audit-remediation`. Clears all 16 `npm audit` advisories
-(1 low, 5 moderate, 10 high) that were on `main` before the Notebook work and
-had nothing to do with it. No semver-major bumps and no application source changes.
+Branch `claude/supabase-security-hardening`. Migration
+`20261004_security_hardening.sql`, from the Supabase security advisor after
+the project's first full schema apply:
 
-- `npm audit fix` (no `--force`) changed only the lockfile and cleared 13
-  advisories: `react-router`/`react-router-dom` 7.14.1 -> 7.18.4, `valibot`
-  1.3.1 -> 1.5.0, `ws` 8.20.0 -> 8.22.0, `undici` 7.25.0 -> 7.30.0, `postcss`
-  8.5.10 -> 8.5.28, `nanoid` 3.3.11 -> 3.3.19, `js-yaml` 4.1.1 -> 4.3.2,
-  `brace-expansion` 1.1.14 -> 1.1.21, `@babel/core` 7.29.0 -> 7.29.7,
-  `browserslist` 4.28.2 -> 4.29.3, `baseline-browser-mapping` 2.10.20 -> 2.11.27.
-- `vitest` + `@vitest/coverage-v8` 4.1.4 -> 4.1.11 (which also moves `@vitest/mocker`).
-  `npm audit fix` cannot move these on its own, because `@vitest/coverage-v8` pins
-  an exact `vitest` peer, so the two are bumped together in `package.json`.
-- `vite` 8.0.8 -> 8.0.16 rather than the 8.3.2 that `npm audit fix` chose.
-  Vite 8.3 brings rolldown 1.2, which merges small shared chunks into the
-  ChiefOfStaff route chunk (15.52 -> 16.11 kB gzip, over its 16 kB budget). The
-  total bundle still shrinks with 8.3. 8.0.16 is the smallest patched release, and
-  it keeps every route within budget without loosening one.
+- `prune_old_app_error_telemetry_events` (SECURITY DEFINER) was executable by
+  anyone through `/rest/v1/rpc/`: the original migration revoked EXECUTE from
+  `anon` and `authenticated`, but Postgres grants it to `PUBLIC` by default.
+  It is now callable by `service_role` only.
+- `set_updated_at()` has a pinned, empty `search_path`.
 
-Shipped-bundle impact: only `react-router(-dom)` and `valibot` reach the
-browser. The router bump matters because `SignIn` forwards `?redirectTo=` into
-`navigate()`, which is the pattern behind the backslash open-redirect advisory.
-Everything else is dev, build, or test tooling, or is Node-only (`ws` is
-pulled in by `@supabase/realtime-js` but is not bundled for the browser).
+## 2026-10-04 - Notebook to-dos and synced reminders
+
+Branch `claude/notebook-lists` (stacked on `claude/notebook-study-items`).
+
+- **Lists tab** in the Notebook panel: add, complete, and delete this page's
+  to-dos, or switch to **All open** to see every open reminder, with notebook
+  to-dos linking back to their page.
+- **To-do** in the selection menu adds the selected text as a to-do on this
+  page. "Make a reminder from this" on a Personal page now links back to that
+  day too.
+- **Focus Home** shows a link from a notebook to-do to the page it came from.
+- **Reminders sync** to the signed-in account (migration
+  `20261003_reminders.sql`, RLS). The API stays synchronous: the local copy
+  is the working copy and `syncReminders()` runs underneath with the notebook
+  background sync. Reminders saved before sync existed upload once; a
+  two-device change keeps the latest one; deletions are remembered until they
+  reach the account; pushes and deletions replay from the offline queue.
+- Shared `syncSession` helper and a shared PostgREST-like test fake
+  (`src/test/fakeSupabase.js`) for the local-first repositories.
+
+## 2026-10-04 - Notebook cards, questions, and ideas
+
+Branch `claude/notebook-study-items` (stacked on `claude/notebook-foundation`).
+Writing in the Notebook can now be turned into things to come back to:
+
+- **Selection menu.** Selecting text in any block shows Highlight, Underline,
+  Make card, Question, and Idea. The create actions open a composer prefilled
+  from the selection; nothing is saved until the learner presses Save.
+- **Cards** (prompt and answer, with a duplicate-prompt warning), **questions**
+  (answered / unanswered, optional answer), and **ideas** (title, category,
+  description). Each remembers the page and block it came from.
+- **Panel** beside the page with Cards / Questions / Ideas tabs and counts, a
+  "This page / All pages" switch (other pages' items link back to their page),
+  edit and delete, and **Show source**, which opens a folded block if needed and
+  selects the original passage. It collapses to a strip of counts; below
+  1100px it opens as a side sheet, and on phones the sheet and composers rise
+  from the bottom.
+
+Engineering:
+
+- `src/lib/notebook/items/` — models and validation ported from the Study
+  Journal, the SM-2 scheduler (`srAlgorithm`, `cardSchedule`) so cards carry
+  review metadata from creation, and `notebookItemsRepository`: local-first
+  with Supabase sync like pages. Items upload only after their page exists in
+  the account (foreign key), follow a Personal page whose id changes when it
+  merges with the same day from another device, and keep both versions when
+  edited on two devices.
+- Supabase migration `20261002_notebook_items.sql`: `notebook_cards`,
+  `notebook_questions`, `notebook_ideas` with RLS (including a check that the
+  linked page belongs to the same user). `page_id ... on delete set null`, so
+  deleting a page keeps its items.
+- New storage domains and backup entries; offline-queue replay for item
+  pushes and deletions; background sync runs pages first, then items.
+- `Modal` gains optional `className` (applied to the panel and, suffixed
+  `-overlay`, to the overlay) and `initialFocusRef`, and no longer re-runs its
+  open effect when a parent passes a new `onClose` each render.
+- The notebook's section list becomes a compact row below 1600px so the page
+  and the panel keep their width beside the app sidebar.
+- Guard test: writing, highlighting, clearing, or deleting notes never creates
+  or removes an item. Notebook route budget raised to 520 / 164 kB JS and
+  21 / 4.2 kB CSS (selection menu positioning, panel, composers).
+
+## 2026-10-01 - Notebook replaces the Journal
+
+Branch `claude/notebook-foundation`. The plain Journal becomes a rich-text
+**Notebook** with four sections, each with its own page template:
+
+- **Personal** — one page per day with the original four Journal prompts, the
+  "Make a reminder from this" action, and a day picker. Existing Journal
+  entries are imported once (the old storage key is kept as a backup).
+- **Professional** — Notes, plus folded Wins / Challenges / Next steps.
+- **Learning** — My Notes and My Version (explain it back), folded What
+  clicked / What confused me / Key takeaways, and a source link.
+- **Inventions & CodeHerWay** — The idea, a To-do checklist, and folded Why it
+  matters / Research & notes.
+
+Engineering:
+
+- `src/lib/notebook/` — section templates, a framework-free autosave
+  controller (800 ms debounce, failed saves keep the writing), plain-text
+  helpers, and `notebookPagesRepository`: a local working copy with Supabase
+  sync (per-page serialized pushes, `updated_at` guard, explicit conflict
+  choice, deletion tombstones, offline-queue replay).
+- Supabase migration `20261001_notebook_pages.sql` (RLS, one Personal page per
+  user per day). New `notebookPages` storage domain and backup entry.
+- Tiptap editor (bold, italic, underline, highlight, heading, lists,
+  checklist, quote, inline code, code block, link) ported from the Study
+  Journal; roving-focus toolbar; Escape leaves the editor.
+- Focus Home and System Pulse read today's Personal page through a plain-text
+  adapter, so `focusHomeLogic` is unchanged. System Pulse is hidden on the
+  Notebook route.
+- `/journal` redirects to `/notebook`. Notebook added to the route budgets,
+  routing smoke, a11y sweep, and performance smoke. `vendor-react` chunk rule
+  anchored so `@tiptap/react` stays in the lazy Notebook chunk.
+- Notebook paper tokens for both themes, covered by the contrast test.
 
 ## 2026-08-31 - Telemetry/ops experimental/ quarantine
 

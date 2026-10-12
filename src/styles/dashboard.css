@@ -527,6 +527,22 @@
 	font-size: var(--fs-caption);
 }
 
+/* A notebook to-do links back to the page it came from. */
+.focus-reminder-list__source {
+	max-width: 12rem;
+	overflow: hidden;
+	color: var(--accent);
+	font-size: var(--fs-body-sm);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.focus-reminder-list__source:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+	border-radius: 0.25rem;
+}
+
 .focus-reminder-list__item--snoozed {
 	opacity: 0.78;
 }
