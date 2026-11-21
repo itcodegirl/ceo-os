@@ -51,7 +51,7 @@ describe('preserveCorruptStorageValue', () => {
     expect(typeof detailEvents[0].backupKey).toBe('string');
   });
 
-  it('keeps at most three backups per key', () => {
+  it('keeps distinct originals until explicitly discarded', () => {
     const key = 'ceo-os-test-cap';
     const writtenKeys = [];
     for (let index = 0; index < 5; index += 1) {
@@ -64,7 +64,7 @@ describe('preserveCorruptStorageValue', () => {
     expect(writtenKeys).toHaveLength(5);
 
     const survivors = writtenKeys.filter((backupKey) => window.localStorage.getItem(backupKey) !== null);
-    expect(survivors).toHaveLength(3);
+    expect(survivors).toHaveLength(5);
   });
 
   it('returns null and does nothing when the raw value is null', () => {
@@ -236,16 +236,16 @@ describe('archiveStorageValue', () => {
 
   it('produces a backup that listCorruptBackups and restoreCorruptBackup recognise', () => {
     const key = 'ceo-os-test-archive-recover';
-    window.localStorage.setItem(key, 'recoverable');
+    window.localStorage.setItem(key, '"recoverable"');
 
     const backupKey = archiveStorageValue(key, { reason: 'legacy-cleanup' });
     expect(backupKey).toBeTruthy();
 
     const backups = listCorruptBackups(key);
     expect(backups).toHaveLength(1);
-    expect(backups[0]).toMatchObject({ backupKey, value: 'recoverable' });
+    expect(backups[0]).toMatchObject({ backupKey, value: '"recoverable"' });
 
     expect(restoreCorruptBackup(key, backupKey)).toBe(true);
-    expect(window.localStorage.getItem(key)).toBe('recoverable');
+    expect(window.localStorage.getItem(key)).toBe('"recoverable"');
   });
 });

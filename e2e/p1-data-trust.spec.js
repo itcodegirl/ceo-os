@@ -68,6 +68,7 @@ test('workspace backups round-trip through the deferred import module', async ({
   await expect(page.getByText('No sticky notes yet')).toBeVisible();
   await page.goto('/settings');
   await page.getByLabel('Import local workspace backup file').setInputFiles(backupPath);
+  await page.getByRole('button', { name: 'Confirm backup restore' }).click();
   await expect(page.getByRole('status').filter({ hasText: /local stores imported/ })).toBeVisible();
   await page.goto('/capture');
   await expect(page.locator('.sticky-note textarea').first()).toHaveValue('Restore this local note');

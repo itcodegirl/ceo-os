@@ -30,6 +30,12 @@ describe('shouldEnqueueWriteFailure', () => {
     }
   });
 
+  it('queues transient HTTP failures but leaves permanent HTTP errors for user correction', () => {
+    expect(shouldEnqueueWriteFailure({ status: 503, message: 'Service unavailable' })).toBe(true);
+    expect(shouldEnqueueWriteFailure({ status: 429 })).toBe(true);
+    expect(shouldEnqueueWriteFailure({ status: 403 })).toBe(false);
+  });
+
   it('returns false for falsy errors', () => {
     expect(shouldEnqueueWriteFailure(null)).toBe(false);
     expect(shouldEnqueueWriteFailure(undefined)).toBe(false);

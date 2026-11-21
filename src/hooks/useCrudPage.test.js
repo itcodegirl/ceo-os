@@ -52,7 +52,7 @@ describe('useCrudPage', () => {
       await result.current.handleFormSubmit(createSubmitEvent());
     });
 
-    expect(createItem).toHaveBeenCalledWith({ name: 'Opportunity B', status: 'Draft' });
+    expect(createItem).toHaveBeenCalledWith({ name: 'Opportunity B', status: 'Draft' }, { operationId: expect.any(String) });
     expect(result.current.items).toEqual([
       { id: '2', name: 'Opportunity B', status: 'Draft' },
       { id: '1', name: 'Opportunity A' },
@@ -444,7 +444,7 @@ describe('useCrudPage', () => {
       await result.current.handleFormSubmit(createSubmitEvent());
     });
 
-    expect(createItem).toHaveBeenCalledWith({ name: 'Opportunity B' });
+    expect(createItem).toHaveBeenCalledWith({ name: 'Opportunity B' }, { operationId: expect.any(String) });
   });
 
   it('runs secondary payload validation after parsePayload succeeds', async () => {

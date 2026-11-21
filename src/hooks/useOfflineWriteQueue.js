@@ -1,7 +1,8 @@
+import { WORKSPACE_ACCOUNT_EVENT, AUTH_STORAGE_KEY } from '../lib/workspaceOwnership';
 import { useEffect, useState } from 'react';
 import {
   OFFLINE_QUEUE_UPDATED_EVENT,
-  getOfflineQueue,
+  getCurrentOfflineQueue,
 } from '../lib/offlineWriteQueue';
 
 /**
@@ -13,34 +14,31 @@ import {
  * and cleans up on unmount.
  */
 export function useOfflineWriteQueueSize() {
-  const [size, setSize] = useState(() => getOfflineQueue().length);
+  const [size, setSize] = useState(() => getCurrentOfflineQueue().length);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
       return undefined;
     }
 
-    const handleQueueChange = (event) => {
-      const detailSize = Number(event?.detail?.size);
-      if (Number.isFinite(detailSize) && detailSize >= 0) {
-        setSize(detailSize);
-        return;
-      }
-      setSize(getOfflineQueue().length);
+    const handleQueueChange = () => {
+      setSize(getCurrentOfflineQueue().length);
     };
 
     // Refetch on storage events so other tabs' queue mutations propagate.
     const handleStorageChange = (event) => {
-      if (event?.key === null || event?.key === 'ceo-os-offline-write-queue') {
-        setSize(getOfflineQueue().length);
+      if (event?.key === null || event?.key === 'ceo-os-offline-write-queue' || event?.key === AUTH_STORAGE_KEY) {
+        setSize(getCurrentOfflineQueue().length);
       }
     };
 
     window.addEventListener(OFFLINE_QUEUE_UPDATED_EVENT, handleQueueChange);
+    window.addEventListener(WORKSPACE_ACCOUNT_EVENT, handleQueueChange);
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
       window.removeEventListener(OFFLINE_QUEUE_UPDATED_EVENT, handleQueueChange);
+      window.removeEventListener(WORKSPACE_ACCOUNT_EVENT, handleQueueChange);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);

@@ -4,6 +4,7 @@ import {
   drainOfflineQueue,
   enqueueOfflineWrite,
   getOfflineQueue,
+  retryOfflineWrite,
 } from './offlineWriteQueue';
 
 /**
@@ -13,19 +14,19 @@ import {
  * intended shape executable and prevents the queue's API from drifting.
  */
 describe('offlineWriteQueue integration shape', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     window.localStorage.clear();
-    clearOfflineQueue();
+    await clearOfflineQueue();
   });
 
-  afterEach(() => {
-    clearOfflineQueue();
+  afterEach(async () => {
+    await clearOfflineQueue();
   });
 
   it('replays queued writes in the order they were enqueued', async () => {
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'First' } });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'Second' } });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'Third' } });
+    await enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'First' } });
+    await enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'Second' } });
+    await enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'Third' } });
 
     const seen = [];
     const handler = vi.fn((payload) => {
@@ -40,37 +41,19 @@ describe('offlineWriteQueue integration shape', () => {
     expect(getOfflineQueue()).toEqual([]);
   });
 
-  it('preserves later entries when an earlier replay fails so a future drain can retry', async () => {
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'A' } });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'B' } });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'C' } });
-
-    const handler = vi.fn();
-    handler.mockResolvedValueOnce(); // A drains
-    handler.mockRejectedValueOnce(new Error('still offline')); // B fails -> stop
-    // C is never attempted.
-
-    const result = await drainOfflineQueue({ 'opportunity:create': handler });
-    expect(result).toEqual({ drained: 1, failed: 1, remaining: 2 });
-
-    const after = getOfflineQueue();
-    expect(after.map((entry) => entry.payload.name)).toEqual(['B', 'C']);
-
-    // A second drain when the network recovers should pick up B + C from
-    // where the first drain stopped.
-    handler.mockClear();
-    handler.mockResolvedValue();
-    const second = await drainOfflineQueue({ 'opportunity:create': handler });
-
-    expect(second).toEqual({ drained: 2, failed: 0, remaining: 0 });
-    expect(handler).toHaveBeenCalledTimes(2);
-    expect(getOfflineQueue()).toEqual([]);
+  it('continues unrelated work and retries a failed action explicitly', async () => {
+    const a = await enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'A' } });
+    await enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'B' } });
+    const handler = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue();
+    expect(await drainOfflineQueue({ 'opportunity:create': handler })).toEqual({ drained: 1, failed: 1, remaining: 1 });
+    await retryOfflineWrite(a.id);
+    expect(await drainOfflineQueue({ 'opportunity:create': handler })).toEqual({ drained: 1, failed: 0, remaining: 0 });
   });
 
   it('routes payloads to handlers by kind so multiple repositories can coexist on one queue', async () => {
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { id: 'opp-1' } });
-    enqueueOfflineWrite({ kind: 'content:create', payload: { id: 'content-1' } });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { id: 'opp-2' } });
+    await enqueueOfflineWrite({ kind: 'opportunity:create', payload: { id: 'opp-1', name: 'A' } });
+    await enqueueOfflineWrite({ kind: 'content:create', payload: { id: 'content-1' } });
+    await enqueueOfflineWrite({ kind: 'opportunity:create', payload: { id: 'opp-2', name: 'B' } });
 
     const opportunityHandler = vi.fn().mockResolvedValue();
     const contentHandler = vi.fn().mockResolvedValue();

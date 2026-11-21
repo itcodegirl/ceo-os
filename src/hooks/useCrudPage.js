@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useConfirmDelete } from './useConfirmDelete';
 import { useIsMountedRef } from './useIsMountedRef';
+import { buildCreateId } from '../lib/utils';
 import { useToast } from './useToast';
 import { getRepositoryErrorMessage } from '../lib/repositoryErrors';
 import { isStaleRecordError } from '../lib/staleRecordError';
@@ -68,6 +69,7 @@ export function useCrudPage(config) {
   const [refreshToken, setRefreshToken] = useState(0);
   const selectedItem = selectedItemState;
   const isSavingRef = useRef(false);
+  const createIntentRef = useRef(null);
   const resetSavingRef = useCallback(() => {
     isSavingRef.current = false;
   }, []);
@@ -321,7 +323,10 @@ export function useCrudPage(config) {
         setSelectedItemState(updated);
         showToast(updateSuccessMessage);
       } else {
-        const created = await createItem(payload);
+        const signature = JSON.stringify(payload);
+        if (createIntentRef.current?.signature !== signature) createIntentRef.current = { signature, id: buildCreateId() };
+        const created = await createItem(payload, { operationId: createIntentRef.current.id });
+        createIntentRef.current = null;
         if (!isMountedRef.current) {
           return;
         }

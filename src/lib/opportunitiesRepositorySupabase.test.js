@@ -15,7 +15,7 @@ vi.mock('./supabaseRuntime', () => {
 import { isStaleRecordError } from './staleRecordError';
 import { matchesExpectedUpdatedAtRange, withMicroseconds } from '../test/timestampPrecision';
 import * as runtimeModule from './supabaseRuntime';
-import { listOpportunities, updateOpportunity } from './opportunitiesRepository';
+import { createOpportunity, listOpportunities, updateOpportunity } from './opportunitiesRepository';
 
 function buildSupabaseListClientStub({ rows = [] } = {}) {
   const captured = { select: '', eqs: [] };
@@ -92,6 +92,13 @@ describe('updateOpportunity (Supabase optimistic locking)', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('recognizes a previously acknowledged create id without inserting a duplicate', async () => {
+    const stub = buildSupabaseListClientStub({ rows: [{ id: 'stable-operation', name: 'Already created', company: 'Acme' }] });
+    runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
+    const result = await createOpportunity({ name: 'Already created', company: 'Acme' }, { operationId: 'stable-operation' });
+    expect(result.id).toBe('stable-operation');
   });
 
   it('loads updated_at from Supabase list rows as a positive updatedAt value', async () => {

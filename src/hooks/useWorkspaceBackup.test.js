@@ -6,6 +6,7 @@ const {
   buildWorkspaceBackupFileNameMock,
   getLocalWorkspaceDataHealthMock,
   importWorkspaceBackupMock,
+  previewWorkspaceBackupMock,
 } = vi.hoisted(() => ({
   buildWorkspaceBackupMock: vi.fn(),
   buildWorkspaceBackupFileNameMock: vi.fn(() => 'ceo-os-backup.json'),
@@ -17,9 +18,10 @@ const {
     lastSettingsSavedAt: 0,
   })),
   importWorkspaceBackupMock: vi.fn(),
+  previewWorkspaceBackupMock: vi.fn((input) => ({ input, stores: [] })),
 }));
 
-vi.mock('../lib/workspaceBackupImport', () => ({ importWorkspaceBackup: importWorkspaceBackupMock }));
+vi.mock('../lib/workspaceBackupImport', () => ({ importWorkspaceBackup: importWorkspaceBackupMock, previewWorkspaceBackup: previewWorkspaceBackupMock }));
 
 vi.mock('../lib/workspacePortability', () => ({
   buildWorkspaceBackup: buildWorkspaceBackupMock,
@@ -100,6 +102,8 @@ describe('useWorkspaceBackup', () => {
       await result.current.handleImportBackup({ currentTarget: input });
     });
 
+    expect(importWorkspaceBackupMock).not.toHaveBeenCalled();
+    await act(async () => { await result.current.confirmImport(); });
     await waitFor(() => {
       expect(onRefreshSettings).toHaveBeenCalledTimes(1);
     });
@@ -109,7 +113,7 @@ describe('useWorkspaceBackup', () => {
   });
 
   it('reports an error status when the import throws', async () => {
-    importWorkspaceBackupMock.mockImplementation(() => {
+    previewWorkspaceBackupMock.mockImplementationOnce(() => {
       throw new Error('bad backup');
     });
     const { result } = renderHook(() => useWorkspaceBackup());

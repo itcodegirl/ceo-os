@@ -3,7 +3,9 @@ import { enqueueTextWrite } from './textAutosave';
 import { assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { buildCreateId } from './utils';
 import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
-import { STORAGE_DOMAINS, readVersionedStoragePayload } from './dataSchema';
+import { validateStorageRaw } from './storageValidation';
+import { preserveCorruptStorageValue } from './storageCorruption';
+import { STORAGE_DOMAINS } from './dataSchema';
 import {
   getVersionedStorageKey,
   readVersionedLocalStorage,
@@ -59,27 +61,9 @@ function readLocalChiefNotes() {
     return '';
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    // Legacy bare-string write — not JSON. Use it directly.
-    return raw;
-  }
+  try { return validateStorageRaw(getVersionedStorageKey(STORAGE_DOMAINS.chiefNotes), raw); }
+  catch (error) { preserveCorruptStorageValue(getVersionedStorageKey(STORAGE_DOMAINS.chiefNotes), raw, error); return ''; }
 
-  const { data, isDomainMismatch } = readVersionedStoragePayload(STORAGE_DOMAINS.chiefNotes, parsed);
-  if (isDomainMismatch) {
-    return '';
-  }
-
-  if (typeof data === 'string') {
-    return data;
-  }
-
-  // Pre-envelope writes that happened to be valid JSON (e.g. the string
-  // `"\"hi\""` because someone double-stringified) end up here. Treat as
-  // empty rather than risk surfacing the wrong text.
-  return '';
 }
 
 function writeLocalChiefNotes(notes) {

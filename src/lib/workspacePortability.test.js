@@ -54,8 +54,8 @@ describe('src/lib/workspacePortability', () => {
 
   it('summarizes local records, invalid stores, and pending sync without exporting the queue', () => {
     window.localStorage.setItem('ceo-os-capture-notes', JSON.stringify([
-      { id: 'note-1' },
-      { id: 'note-2' },
+      { id: 'note-1', text: 'First' },
+      { id: 'note-2', text: 'Second' },
     ]));
     window.localStorage.setItem('ceo-os-journal-entries', JSON.stringify({
       '2026-05-07': { date: '2026-05-07' },
@@ -127,7 +127,7 @@ describe('src/lib/workspacePortability', () => {
       schemaVersion: 1,
       keys: {
         'ceo-os-settings': '{broken',
-        'ceo-os-capture-notes': JSON.stringify([{ id: 'note-1' }]),
+        'ceo-os-capture-notes': JSON.stringify([{ id: 'note-1', text: 'First' }]),
       },
     }))).toThrow('Settings is not valid JSON.');
 

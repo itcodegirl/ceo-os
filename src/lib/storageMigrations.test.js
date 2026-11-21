@@ -85,12 +85,9 @@ describe('storageMigrations', () => {
     expect(result.data).toEqual([{ id: 'migrated' }]);
   });
 
-  it('does nothing when no migrators are registered for the domain', () => {
-    const data = [{ id: 'a' }];
-    const result = migrateStoragePayload(STORAGE_DOMAINS.captureNotes, 0, data);
-    expect(result.data).toBe(data);
-    expect(result.migrationsApplied).toEqual([]);
-    // The chain stops at the first missing migrator, so toVersion stays at 0.
-    expect(result.toVersion).toBe(0);
+  it('explicitly migrates supported legacy data and rejects missing or future versions', () => {
+    expect(migrateStoragePayload(STORAGE_DOMAINS.captureNotes, 0, []).migrationsApplied).toEqual([0]);
+    expect(() => migrateStoragePayload(STORAGE_DOMAINS.captureNotes, 0, [], {})).toThrow(/migrat/i);
+    expect(() => migrateStoragePayload(STORAGE_DOMAINS.captureNotes, 99, [])).toThrow(/newer/i);
   });
 });

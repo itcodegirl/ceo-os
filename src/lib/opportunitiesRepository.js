@@ -98,6 +98,7 @@ function notifyOpportunitiesUpdated(detail = {}) {
 function formatForSupabase(payload) {
   return {
     ...(payload.userId ? { user_id: payload.userId } : {}),
+    ...(payload.id ? { id: payload.id } : {}),
     name: payload.name,
     company: payload.company,
     priority: payload.priority,
@@ -125,10 +126,10 @@ function hasDuplicateOpportunity(items, payload, { excludeId = '' } = {}) {
   });
 }
 
-async function assertNoSupabaseOpportunityDuplicate({ supabaseClient, userId, payload, excludeId = '' }) {
+async function assertNoSupabaseOpportunityDuplicate({ supabaseClient, userId, payload, excludeId = '', replayId }) {
   const { data, error } = await supabaseClient
     .from('opportunities')
-    .select('id, name, company')
+    .select('id, name, company, priority, stage, next_step, updated_at')
     .eq('user_id', userId);
 
   if (error) {
@@ -136,6 +137,8 @@ async function assertNoSupabaseOpportunityDuplicate({ supabaseClient, userId, pa
   }
 
   const existingItems = mapSupabaseRows(Array.isArray(data) ? data : []);
+  const replayed = replayId && existingItems.find((item) => item.id === replayId);
+  if (replayed) return replayed;
   if (hasDuplicateOpportunity(existingItems, payload, { excludeId })) {
     throw createDuplicateRecordError(DUPLICATE_OPPORTUNITY_MESSAGE);
   }
@@ -169,7 +172,7 @@ export async function createOpportunity(payload, options = {}) {
   options = { ...options, ownerId: options.ownerId ?? getWorkspaceOwnerId() };
   assertWorkspaceOwner(options.ownerId);
   const normalizedPayload = normalizeOpportunity({
-    id: buildCreateId(),
+    id: options.operationId || buildCreateId(),
     updatedAt: Date.now(),
     ...payload,
   });
@@ -181,11 +184,13 @@ export async function createOpportunity(payload, options = {}) {
       const userId = await supabase.requireSupabaseUserId();
       assertWorkspaceOwner(options.ownerId);
       if (userId !== options.ownerId) throw accountChangedError();
-      await assertNoSupabaseOpportunityDuplicate({
+      const replayed = await assertNoSupabaseOpportunityDuplicate({
         supabaseClient,
         userId,
         payload: normalizedPayload,
+        replayId: normalizedPayload.id,
       });
+      if (replayed) return replayed;
 
       assertWorkspaceOwner(options.ownerId);
       const { data, error } = await supabaseClient
@@ -203,7 +208,7 @@ export async function createOpportunity(payload, options = {}) {
     };
 
     return tryRemoteOrEnqueue(
-      { kind: OPPORTUNITY_QUEUE_KIND_CREATE, payload, options },
+      { kind: OPPORTUNITY_QUEUE_KIND_CREATE, payload: normalizedPayload, options },
       attempt,
     );
   }

@@ -114,11 +114,11 @@ describe('P1 data-trust regressions', () => {
 
   it('replays only the originating account and holds legacy ownerless entries', async () => {
     account('A');
-    enqueueOfflineWrite({ kind: 'create', payload: { title: 'A' } });
+    await enqueueOfflineWrite({ kind: 'create', payload: { title: 'A' } });
     const entries = getOfflineQueue();
     window.localStorage.setItem(OFFLINE_QUEUE_STORAGE_KEY, JSON.stringify([...entries, { id: 'legacy', kind: 'create', payload: {} }]));
     account('B');
-    enqueueOfflineWrite({ kind: 'create', payload: { title: 'B' } });
+    await enqueueOfflineWrite({ kind: 'create', payload: { title: 'B' } });
     const handler = vi.fn();
     expect((await drainOfflineQueue({ create: handler })).drained).toBe(1);
     expect(handler.mock.calls[0][0]).toEqual({ title: 'B' });
@@ -129,7 +129,7 @@ describe('P1 data-trust regressions', () => {
 
   it('preserves an uncertain replay when the account changes before acknowledgement', async () => {
     account('A');
-    enqueueOfflineWrite({ kind: 'delete', payload: { id: 'A-row' } });
+    await enqueueOfflineWrite({ kind: 'delete', payload: { id: 'A-row' } });
     const result = await drainOfflineQueue({ delete: async () => { account('B'); } });
     expect(result).toMatchObject({ drained: 0, failed: 1, remaining: 1 });
     expect(getOfflineQueue()[0].ownerId).toBe('A');

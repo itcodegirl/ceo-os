@@ -250,6 +250,12 @@ export function isVersionedStorageEnvelope(value) {
 }
 
 export function readVersionedStoragePayload(domain, value) {
+  if (value && typeof value === 'object' && !Array.isArray(value) && ('schemaVersion' in value || 'data' in value)) {
+    if (!isVersionedStorageEnvelope(value) || !Number.isInteger(value.schemaVersion) || value.schemaVersion < 1) {
+      throw new Error('Unsupported storage envelope.');
+    }
+    if (value.schemaVersion > CURRENT_DATA_SCHEMA_VERSION) throw new Error('This data was saved by a newer CEO OS version.');
+  }
   if (!isVersionedStorageEnvelope(value)) {
     return {
       data: value,

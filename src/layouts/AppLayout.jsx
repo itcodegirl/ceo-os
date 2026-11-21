@@ -100,7 +100,7 @@ function AppShellInner() {
     handlerByKind: OFFLINE_QUEUE_HANDLERS,
     onDrainFailure: (result) => {
       showToast(
-        `${result.failed} queued write${result.failed === 1 ? '' : 's'} could not sync. Check your connection and try again.`,
+        `${result.failed} queued write${result.failed === 1 ? '' : 's'} could not sync. Review pending writes in Settings > Workspace Data.`,
       );
     },
   });

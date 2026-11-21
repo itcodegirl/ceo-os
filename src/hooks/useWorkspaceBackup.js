@@ -1,3 +1,4 @@
+import { withStorageLock } from '../lib/storageLock';
 import { useCallback, useRef, useState } from 'react';
 import {
   buildWorkspaceBackup,
@@ -45,6 +46,9 @@ export function useWorkspaceBackup({ onRefreshSettings } = {}) {
   const [, setDataHealthRefreshKey] = useState(0);
   const [portabilityStatus, setPortabilityStatus] = useState({ tone: '', message: '' });
   const importInputRef = useRef(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const importingRef = useRef(false);
 
   const dataHealth = getLocalWorkspaceDataHealth();
 
@@ -102,16 +106,10 @@ export function useWorkspaceBackup({ onRefreshSettings } = {}) {
 
     try {
       const backupText = await readFileAsText(file);
-      const { importWorkspaceBackup } = await import('../lib/workspaceBackupImport');
-      const result = importWorkspaceBackup(backupText);
-      setDataHealthRefreshKey((current) => current + 1);
-      if (typeof onRefreshSettings === 'function') {
-        await onRefreshSettings();
-      }
-      setPortabilityStatus({
-        tone: 'success',
-        message: `${formatCount(result.importedStoreCount, 'local store')} imported. Matching local stores were replaced; Supabase data was not changed.`,
-      });
+      const { previewWorkspaceBackup } = await import('../lib/workspaceBackupImport');
+      const preview = previewWorkspaceBackup(backupText);
+      setImportPreview(preview);
+      setPortabilityStatus({ tone: '', message: '' });
     } catch (error) {
       setPortabilityStatus({
         tone: 'error',
@@ -120,10 +118,30 @@ export function useWorkspaceBackup({ onRefreshSettings } = {}) {
     } finally {
       input.value = '';
     }
-  }, [onRefreshSettings]);
+  }, []);
+
+  const confirmImport = useCallback(async () => {
+    if (!importPreview || importingRef.current) return;
+    importingRef.current = true;
+    setIsImporting(true);
+    try {
+      const { importWorkspaceBackup } = await import('../lib/workspaceBackupImport');
+      const result = await withStorageLock('workspace-import', () => importWorkspaceBackup(importPreview.input, { preview: importPreview }));
+      setImportPreview(null);
+      setDataHealthRefreshKey((current) => current + 1);
+      if (typeof onRefreshSettings === 'function') await onRefreshSettings();
+      setPortabilityStatus({ tone: 'success', message: `${formatCount(result.importedStoreCount, 'local store')} imported. The original snapshot is available in Recovery & pending writes.` });
+    } catch (error) {
+      setPortabilityStatus({ tone: 'error', message: error?.message || 'Backup import failed.' });
+    } finally { importingRef.current = false; setIsImporting(false); }
+  }, [importPreview, onRefreshSettings]);
 
   return {
     dataHealth,
+    importPreview,
+    isImporting,
+    confirmImport,
+    cancelImport: () => { if (!importingRef.current) setImportPreview(null); },
     portabilityStatus,
     importInputRef,
     handleExportBackup,

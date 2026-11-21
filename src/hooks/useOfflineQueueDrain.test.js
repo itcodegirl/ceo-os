@@ -13,17 +13,17 @@ function setNavigatorOnline(value) {
 describe('useOfflineQueueDrain', () => {
   let originalDescriptor;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalDescriptor = Object.getOwnPropertyDescriptor(window.navigator, 'onLine');
     setNavigatorOnline(true);
-    clearOfflineQueue();
+    await clearOfflineQueue();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     if (originalDescriptor) {
       Object.defineProperty(navigator, 'onLine', originalDescriptor);
     }
-    clearOfflineQueue();
+    await clearOfflineQueue();
   });
 
   it('does nothing when the queue is empty on mount', async () => {
@@ -35,7 +35,7 @@ describe('useOfflineQueueDrain', () => {
 
   it('drains the queue when coming back online', async () => {
     setNavigatorOnline(false);
-    enqueueOfflineWrite({ kind: 'test', payload: { value: 1 } });
+    await enqueueOfflineWrite({ kind: 'test', payload: { value: 1 } });
 
     const handler = vi.fn(() => Promise.resolve());
     const onDrainFailure = vi.fn();
@@ -45,7 +45,7 @@ describe('useOfflineQueueDrain', () => {
       onDrainFailure,
     }));
 
-    act(() => {
+    await act(async () => {
       setNavigatorOnline(true);
       window.dispatchEvent(new Event('online'));
     });
@@ -58,7 +58,7 @@ describe('useOfflineQueueDrain', () => {
 
   it('calls onDrainFailure when at least one entry fails', async () => {
     setNavigatorOnline(false);
-    enqueueOfflineWrite({ kind: 'test', payload: { value: 1 } });
+    await enqueueOfflineWrite({ kind: 'test', payload: { value: 1 } });
 
     const handler = vi.fn(() => Promise.reject(new Error('network error')));
     const onDrainFailure = vi.fn();
@@ -68,7 +68,7 @@ describe('useOfflineQueueDrain', () => {
       onDrainFailure,
     }));
 
-    act(() => {
+    await act(async () => {
       setNavigatorOnline(true);
       window.dispatchEvent(new Event('online'));
     });
@@ -83,8 +83,8 @@ describe('useOfflineQueueDrain', () => {
 
   it('does not call onDrainFailure when all entries drain successfully', async () => {
     setNavigatorOnline(false);
-    enqueueOfflineWrite({ kind: 'test', payload: 1 });
-    enqueueOfflineWrite({ kind: 'test', payload: 2 });
+    await enqueueOfflineWrite({ kind: 'test', payload: 1 });
+    await enqueueOfflineWrite({ kind: 'test', payload: 2 });
 
     const handler = vi.fn(() => Promise.resolve());
     const onDrainFailure = vi.fn();
@@ -94,7 +94,7 @@ describe('useOfflineQueueDrain', () => {
       onDrainFailure,
     }));
 
-    act(() => {
+    await act(async () => {
       setNavigatorOnline(true);
       window.dispatchEvent(new Event('online'));
     });
@@ -107,7 +107,7 @@ describe('useOfflineQueueDrain', () => {
 
   it('does not re-enter while a drain is in flight', async () => {
     setNavigatorOnline(false);
-    enqueueOfflineWrite({ kind: 'test', payload: 1 });
+    await enqueueOfflineWrite({ kind: 'test', payload: 1 });
 
     let resolveHandler;
     const handler = vi.fn(() => new Promise((resolve) => {
@@ -120,16 +120,17 @@ describe('useOfflineQueueDrain', () => {
       onDrainFailure,
     }));
 
-    act(() => {
+    await act(async () => {
       setNavigatorOnline(true);
       window.dispatchEvent(new Event('online'));
     });
 
     // Second online event fires while drain is still in flight.
-    act(() => {
+    await act(async () => {
       window.dispatchEvent(new Event('online'));
     });
 
+    await waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
     await act(async () => {
       resolveHandler();
       await Promise.resolve();

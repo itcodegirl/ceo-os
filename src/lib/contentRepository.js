@@ -139,7 +139,7 @@ function hasDuplicateContentItem(items, payload, { excludeId = '' } = {}) {
   });
 }
 
-async function assertNoSupabaseContentDuplicate({ supabaseClient, userId, payload, excludeId = '' }) {
+async function assertNoSupabaseContentDuplicate({ supabaseClient, userId, payload, excludeId = '', replayId }) {
   const { data, error } = await supabaseClient
     .from('content_items')
     .select(CONTENT_ITEM_COLUMNS)
@@ -150,6 +150,8 @@ async function assertNoSupabaseContentDuplicate({ supabaseClient, userId, payloa
   }
 
   const existingItems = (Array.isArray(data) ? data : []).map((item) => normalizeContentItem(item));
+  const replayed = replayId && existingItems.find((item) => item.id === replayId);
+  if (replayed) return replayed;
   if (hasDuplicateContentItem(existingItems, payload, { excludeId })) {
     throw createDuplicateRecordError(DUPLICATE_CONTENT_MESSAGE);
   }
@@ -183,7 +185,7 @@ export async function createContentItem(payload, options = {}) {
   options = { ...options, ownerId: options.ownerId ?? getWorkspaceOwnerId() };
   assertWorkspaceOwner(options.ownerId);
   const normalizedPayload = normalizeContentItem({
-    id: buildCreateId(),
+    id: options.operationId || buildCreateId(),
     updatedAt: Date.now(),
     ...payload,
   });
@@ -195,17 +197,20 @@ export async function createContentItem(payload, options = {}) {
       const userId = await supabase.requireSupabaseUserId();
       assertWorkspaceOwner(options.ownerId);
       if (userId !== options.ownerId) throw accountChangedError();
-      await assertNoSupabaseContentDuplicate({
+      const replayed = await assertNoSupabaseContentDuplicate({
         supabaseClient,
         userId,
         payload: normalizedPayload,
+        replayId: normalizedPayload.id,
       });
+      if (replayed) return replayed;
 
       assertWorkspaceOwner(options.ownerId);
       const { data, error } = await supabaseClient
         .from('content_items')
         .insert({
           user_id: userId,
+          id: normalizedPayload.id,
           ...toContentItemRow(normalizedPayload),
         })
         .select(CONTENT_ITEM_COLUMNS)
@@ -220,7 +225,7 @@ export async function createContentItem(payload, options = {}) {
     };
 
     return tryRemoteOrEnqueue(
-      { kind: CONTENT_QUEUE_KIND_CREATE, payload, options },
+      { kind: CONTENT_QUEUE_KIND_CREATE, payload: normalizedPayload, options },
       attempt,
     );
   }

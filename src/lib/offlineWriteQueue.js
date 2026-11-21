@@ -1,228 +1,173 @@
 import { getWorkspaceOwnerId, assertWorkspaceOwner } from './workspaceOwnership';
-/**
- * Persistent queue for writes that could not reach Supabase (network down,
- * auth blip, etc.). Repositories can opt in: when a remote write fails with
- * a recoverable error, push an entry here, and the user's data stays
- * available locally while the queue waits to drain on the next online tick.
- *
- * Design choices:
- *
- *   - Persisted in localStorage under `ceo-os-offline-write-queue`. Survives
- *     reloads and tab restarts.
- *   - Each entry: { id, ownerId, kind, payload, createdAt, attempts }.
- *   - Drain stops on first failure to avoid hammering a still-down service.
- *     Callers can manually re-drain on a window 'online' event or a UI retry.
- *   - Emits `ceo-os:offline-queue-updated` on every queue change so the
- *     SyncStatusPill (or any other observer) can render the pending count.
- *
- * The module is intentionally framework-agnostic — the React-side hook
- * wraps it so components can subscribe with the standard usePersistentState
- * cross-tab semantics.
- */
-
 import { parseJsonOrPreserveCorruption } from './storageCorruption';
+import { withStorageLock } from './storageLock';
 
 export const OFFLINE_QUEUE_STORAGE_KEY = 'ceo-os-offline-write-queue';
 export const OFFLINE_QUEUE_UPDATED_EVENT = 'ceo-os:offline-queue-updated';
+export const OFFLINE_QUEUE_RETRY_EVENT = 'ceo-os:offline-queue-retry';
 const MAX_QUEUE_LENGTH = 200;
+const MAX_ATTEMPTS = 5;
 
-let monotonicId = 0;
-
-function safeStorage() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
+const queueError = (message, code = 'QUEUE_STORAGE_FAILED') => Object.assign(new Error(message), { code });
+function storageOrThrow() {
+  try { if (window.localStorage) return window.localStorage; } catch { /* report below */ }
+  throw queueError('Pending work could not be kept on this device. Keep your draft open and export it before leaving.');
 }
-
-function notifyQueueUpdated(detail = {}) {
-  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
-    return;
-  }
-  try {
-    window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_UPDATED_EVENT, { detail }));
-  } catch {
-    // ignore dispatch errors
-  }
+function notify(kind) {
+  window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_UPDATED_EVENT, { detail: { kind } }));
 }
-
 function readQueue(storage) {
-  try {
-    const raw = storage.getItem(OFFLINE_QUEUE_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = parseJsonOrPreserveCorruption(OFFLINE_QUEUE_STORAGE_KEY, raw, null);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter((entry) => entry && typeof entry === 'object' && typeof entry.kind === 'string');
-  } catch {
-    return [];
+  const raw = storage.getItem(OFFLINE_QUEUE_STORAGE_KEY);
+  if (!raw) return [];
+  const entries = parseJsonOrPreserveCorruption(OFFLINE_QUEUE_STORAGE_KEY, raw, null);
+  if (!Array.isArray(entries) || entries.some((entry) => !entry || typeof entry.id !== 'string' || typeof entry.kind !== 'string')) {
+    throw queueError('The pending-write list needs recovery. Export it in Settings before retrying.', 'QUEUE_RECOVERY_REQUIRED');
   }
+  return entries;
 }
-
-function writeQueue(storage, queue) {
-  try {
-    storage.setItem(OFFLINE_QUEUE_STORAGE_KEY, JSON.stringify(queue));
-    return true;
-  } catch {
-    return false;
-  }
+function writeQueue(storage, entries) {
+  try { storage.setItem(OFFLINE_QUEUE_STORAGE_KEY, JSON.stringify(entries)); }
+  catch { throw queueError('Pending work could not be kept on this device. Keep your draft open and free some browser storage before retrying.'); }
 }
-
-function buildEntryId() {
-  monotonicId = (monotonicId + 1) % 1_000_000;
-  return `q-${Date.now()}-${String(monotonicId).padStart(6, '0')}`;
-}
-
-/**
- * Reads the current queue. Returns a fresh array each call so callers can
- * filter or count without worrying about mutation.
- */
 export function getOfflineQueue() {
-  const storage = safeStorage();
-  if (!storage) {
-    return [];
-  }
-  return readQueue(storage);
+  try { return readQueue(storageOrThrow()); } catch { return []; }
 }
+const currentOwnerEntries = () => getOfflineQueue().filter((entry) => entry.ownerId === getWorkspaceOwnerId());
+export function getCurrentOfflineQueue() { return currentOwnerEntries(); }
 
-/**
- * Pushes a write entry onto the queue. `kind` is a free-form string the
- * caller uses to dispatch in `drainOfflineQueue` (e.g. 'opportunity:create').
- * `payload` is whatever data the caller needs to replay the write.
- *
- * Returns the persisted entry, or null if storage is unavailable.
- */
-export function enqueueOfflineWrite({ kind, payload, ownerId = getWorkspaceOwnerId() }) {
-  const storage = safeStorage();
-  if (!storage || typeof kind !== 'string' || !kind.trim()) {
-    return null;
-  }
-
-  const queue = readQueue(storage);
-  const entry = {
-    id: buildEntryId(),
-    kind: kind.trim(),
-    ownerId,
-    payload: payload === undefined ? null : payload,
-    createdAt: Date.now(),
-    attempts: 0,
-  };
-
-  // Keep the queue bounded so a runaway loop can't fill localStorage. When
-  // we hit the limit, drop the oldest entries (FIFO) so the user's most
-  // recent intentions are preserved.
-  const next = queue.concat(entry).slice(-MAX_QUEUE_LENGTH);
-  if (!writeQueue(storage, next)) {
-    return null;
-  }
-
-  notifyQueueUpdated({ kind: 'enqueue', size: next.length });
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  return JSON.stringify(value);
+}
+function fingerprint(kind, payload) {
+  // Create retries can carry freshly generated metadata. The authored intent is
+  // stable, and the first queued record keeps its original server id.
+  const data = kind.endsWith(':create') && payload && typeof payload === 'object'
+    ? Object.fromEntries(Object.entries(payload).filter(([key]) => !['id', 'updatedAt', 'createdAt'].includes(key))) : payload;
+  return `${kind}:${stableJson(data)}`;
+}
+function targetKey(entry) {
+  return `${entry.kind.split(':')[0]}:${entry.payload?.kind || ''}:${entry.payload?.id || entry.id}`;
+}
+function mutateQueue(work) {
+  return withStorageLock('queue-write', () => {
+    const storage = storageOrThrow();
+    const queue = readQueue(storage);
+    const result = work(queue);
+    writeQueue(storage, queue);
+    return result;
+  });
+}
+export async function enqueueOfflineWrite({ kind, payload, ownerId = getWorkspaceOwnerId() }) {
+  if (typeof kind !== 'string' || !kind.trim()) throw queueError('This pending action has no type.', 'QUEUE_INVALID');
+  const entry = await mutateQueue((queue) => {
+    const signature = fingerprint(kind, payload);
+    const existing = queue.find((item) => item.ownerId === ownerId && fingerprint(item.kind, item.payload) === signature);
+    if (existing) return existing;
+    if (queue.length >= MAX_QUEUE_LENGTH) throw queueError('Pending writes are full. Existing work is safe. Review or export pending writes in Settings before retrying this draft.', 'QUEUE_FULL');
+    const next = { id: crypto.randomUUID(), ownerId, kind: kind.trim(), payload: payload ?? null,
+      createdAt: Date.now(), attempts: 0, status: 'pending', nextAttemptAt: 0 };
+    queue.push(next);
+    return next;
+  });
+  notify('enqueue');
   return entry;
 }
-
-/**
- * Removes a single entry by id. Used by `drainOfflineQueue` after a
- * successful replay; exposed so tests and a future "discard pending" UI
- * action can reuse the same path.
- */
-export function removeOfflineWrite(id) {
-  const storage = safeStorage();
-  if (!storage) {
-    return false;
-  }
-  const queue = readQueue(storage);
-  const next = queue.filter((entry) => entry.id !== id);
-  if (next.length === queue.length) {
-    return false;
-  }
-  writeQueue(storage, next);
-  notifyQueueUpdated({ kind: 'remove', size: next.length });
-  return true;
+export async function removeOfflineWrite(id) {
+  const removed = await mutateQueue((queue) => {
+    const index = queue.findIndex((entry) => entry.id === id);
+    if (index < 0) return false;
+    queue.splice(index, 1);
+    return true;
+  });
+  notify('remove');
+  return removed;
 }
-
-/**
- * Empties the queue. Intended for tests and an explicit "abandon pending"
- * UI affordance — never call this on a failure path, since pending writes
- * represent the user's data that did not reach the server yet.
- */
-export function clearOfflineQueue() {
-  const storage = safeStorage();
-  if (!storage) {
-    return;
-  }
-  writeQueue(storage, []);
-  notifyQueueUpdated({ kind: 'clear', size: 0 });
-}
-
-/**
- * Walks the queue, attempting to replay each entry through the supplied
- * handler. Returns a summary { drained, failed, remaining } so callers can
- * show a result toast.
- *
- * Stops at the first failure — assumes all entries depend on the same
- * remote service, so once one fails the rest will likely fail too.
- *
- * `handlerByKind` is a map of `{ [kind]: async (payload) => any }`. Unknown
- * kinds are left in place so a future code version that recognizes them
- * can drain them later.
- */
-export async function drainOfflineQueue(handlerByKind = {}) {
-  const storage = safeStorage();
-  if (!storage) {
-    return { drained: 0, failed: 0, remaining: 0 };
-  }
-
-  let queue = readQueue(storage);
-  if (queue.length === 0) {
-    return { drained: 0, failed: 0, remaining: 0 };
-  }
-
+export async function discardOfflineWrite(id) {
   const ownerId = getWorkspaceOwnerId();
-  let drained = 0;
-  let failed = 0;
-  let stopOnFailure = false;
+  // Wait for an in-flight request: discarding cannot cancel a server write.
+  return withStorageLock('queue-drain', async () => {
+    assertWorkspaceOwner(ownerId);
+    const entry = getOfflineQueue().find((item) => item.id === id);
+    if (!entry) return true;
+    if (entry.ownerId !== undefined && entry.ownerId !== ownerId) throw queueError('This action belongs to another account.', 'QUEUE_OWNER');
+    return removeOfflineWrite(id);
+  });
+}
+export async function clearOfflineQueue() {
+  await mutateQueue((queue) => { queue.length = 0; });
+  notify('clear');
+}
+export async function retryOfflineWrite(id) {
+  const ownerId = getWorkspaceOwnerId();
+  await mutateQueue((queue) => {
+    assertWorkspaceOwner(ownerId);
+    const entry = queue.find((item) => item.id === id && item.ownerId === ownerId);
+    if (!entry) throw queueError('This action belongs to another workspace or is no longer pending.', 'QUEUE_OWNER');
+    Object.assign(entry, { status: 'pending', attempts: 0, nextAttemptAt: 0, lastError: '' });
+  });
+  notify('retry');
+  window.dispatchEvent(new Event(OFFLINE_QUEUE_RETRY_EVENT));
+}
+function isTransient(error) {
+  if (error?.code === 'STALE_RECORD' || error?.code === 'WORKSPACE_ACCOUNT_CHANGED' || error?.code === 'SUPABASE_AUTH_REQUIRED') return false;
+  const status = Number(error?.status);
+  return error instanceof TypeError || status === 429 || status >= 500
+    || /network|fetch|connection|timeout|timed out|offline/i.test(String(error?.message || ''));
+}
 
-  for (let index = 0; index < queue.length && !stopOnFailure; index += 1) {
-    const entry = queue[index];
-    // Older entries without ownership stay preserved for manual recovery.
-    if (entry.ownerId !== ownerId) continue;
-    const handler = handlerByKind[entry.kind];
-    if (typeof handler !== 'function') {
-      // Unknown kinds stay in place.
-      continue;
-    }
-    try {
-      assertWorkspaceOwner(ownerId);
-      await handler(entry.payload, entry);
-      assertWorkspaceOwner(ownerId);
-      // Re-read the queue in case other tabs changed it; remove this entry by id.
-      queue = readQueue(storage).filter((candidate) => candidate.id !== entry.id);
-      if (!writeQueue(storage, queue)) throw new Error('Unable to acknowledge queued write on this device.');
-      drained += 1;
-      // After mutation, restart loop from current index against the fresh queue.
-      index -= 1;
-    } catch {
-      // Bump attempts on the persisted entry so observers can show retry counts,
-      // then stop draining for this pass.
-      const persisted = readQueue(storage);
-      const target = persisted.find((candidate) => candidate.id === entry.id);
-      if (target) {
-        target.attempts = Number(target.attempts || 0) + 1;
-        writeQueue(storage, persisted);
+export async function drainOfflineQueue(handlerByKind = {}) {
+  const summary = { drained: 0, failed: 0, remaining: 0 };
+  const result = await withStorageLock('queue-drain', async () => {
+    const ownerId = getWorkspaceOwnerId();
+    const blockedTargets = new Set();
+    const queue = readQueue(storageOrThrow());
+    for (let entry of queue) {
+      if (entry.ownerId !== ownerId) continue;
+      const target = targetKey(entry);
+      if (entry.status === 'blocked' || blockedTargets.has(target) || Number(entry.nextAttemptAt) > Date.now()) {
+        blockedTargets.add(target);
+        continue;
       }
-      failed += 1;
-      stopOnFailure = true;
+      if (entry.kind.endsWith(':create') && entry.payload && !entry.payload.id) {
+        // Persist a stable server identity before replaying older queue entries.
+        entry = await mutateQueue((persisted) => {
+          const current = persisted.find((item) => item.id === entry.id);
+          if (!current) return entry;
+          current.payload.id ||= crypto.randomUUID();
+          return current;
+        });
+      }
+      // Another tab may have explicitly discarded the entry while we waited.
+      if (!getOfflineQueue().some((item) => item.id === entry.id)) continue;
+      try {
+        assertWorkspaceOwner(ownerId);
+        if (typeof handlerByKind[entry.kind] !== 'function') throw queueError('This action is not supported by this version. Export it before discarding.', 'QUEUE_UNKNOWN_ACTION');
+        await handlerByKind[entry.kind](entry.payload, entry);
+        assertWorkspaceOwner(ownerId);
+        await removeOfflineWrite(entry.id);
+        summary.drained += 1;
+      } catch (error) {
+        summary.failed += 1;
+        blockedTargets.add(target);
+        await mutateQueue((persisted) => {
+          const current = persisted.find((item) => item.id === entry.id);
+          if (!current) return;
+          const attempts = Number(current.attempts || 0) + 1;
+          const retry = isTransient(error) && attempts < MAX_ATTEMPTS;
+          Object.assign(current, { attempts, status: retry ? 'retry' : 'blocked',
+            nextAttemptAt: retry ? Date.now() + Math.min(60000, 2000 * 2 ** (attempts - 1)) : 0,
+            lastError: error?.code === 'STALE_RECORD' ? 'This record changed. Review the latest version before retrying.'
+              : 'This action could not sync. Review it, retry, or export it before discarding.',
+            errorCode: String(error?.code || 'SYNC_FAILED') });
+        });
+        if (getWorkspaceOwnerId() !== ownerId || error?.code === 'SUPABASE_AUTH_REQUIRED') break;
+      }
     }
-  }
-
-  const remaining = readQueue(storage).length;
-  notifyQueueUpdated({ kind: 'drain', drained, failed, remaining });
-  return { drained, failed, remaining };
+    summary.remaining = getOfflineQueue().filter((entry) => entry.ownerId === ownerId).length;
+    notify('drain');
+    return summary;
+  }, { ifAvailable: true });
+  return result || { ...summary, remaining: currentOwnerEntries().length };
 }

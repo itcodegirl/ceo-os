@@ -1,82 +1,29 @@
-import {
-  createVersionedStorageEnvelope,
-  getStorageSchema,
-  readVersionedStoragePayload,
-} from './dataSchema';
-import { migrateStoragePayload } from './storageMigrations';
-import { parseJsonOrPreserveCorruption } from './storageCorruption';
+import { createVersionedStorageEnvelope, getStorageSchema } from './dataSchema';
+import { decodeStoredDomain, validateDomainData } from './storageValidation';
+import { preserveCorruptStorageValue, assertStorageWritable } from './storageCorruption';
 import { requireLocalStorageSetItem, safeLocalStorageSetItem } from './utils';
-
-function getBrowserLocalStorage() {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return null;
-  }
-
-  return window.localStorage;
-}
 
 export function getVersionedStorageKey(domain) {
   const schema = getStorageSchema(domain);
-  if (!schema) {
-    throw new Error(`Unknown storage schema domain: ${domain}`);
-  }
-
+  if (!schema) throw new Error(`Unknown storage schema domain: ${domain}`);
   return schema.key;
 }
-
 export function readVersionedLocalStorage(domain, fallbackValue) {
-  const storage = getBrowserLocalStorage();
-  if (!storage) {
-    return fallbackValue;
-  }
-
-  const storageKey = getVersionedStorageKey(domain);
-
-  try {
-    const raw = storage.getItem(storageKey);
-    if (!raw) {
-      return fallbackValue;
-    }
-
-    const parsed = parseJsonOrPreserveCorruption(storageKey, raw, null);
-    const {
-      data,
-      schemaVersion,
-      isDomainMismatch,
-    } = readVersionedStoragePayload(domain, parsed);
-    if (isDomainMismatch) {
-      return fallbackValue;
-    }
-
-    if (data == null) {
-      return fallbackValue;
-    }
-
-    // Run any registered migrators so callers always observe data in the
-    // current shape. Today the registry is empty (every domain ships v1), so
-    // this is a cheap no-op; once a v1 → v2 migrator is registered, reads
-    // will lift legacy/older payloads automatically.
-    const migrated = migrateStoragePayload(domain, schemaVersion, data);
-    return migrated.data ?? fallbackValue;
-  } catch {
-    return fallbackValue;
-  }
+  const key = getVersionedStorageKey(domain);
+  let raw;
+  try { raw = window.localStorage.getItem(key); } catch { return fallbackValue; }
+  if (!raw) return fallbackValue;
+  try { return decodeStoredDomain(domain, JSON.parse(raw)); }
+  catch (error) { preserveCorruptStorageValue(key, raw, error); return fallbackValue; }
 }
-
 export function writeVersionedLocalStorage(domain, data, errorMessage) {
-  const storageKey = getVersionedStorageKey(domain);
-  requireLocalStorageSetItem(
-    storageKey,
-    JSON.stringify(createVersionedStorageEnvelope(domain, data)),
-    errorMessage,
-  );
+  const key = getVersionedStorageKey(domain);
+  validateDomainData(domain, data);
+  assertStorageWritable(key);
+  requireLocalStorageSetItem(key, JSON.stringify(createVersionedStorageEnvelope(domain, data)), errorMessage);
 }
-
 export function safeWriteVersionedLocalStorage(domain, data, warningMessage) {
-  const storageKey = getVersionedStorageKey(domain);
-  return safeLocalStorageSetItem(
-    storageKey,
-    JSON.stringify(createVersionedStorageEnvelope(domain, data)),
-    warningMessage,
-  );
+  const key = getVersionedStorageKey(domain);
+  try { validateDomainData(domain, data); assertStorageWritable(key); } catch { return false; }
+  return safeLocalStorageSetItem(key, JSON.stringify(createVersionedStorageEnvelope(domain, data)), warningMessage);
 }

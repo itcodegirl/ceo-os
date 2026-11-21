@@ -176,7 +176,7 @@ describe('src/pages/Settings', () => {
       { id: 'reminder-1', text: 'Follow up' },
     ]));
     window.localStorage.setItem('ceo-os-offline-write-queue', JSON.stringify([
-      { id: 'q-1', kind: 'content:update' },
+      { id: 'q-1', kind: 'content:update', ownerId: '' },
     ]));
     useSettings.mockReturnValue(createSettingsState());
 
@@ -233,6 +233,9 @@ describe('src/pages/Settings', () => {
     fireEvent.change(screen.getByLabelText('Import local workspace backup file'), {
       target: { files: [backupFile] },
     });
+
+    expect(refreshSettings).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm backup restore' }));
 
     await waitFor(() => {
       expect(refreshSettings).toHaveBeenCalledTimes(1);

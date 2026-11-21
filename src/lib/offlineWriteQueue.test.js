@@ -1,139 +1,87 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  OFFLINE_QUEUE_STORAGE_KEY,
-  OFFLINE_QUEUE_UPDATED_EVENT,
-  clearOfflineQueue,
-  drainOfflineQueue,
-  enqueueOfflineWrite,
-  getOfflineQueue,
-  removeOfflineWrite,
-} from './offlineWriteQueue';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { OFFLINE_QUEUE_STORAGE_KEY as KEY, enqueueOfflineWrite as enqueue, getOfflineQueue as read,
+  drainOfflineQueue as drain, retryOfflineWrite, discardOfflineWrite } from './offlineWriteQueue';
 
-describe('offlineWriteQueue', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
+describe('durable offline queue', () => {
+  beforeEach(() => localStorage.clear());
+  it('serializes simultaneous enqueues without losing either write', async () => {
+    await Promise.all(Array.from({ length: 20 }, (_, payload) => enqueue({ kind: 'update', payload })));
+    expect(read().map((entry) => entry.payload).sort((a, b) => a - b)).toEqual(Array.from({ length: 20 }, (_, i) => i));
   });
-
-  afterEach(() => {
-    clearOfflineQueue();
+  it('deduplicates an unchanged create intent, preserving its original server id', async () => {
+    const first = await enqueue({ kind: 'opportunity:create', payload: { name: 'A', id: 'first' } });
+    const second = await enqueue({ kind: 'opportunity:create', payload: { id: 'retry', name: 'A' } });
+    expect(second.id).toBe(first.id);
+    expect(read()).toHaveLength(1);
+    expect(read()[0].payload.id).toBe('first');
   });
-
-  it('starts empty when no entries are persisted', () => {
-    expect(getOfflineQueue()).toEqual([]);
+  it('refuses overflow without evicting the oldest pending work', async () => {
+    for (let payload = 0; payload < 200; payload++) await enqueue({ kind: 'k', payload });
+    await expect(enqueue({ kind: 'k', payload: 200 })).rejects.toMatchObject({ code: 'QUEUE_FULL' });
+    expect(read()).toHaveLength(200);
+    expect(read()[0].payload).toBe(0);
   });
-
-  it('enqueues an entry with id, kind, payload, createdAt, attempts', () => {
-    const entry = enqueueOfflineWrite({
-      kind: 'opportunity:create',
-      payload: { name: 'Acme partnership' },
-    });
-
-    expect(entry).toBeTruthy();
-    expect(entry.id).toMatch(/^q-\d+-\d{6}$/);
-    expect(entry.kind).toBe('opportunity:create');
-    expect(entry.payload).toEqual({ name: 'Acme partnership' });
-    expect(entry.attempts).toBe(0);
-    expect(entry.createdAt).toBeGreaterThan(0);
-
-    const persisted = JSON.parse(window.localStorage.getItem(OFFLINE_QUEUE_STORAGE_KEY));
-    expect(persisted).toHaveLength(1);
-    expect(persisted[0].id).toBe(entry.id);
+  it('reports a failed durable write instead of claiming the draft was queued', async () => {
+    vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => { throw new Error('quota'); });
+    await expect(enqueue({ kind: 'k', payload: 1 })).rejects.toMatchObject({ code: 'QUEUE_STORAGE_FAILED' });
+    expect(read()).toEqual([]);
   });
-
-  it('rejects entries without a kind', () => {
-    expect(enqueueOfflineWrite({ kind: '', payload: {} })).toBeNull();
-    expect(enqueueOfflineWrite({ payload: {} })).toBeNull();
-    expect(getOfflineQueue()).toEqual([]);
+  it('rejects missing action types', async () => {
+    await expect(enqueue({ payload: {} })).rejects.toMatchObject({ code: 'QUEUE_INVALID' });
   });
-
-  it('emits OFFLINE_QUEUE_UPDATED_EVENT on enqueue with the new size', () => {
-    const events = [];
-    const listener = (event) => events.push(event.detail);
-    window.addEventListener(OFFLINE_QUEUE_UPDATED_EVENT, listener);
-    try {
-      enqueueOfflineWrite({ kind: 'opportunity:create', payload: { id: 1 } });
-      enqueueOfflineWrite({ kind: 'opportunity:create', payload: { id: 2 } });
-    } finally {
-      window.removeEventListener(OFFLINE_QUEUE_UPDATED_EVENT, listener);
+  it('blocks poison entries while allowing unrelated later actions to finish', async () => {
+    await enqueue({ kind: 'unsupported', payload: {} });
+    await enqueue({ kind: 'update', payload: { id: 'a', text: 'first' } });
+    await enqueue({ kind: 'update', payload: { id: 'a', text: 'second' } });
+    await enqueue({ kind: 'update', payload: { id: 'b' } });
+    const update = vi.fn(async (payload) => { if (payload.id === 'a') throw Object.assign(new Error('conflict'), { code: 'STALE_RECORD' }); });
+    expect(await drain({ update })).toEqual({ drained: 1, failed: 2, remaining: 3 });
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(read().map((entry) => entry.status)).toEqual(['blocked', 'blocked', 'pending']);
+    await drain({ update });
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+  it('backs off transient failures and stops after five attempts until explicitly retried', async () => {
+    const entry = await enqueue({ kind: 'k', payload: 1 });
+    const handler = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    await drain({ k: handler });
+    await drain({ k: handler });
+    expect(handler).toHaveBeenCalledTimes(1);
+    for (let attempt = 1; attempt < 5; attempt++) {
+      const queue = read(); queue[0].nextAttemptAt = 0; localStorage.setItem(KEY, JSON.stringify(queue));
+      await drain({ k: handler });
     }
-
-    expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({ kind: 'enqueue', size: 1 });
-    expect(events[1]).toMatchObject({ kind: 'enqueue', size: 2 });
+    expect(read()[0]).toMatchObject({ status: 'blocked', attempts: 5 });
+    await retryOfflineWrite(entry.id);
+    expect(read()[0]).toMatchObject({ status: 'pending', attempts: 0 });
+    expect(await drain({ k: vi.fn().mockResolvedValue() })).toEqual({ drained: 1, failed: 0, remaining: 0 });
   });
-
-  it('removeOfflineWrite removes a single entry by id', () => {
-    const a = enqueueOfflineWrite({ kind: 'k', payload: 1 });
-    enqueueOfflineWrite({ kind: 'k', payload: 2 });
-    expect(getOfflineQueue()).toHaveLength(2);
-
-    expect(removeOfflineWrite(a.id)).toBe(true);
-    expect(getOfflineQueue()).toHaveLength(1);
-    expect(getOfflineQueue()[0].payload).toBe(2);
+  it('allows only one drainer and waits for an in-flight request before discarding', async () => {
+    const entry = await enqueue({ kind: 'k', payload: 1 });
+    let finish;
+    const handler = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const first = drain({ k: handler });
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
+    expect((await drain({ k: handler })).drained).toBe(0);
+    const discard = discardOfflineWrite(entry.id);
+    finish();
+    await first; await discard;
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(read()).toEqual([]);
   });
-
-  it('clearOfflineQueue empties the queue', () => {
-    enqueueOfflineWrite({ kind: 'k', payload: 1 });
-    enqueueOfflineWrite({ kind: 'k', payload: 2 });
-    clearOfflineQueue();
-    expect(getOfflineQueue()).toEqual([]);
+  it('persists a stable id for legacy creates before replay, including a lost acknowledgement', async () => {
+    await enqueue({ kind: 'opportunity:create', payload: { name: 'Legacy' } });
+    const ids = [];
+    await drain({ 'opportunity:create': async (payload) => { ids.push(payload.id); throw new TypeError('connection lost'); } });
+    await retryOfflineWrite(read()[0].id);
+    await drain({ 'opportunity:create': async (payload) => { ids.push(payload.id); } });
+    expect(ids[0]).toBeTruthy(); expect(ids[1]).toBe(ids[0]);
   });
-
-  it('drainOfflineQueue replays entries through their handlers and removes successful ones', async () => {
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'A' } });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'B' } });
-
-    const handler = vi.fn().mockResolvedValue();
-    const result = await drainOfflineQueue({ 'opportunity:create': handler });
-
-    expect(result).toEqual({ drained: 2, failed: 0, remaining: 0 });
-    expect(handler).toHaveBeenCalledTimes(2);
-    expect(handler).toHaveBeenNthCalledWith(1, { name: 'A' }, expect.objectContaining({ kind: 'opportunity:create' }));
-    expect(handler).toHaveBeenNthCalledWith(2, { name: 'B' }, expect.objectContaining({ kind: 'opportunity:create' }));
-    expect(getOfflineQueue()).toEqual([]);
-  });
-
-  it('drainOfflineQueue stops on the first failure and bumps that entry attempts', async () => {
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'A' } });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'B' } });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: { name: 'C' } });
-
-    const handler = vi.fn();
-    handler.mockResolvedValueOnce();
-    handler.mockRejectedValueOnce(new Error('still offline'));
-    // Third call must never happen because we stop after the first failure.
-
-    const result = await drainOfflineQueue({ 'opportunity:create': handler });
-
-    expect(result).toEqual({ drained: 1, failed: 1, remaining: 2 });
-    expect(handler).toHaveBeenCalledTimes(2);
-
-    const remaining = getOfflineQueue();
-    expect(remaining.map((entry) => entry.payload.name)).toEqual(['B', 'C']);
-    expect(remaining[0].attempts).toBe(1);
-    expect(remaining[1].attempts).toBe(0);
-  });
-
-  it('drainOfflineQueue leaves unknown-kind entries in place', async () => {
-    enqueueOfflineWrite({ kind: 'unknown:future', payload: {} });
-    enqueueOfflineWrite({ kind: 'opportunity:create', payload: {} });
-
-    const handler = vi.fn().mockResolvedValue();
-    const result = await drainOfflineQueue({ 'opportunity:create': handler });
-
-    expect(result.drained).toBe(1);
-    expect(getOfflineQueue()).toHaveLength(1);
-    expect(getOfflineQueue()[0].kind).toBe('unknown:future');
-  });
-
-  it('caps the queue at MAX_QUEUE_LENGTH (drops oldest entries first)', () => {
-    // Push 205 entries; only the last 200 should survive (FIFO drop).
-    for (let index = 0; index < 205; index += 1) {
-      enqueueOfflineWrite({ kind: 'k', payload: index });
-    }
-    const queue = getOfflineQueue();
-    expect(queue).toHaveLength(200);
-    expect(queue[0].payload).toBe(5);
-    expect(queue[queue.length - 1].payload).toBe(204);
+  it('does not replay another account or ownerless legacy work', async () => {
+    localStorage.setItem(KEY, JSON.stringify([{ id: 'old', kind: 'k', payload: 1 }]));
+    await enqueue({ kind: 'k', payload: 2, ownerId: 'other-account' });
+    const handler = vi.fn(); await drain({ k: handler });
+    expect(handler).not.toHaveBeenCalled(); expect(read()).toHaveLength(2);
+    await expect(discardOfflineWrite(read()[1].id)).rejects.toMatchObject({ code: 'QUEUE_OWNER' });
   });
 });

@@ -1,11 +1,16 @@
-import { useId } from 'react';
+import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
+import { lazy, Suspense, useId, useState } from 'react';
 import SectionCard from '../ui/SectionCard';
 import Button from '../ui/Button';
 import LoadDemoWorkspaceButton from '../ui/LoadDemoWorkspaceButton';
 import { useWorkspaceSetup } from '../../hooks/useWorkspaceSetup';
 import { useOfflineWriteQueueSize } from '../../hooks/useOfflineWriteQueue';
 import { formatCount, useWorkspaceBackup } from '../../hooks/useWorkspaceBackup';
+import ConfirmModal from '../ui/ConfirmModal';
 import { SOURCE_NOTICE_DEMO_DATA } from '../../lib/uiCopy';
+
+const WorkspaceRecoveryTools = lazy(() => import('./WorkspaceRecoveryTools'));
 
 function formatSavedAt(savedAt) {
   const timestamp = Number(savedAt);
@@ -36,9 +41,16 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
     startBlankWorkspace,
     clearDemoData,
   } = useWorkspaceSetup();
+  const { hash } = useLocation();
+  const [recoveryDisclosure, setRecoveryDisclosure] = useState({ hash: null, open: false });
+  const showRecovery = recoveryDisclosure.hash === hash ? recoveryDisclosure.open : hash === '#recovery';
   const pendingSyncCount = useOfflineWriteQueueSize();
   const {
     dataHealth,
+    importPreview,
+    isImporting,
+    confirmImport,
+    cancelImport,
     portabilityStatus,
     importInputRef,
     handleExportBackup,
@@ -59,6 +71,10 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
 
   return (
     <SectionCard id="workspace-data" title="Workspace Data" iconName="section">
+      {createPortal(<ConfirmModal error={portabilityStatus.tone === 'error' ? portabilityStatus.message : ''} isOpen={Boolean(importPreview)} title="Review backup restore"
+        message={importPreview ? `Restore ${importPreview.stores.length} local stores: ${importPreview.stores.map((store) => `${store.label}${store.replacesExisting ? ' (replace)' : ' (add)'}`).join(', ')}. Matching local data will be replaced. An original snapshot will be preserved before any changes.` : ''}
+        onCancel={cancelImport} onConfirm={confirmImport} isConfirming={isImporting}
+        confirmLabel="Restore backup" confirmAriaLabel="Confirm backup restore" />, document.body)}
       <div className="settings-workspace-setup">
         <p className="helper-text">
           {hasWorkspaceSetupChoice
@@ -150,6 +166,13 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
             {portabilityStatus.message}
           </p>
         ) : null}
+      </div>
+      <div id="recovery">
+        <h3>Recovery &amp; pending writes</h3>
+        <Button variant="ghost" onClick={() => setRecoveryDisclosure({ hash, open: !showRecovery })} aria-expanded={showRecovery} aria-controls="recovery-tools">
+          {showRecovery ? 'Hide recovery tools' : 'Review recovery and pending writes'}
+        </Button>
+        <div id="recovery-tools" hidden={!showRecovery}>{showRecovery ? <Suspense fallback={<p role="status">Loading recovery tools…</p>}><WorkspaceRecoveryTools /></Suspense> : null}</div>
       </div>
     </SectionCard>
   );

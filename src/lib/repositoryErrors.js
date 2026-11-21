@@ -7,6 +7,7 @@ export function createDuplicateRecordError(message) {
 }
 
 export function getRepositoryErrorMessage(error, fallbackMessage) {
+  if ((String(error?.code || '').startsWith('QUEUE_') || error?.code === 'STORAGE_COORDINATION_UNAVAILABLE') && error?.message) return error.message;
   if (error?.code === DUPLICATE_RECORD_CODE && typeof error.message === 'string' && error.message.trim()) {
     return error.message;
   }

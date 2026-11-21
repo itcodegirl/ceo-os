@@ -47,6 +47,10 @@ export function shouldEnqueueWriteFailure(error) {
     return false;
   }
 
+  const status = Number(error?.status);
+  if (status >= 400 && status < 500 && status !== 429) return false;
+  if (status === 429 || status >= 500) return true;
+
   if (isOfflineNavigator()) {
     return true;
   }
@@ -78,7 +82,7 @@ export async function tryRemoteOrEnqueue({ kind, payload, options = {} }, attemp
     return result;
   } catch (error) {
     if (!options.skipQueue && shouldEnqueueWriteFailure(error)) {
-      enqueueOfflineWrite({ kind, payload, ownerId });
+      await enqueueOfflineWrite({ kind, payload, ownerId });
     }
     throw error;
   }

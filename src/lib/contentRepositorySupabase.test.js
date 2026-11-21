@@ -125,6 +125,14 @@ describe('contentRepository Supabase timestamp coverage', () => {
     expect(rows[0].updatedAt).toBeGreaterThan(0);
   });
 
+  it('recognizes a previously acknowledged create id without inserting a duplicate', async () => {
+    const stub = buildSupabaseClientStub({ listRows: [{ id: 'stable-operation', title: 'Already created', platform: 'LinkedIn', status: 'Drafting' }] });
+    runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(stub);
+    const result = await createContentItem({ title: 'Already created', platform: 'LinkedIn' }, { operationId: 'stable-operation' });
+    expect(result.id).toBe('stable-operation');
+    expect(stub.captured.insert).toBeNull();
+  });
+
   it('returns updatedAt from the Supabase create select path', async () => {
     const stub = buildSupabaseClientStub({
       createRow: {
@@ -145,6 +153,7 @@ describe('contentRepository Supabase timestamp coverage', () => {
 
     expect(stub.captured.selects[0]).toContain('updated_at');
     expect(created.updatedAt).toBe(Date.parse('2026-05-01T13:02:00.000Z'));
+    expect(stub.captured.insert.id).toEqual(expect.any(String));
   });
 
   it('passes expected updated_at to Supabase and returns the fresh row when it matches', async () => {

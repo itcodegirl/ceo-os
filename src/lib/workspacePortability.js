@@ -1,3 +1,4 @@
+import { validateStorageRaw } from './storageValidation';
 import { accountBackupValue } from './workspaceBackupOwnership';
 import { getWorkspaceOwnerId } from './workspaceOwnership';
 import { CAPTURE_NOTES_UPDATED_EVENT } from './captureRepository';
@@ -179,14 +180,6 @@ function safeStorage() {
   }
 }
 
-function parseJson(raw) {
-  try {
-    return { value: JSON.parse(raw), isValid: true };
-  } catch {
-    return { value: null, isValid: false };
-  }
-}
-
 export function validateRawStorageValue(definition, rawValue) {
   if (typeof rawValue !== 'string') {
     return {
@@ -195,11 +188,9 @@ export function validateRawStorageValue(definition, rawValue) {
     };
   }
 
-  if (definition.storageType === STORAGE_TYPES.json) {
-    const parsed = parseJson(rawValue);
-    return parsed.isValid
-      ? { isValid: true, parsedValue: parsed.value }
-      : { isValid: false, reason: `${definition.label} is not valid JSON.` };
+  if (definition.storageType === STORAGE_TYPES.json || definition.key === 'ceo-os-chief-notes') {
+    try { return { isValid: true, parsedValue: validateStorageRaw(definition.key, rawValue) }; }
+    catch (error) { return { isValid: false, reason: error instanceof SyntaxError ? `${definition.label} is not valid JSON.` : `${definition.label}: ${error.message}` }; }
   }
 
   if (definition.storageType === STORAGE_TYPES.numericText) {

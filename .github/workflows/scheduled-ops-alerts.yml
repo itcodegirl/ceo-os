@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '15 13 * * *'
   workflow_dispatch:
+    inputs:
+      notify:
+        description: 'Publish incident updates and send configured notifications'
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -15,6 +20,10 @@ jobs:
     name: Route + Telemetry Health Monitor
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      NOTIFY_OPS: ${{ github.event_name == 'schedule' || inputs.notify == true }}
+      HAS_SLACK_WEBHOOK: ${{ secrets.SLACK_OPS_WEBHOOK_URL != '' }}
+      HAS_PAGERDUTY_KEY: ${{ secrets.PAGERDUTY_EVENTS_ROUTING_KEY != '' }}
 
     steps:
       - name: Checkout
@@ -28,6 +37,9 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci
+
+      - name: Build Production Assets
+        run: npm run build
 
       - name: Check Route Performance Trend Baseline
         id: route_trend
@@ -100,7 +112,7 @@ jobs:
         run: npm run build:slo-trend-snapshot
 
       - name: Persist Daily SLO Trend Snapshot
-        if: always()
+        if: always() && env.NOTIFY_OPS == 'true'
         continue-on-error: true
         env:
           SLO_TREND_SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
@@ -292,7 +304,7 @@ jobs:
 
       - name: Persist Incident Lifecycle Transition
         id: persist_incident_state
-        if: always()
+        if: always() && env.NOTIFY_OPS == 'true'
         continue-on-error: true
         env:
           OPS_INCIDENT_SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
@@ -310,7 +322,7 @@ jobs:
 
       - name: Upsert Ops Alert Issue
         id: upsert_ops_alert_issue
-        if: always() && steps.publish_summary.outputs.alert_triggered == 'true'
+        if: always() && env.NOTIFY_OPS == 'true' && steps.publish_summary.outputs.alert_triggered == 'true'
         uses: actions/github-script@v7
         env:
           EXISTING_ISSUE_NUMBER: ${{ steps.lookup_ops_alert_issue.outputs.issue_number }}
@@ -396,7 +408,7 @@ jobs:
 
       - name: Close Ops Alert Issue On Recovery
         id: close_ops_alert_issue
-        if: always() && steps.publish_summary.outputs.alert_triggered != 'true' && steps.lookup_ops_alert_issue.outputs.issue_number != ''
+        if: always() && env.NOTIFY_OPS == 'true' && steps.publish_summary.outputs.alert_triggered != 'true' && steps.lookup_ops_alert_issue.outputs.issue_number != ''
         uses: actions/github-script@v7
         env:
           ISSUE_NUMBER: ${{ steps.lookup_ops_alert_issue.outputs.issue_number }}
@@ -429,7 +441,7 @@ jobs:
             core.setOutput('issue_url', process.env.ISSUE_URL || '');
 
       - name: Notify Slack On Alert
-        if: always() && steps.publish_summary.outputs.alert_triggered == 'true' && (steps.persist_incident_state.outcome == 'failure' || steps.persist_incident_state.outputs.state_changed == 'true') && secrets.SLACK_OPS_WEBHOOK_URL != ''
+        if: always() && env.NOTIFY_OPS == 'true' && steps.publish_summary.outputs.alert_triggered == 'true' && (steps.persist_incident_state.outcome == 'failure' || steps.persist_incident_state.outputs.state_changed == 'true') && env.HAS_SLACK_WEBHOOK == 'true'
         uses: actions/github-script@v7
         env:
           SLACK_OPS_WEBHOOK_URL: ${{ secrets.SLACK_OPS_WEBHOOK_URL }}
@@ -469,7 +481,7 @@ jobs:
             }
 
       - name: Notify Slack On Recovery
-        if: always() && steps.publish_summary.outputs.alert_triggered != 'true' && (steps.persist_incident_state.outcome == 'failure' || steps.persist_incident_state.outputs.state_changed == 'true') && secrets.SLACK_OPS_WEBHOOK_URL != ''
+        if: always() && env.NOTIFY_OPS == 'true' && steps.publish_summary.outputs.alert_triggered != 'true' && (steps.persist_incident_state.outcome == 'failure' || steps.persist_incident_state.outputs.state_changed == 'true') && env.HAS_SLACK_WEBHOOK == 'true'
         uses: actions/github-script@v7
         env:
           SLACK_OPS_WEBHOOK_URL: ${{ secrets.SLACK_OPS_WEBHOOK_URL }}
@@ -500,7 +512,7 @@ jobs:
             }
 
       - name: Notify PagerDuty On Alert
-        if: always() && steps.publish_summary.outputs.alert_triggered == 'true' && (steps.persist_incident_state.outcome == 'failure' || steps.persist_incident_state.outputs.state_changed == 'true') && secrets.PAGERDUTY_EVENTS_ROUTING_KEY != ''
+        if: always() && env.NOTIFY_OPS == 'true' && steps.publish_summary.outputs.alert_triggered == 'true' && (steps.persist_incident_state.outcome == 'failure' || steps.persist_incident_state.outputs.state_changed == 'true') && env.HAS_PAGERDUTY_KEY == 'true'
         uses: actions/github-script@v7
         env:
           PAGERDUTY_EVENTS_ROUTING_KEY: ${{ secrets.PAGERDUTY_EVENTS_ROUTING_KEY }}
@@ -555,7 +567,7 @@ jobs:
             }
 
       - name: Notify PagerDuty On Recovery
-        if: always() && steps.publish_summary.outputs.alert_triggered != 'true' && (steps.persist_incident_state.outcome == 'failure' || steps.persist_incident_state.outputs.state_changed == 'true') && secrets.PAGERDUTY_EVENTS_ROUTING_KEY != ''
+        if: always() && env.NOTIFY_OPS == 'true' && steps.publish_summary.outputs.alert_triggered != 'true' && (steps.persist_incident_state.outcome == 'failure' || steps.persist_incident_state.outputs.state_changed == 'true') && env.HAS_PAGERDUTY_KEY == 'true'
         uses: actions/github-script@v7
         env:
           PAGERDUTY_EVENTS_ROUTING_KEY: ${{ secrets.PAGERDUTY_EVENTS_ROUTING_KEY }}

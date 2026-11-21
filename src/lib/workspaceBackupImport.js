@@ -1,3 +1,4 @@
+import { applyStorageImport } from './importRecovery';
 // Loaded only when a backup is selected, keeping restoration code off the
 // initial Settings route. Validation completes before any storage writes.
 import { accountBackupValue } from './workspaceBackupOwnership';
@@ -44,7 +45,7 @@ function validateBackupEnvelope(backup) {
   }
 
   const schemaVersion = Number(backup.schemaVersion);
-  if (!Number.isFinite(schemaVersion) || schemaVersion < 1) {
+  if (!Number.isInteger(schemaVersion) || schemaVersion < 1) {
     throw new Error('Backup file is missing a supported schema version.');
   }
 
@@ -115,7 +116,7 @@ function dispatchImportEvents(importedDefinitions) {
   }
 }
 
-export function importWorkspaceBackup(input, options = {}) {
+export function previewWorkspaceBackup(input, options = {}) {
   const storage = getStorageOrThrow(options.storage);
   const backup = parseBackup(input);
   const backupKeys = validateBackupEnvelope(backup);
@@ -153,15 +154,22 @@ export function importWorkspaceBackup(input, options = {}) {
     throw new Error('Backup file does not include restorable local data.');
   }
 
-  entriesToImport.forEach(({ definition, rawValue }) => {
-    storage.setItem(definition.key, rawValue);
-  });
-
-  dispatchImportEvents(entriesToImport.map((entry) => entry.definition));
-
   return {
-    importedStoreCount: entriesToImport.length,
-    importedKeys: entriesToImport.map((entry) => entry.definition.key),
+    input, ownerId: getWorkspaceOwnerId(), entries: entriesToImport,
+    before: Object.fromEntries(entriesToImport.map(({ definition }) => [definition.key, storage.getItem(definition.key)])),
+    stores: entriesToImport.map(({ definition }) => ({ key: definition.key, label: definition.label, replacesExisting: storage.getItem(definition.key) !== null })),
     ignoredKeyCount: Object.keys(backupKeys).length - entriesToImport.length,
   };
+}
+
+export function importWorkspaceBackup(input, options = {}) {
+  const storage = getStorageOrThrow(options.storage);
+  if (options.preview && options.preview.ownerId !== getWorkspaceOwnerId()) throw new Error('Your account changed. Choose the backup again in the correct workspace.');
+  const plan = previewWorkspaceBackup(input, options);
+  if (options.preview && Object.entries(options.preview.before).some(([key, raw]) => storage.getItem(key) !== raw)) {
+    throw new Error('The workspace changed since this preview. Choose the backup again before replacing data.');
+  }
+  const recoveryKey = applyStorageImport(plan.entries, { storage, ownerId: plan.ownerId });
+  dispatchImportEvents(plan.entries.map((entry) => entry.definition));
+  return { importedStoreCount: plan.entries.length, importedKeys: plan.stores.map((store) => store.key), ignoredKeyCount: plan.ignoredKeyCount, recoveryKey };
 }
