@@ -64,6 +64,7 @@ export function useCrudPage(config) {
   const [formValues, setFormValues] = useState(defaultFormValuesResolved);
   const [formError, setFormError] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [refreshToken, setRefreshToken] = useState(0);
   const selectedItem = selectedItemState;
   const isSavingRef = useRef(false);
@@ -87,11 +88,11 @@ export function useCrudPage(config) {
       }
 
       try {
-        setLoadError('');
+        setDeleteError('');
         if (typeof deleteItem !== 'function') {
           throw new Error('Delete operation is not configured.');
         }
-        await deleteItem(itemToDelete.id);
+        await deleteItem(itemToDelete.id, { expectedUpdatedAt: itemToDelete.updatedAt ?? 0 });
         if (!isMountedRef.current) {
           return;
         }
@@ -100,7 +101,10 @@ export function useCrudPage(config) {
         showToast(deleteSuccessMessage);
       } catch (error) {
         if (isMountedRef.current) {
-          setLoadError(deleteErrorMessage);
+          setDeleteError(isStaleRecordError(error)
+            ? 'This record changed in another window. Cancel and reopen it from the list to review the latest version before deleting.'
+            : getRepositoryErrorMessage(error, deleteErrorMessage));
+          setRefreshToken((current) => current + 1);
         }
         if (import.meta.env.DEV) {
           console.error(`Failed to delete ${logPrefix}`, error);
@@ -243,6 +247,7 @@ export function useCrudPage(config) {
       return;
     }
 
+    setDeleteError('');
     requestConfirm(selectedItem);
   }, [isDeleting, requestConfirm, selectedItem]);
 
@@ -395,6 +400,7 @@ export function useCrudPage(config) {
     handleCloseDeleteConfirm,
     handleConfirmDeleteSelected,
     deletePrompt,
+    deleteError,
     refreshItems,
   };
 }

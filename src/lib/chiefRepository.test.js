@@ -84,7 +84,7 @@ describe('chiefRepository', () => {
     ]);
   });
 
-  it('creates a local session and persists notes when Supabase auth is required', async () => {
+  it('creates a local session without overwriting newer draft notes when auth is required', async () => {
     const authRequiredError = new Error('Auth required');
     authRequiredError.code = 'SUPABASE_AUTH_REQUIRED';
 
@@ -102,17 +102,8 @@ describe('chiefRepository', () => {
     });
 
     expect(session.source).toBe('local');
-    // Writes use the versioned-envelope shape so future schema migrations
-    // can lift this entry without touching call sites.
-    const persistedNotes = JSON.parse(window.localStorage.getItem('ceo-os-chief-notes'));
-    expect(persistedNotes).toMatchObject({
-      schemaVersion: 1,
-      domain: 'chiefNotes',
-      model: 'ChiefNotes',
-      data: 'Temporary notes',
-    });
-    expect(typeof session.id).toBe('string');
-    expect(session.id).toBeTruthy();
+    expect(window.localStorage.getItem('ceo-os-chief-notes')).toBeNull();
+
   });
 
   it('creates a Supabase draft session when notes are saved before generation', async () => {
@@ -140,6 +131,7 @@ describe('chiefRepository', () => {
       requireSupabaseUserId: vi.fn(async () => 'user-1'),
     });
 
+    window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: 'user-1' } }));
     await expect(saveChiefNotes('Draft strategy notes')).resolves.toBe('Draft strategy notes');
 
     const persistedNotes = JSON.parse(window.localStorage.getItem('ceo-os-chief-notes'));

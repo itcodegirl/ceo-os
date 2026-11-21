@@ -306,7 +306,7 @@ describe("src/pages/ChiefOfStaff", () => {
     expect(hookState.clearWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  it("renders recent outputs history and lets the user view an earlier one", () => {
+  it("renders recent outputs history and lets the user view an earlier one", async () => {
     const hookState = createHookState({
       responses: [
         { id: "out-2", title: "Priority Recommendation", content: "Latest", source: "proxy", structuredPayload: {} },
@@ -321,7 +321,7 @@ describe("src/pages/ChiefOfStaff", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("Recent outputs")).toBeInTheDocument();
+    expect(await screen.findByText("Recent outputs")).toBeInTheDocument();
     // Latest is shown by default.
     expect(screen.queryByText(/You're viewing an earlier output/)).not.toBeInTheDocument();
 

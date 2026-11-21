@@ -30,7 +30,8 @@ vi.mock('../lib/chiefRepository', () => ({
 
 describe('useChiefWorkspace', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    window.sessionStorage.clear();
 
     repositoryState.getChiefSource.mockReturnValue('local');
     repositoryState.loadChiefWorkspace.mockResolvedValue({
@@ -62,7 +63,7 @@ describe('useChiefWorkspace', () => {
     });
 
     expect(result.current.notes).toBe('Draft in progress');
-    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isLoading).toBe(true);
 
     await act(async () => {
       firstLoad.resolve({
@@ -74,8 +75,8 @@ describe('useChiefWorkspace', () => {
     });
 
     expect(result.current.notes).toBe('Draft in progress');
-    expect(result.current.responses).toEqual([]);
-    expect(result.current.source).toBe('local');
+    expect(result.current.responses).toEqual([{ id: 'response-old', title: 'Older Output', content: 'Old content' }]);
+    expect(result.current.source).toBe('supabase');
     expect(result.current.isLoading).toBe(false);
   });
 
@@ -131,7 +132,7 @@ describe('useChiefWorkspace', () => {
     expect(result.current.notes).toBe('Draft that failed to save');
 
     await waitFor(() => {
-      expect(result.current.loadError).toBe('Unable to save notes right now.');
+      expect(result.current.notesStatus).toBe('error');
     });
   });
 });

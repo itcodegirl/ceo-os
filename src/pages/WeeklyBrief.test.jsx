@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import WeeklyBrief from './WeeklyBrief';
@@ -66,48 +66,33 @@ describe('src/pages/WeeklyBrief', () => {
     expect(screen.getByText('Saved.')).toBeInTheDocument();
   });
 
-  it('shows a saving indicator while keystrokes are pending', () => {
-    vi.useFakeTimers();
-    try {
-      const setReviewNotes = vi.fn();
-      useWeeklyBrief.mockReturnValue(createWeeklyState({ setReviewNotes }));
-
-      renderWeeklyBrief();
-
-      const textarea = screen.getByLabelText('What actually happened this week?');
-      fireEvent.change(textarea, { target: { value: 'New thought' } });
-
-      // Pending state: a keystroke happened but the debounce hasn't fired yet.
-      expect(screen.getByText('Saving your reflection…')).toBeInTheDocument();
-      expect(setReviewNotes).not.toHaveBeenCalled();
-
-      act(() => {
-        vi.advanceTimersByTime(700);
-      });
-
-      expect(setReviewNotes).toHaveBeenCalledWith('New thought');
-    } finally {
-      vi.useRealTimers();
-    }
+  it('shows the hook autosave state and stages each keystroke immediately', () => {
+    const setReviewNotes = vi.fn();
+    useWeeklyBrief.mockReturnValue(createWeeklyState({ setReviewNotes, reviewNotesStatus: 'dirty' }));
+    renderWeeklyBrief();
+    fireEvent.change(screen.getByLabelText('What actually happened this week?'), { target: { value: 'New thought' } });
+    expect(screen.getByText('Saving your reflection…')).toBeInTheDocument();
+    expect(setReviewNotes).toHaveBeenCalledWith('New thought');
   });
 
-  it('connects saved priorities and blockers back to Focus Home recommendations', () => {
+  it('connects saved priorities and blockers back to Focus Home recommendations', async () => {
     useWeeklyBrief.mockReturnValue(createWeeklyState());
 
     renderWeeklyBrief();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add weekly priority' }));
-    fireEvent.change(screen.getByLabelText('Priority'), {
+    fireEvent.change(await screen.findByLabelText('Priority'), {
       target: { value: 'Confirm scholarship partner' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Add weekly blocker' }));
-    fireEvent.change(screen.getByLabelText('Blocker'), {
+    fireEvent.change(await screen.findByLabelText('Blocker'), {
       target: { value: 'Waiting on curriculum review' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
-    expect(screen.getAllByText('This will influence your Focus Home recommendations.')).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByText('This will influence your Focus Home recommendations.')).toHaveLength(2));
   });
 });

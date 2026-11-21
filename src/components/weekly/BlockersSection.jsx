@@ -2,20 +2,24 @@ import { useCallback, useState } from 'react';
 import SectionCard from '../ui/SectionCard';
 import ConfirmModal from '../ui/ConfirmModal';
 import WeeklyTextList from './WeeklyTextList';
-import WeeklyEditorModal from './WeeklyEditorModal';
+import WeeklyEditorModal from './LazyWeeklyEditorModal';
 import { useWeeklySectionEditor } from '../../hooks/useWeeklySectionEditor';
 import { blockerNeedTone, describeBlockerNeed } from '../../lib/weeklyData';
 
 function BlockersSection({ items, setItems, defaultItems }) {
   const blockerItems = Array.isArray(items) ? items : defaultItems;
   const [impactMessage, setImpactMessage] = useState('');
-  const setBlockerItems = useCallback((nextValue) => {
-    setItems(nextValue);
+  const setBlockerItems = useCallback(async (nextValue, options) => {
+    await setItems(nextValue, options);
     setImpactMessage('This will influence your Focus Home recommendations.');
   }, [setItems]);
   const {
     formValues,
     formError,
+    isSaving,
+    isDeleting,
+    deleteError,
+    reloadEditor,
     isEditorOpen,
     isEditing,
     isDeleteConfirmOpen,
@@ -32,6 +36,7 @@ function BlockersSection({ items, setItems, defaultItems }) {
   } = useWeeklySectionEditor({
     type: 'blocker',
     defaultItems,
+    items,
     setItems: setBlockerItems,
   });
 
@@ -66,6 +71,8 @@ function BlockersSection({ items, setItems, defaultItems }) {
         editorType="blocker"
         formValues={formValues}
         formError={formError}
+        isSaving={isSaving}
+        onReload={reloadEditor}
         isEditing={isEditing}
         onClose={closeEditor}
         onSubmit={handleEditorSubmit}
@@ -76,6 +83,8 @@ function BlockersSection({ items, setItems, defaultItems }) {
         isOpen={isDeleteConfirmOpen}
         title="Delete Blocker"
         message={deletePrompt}
+        error={deleteError}
+        isConfirming={isDeleting}
         onCancel={closeDeleteConfirm}
         onConfirm={handleConfirmDelete}
         cancelLabel="Cancel"

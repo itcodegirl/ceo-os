@@ -297,7 +297,7 @@ export async function updateOpportunity(id, payload, options = {}) {
   const normalizedPayload = normalizeOpportunity({
     id,
     ...payload,
-    updatedAt: Date.now(),
+    updatedAt: Math.max(Date.now(), (persisted?.updatedAt || 0) + 1),
   });
   const next = replaceRecordById(current, id, normalizedPayload, {
     notFoundMessage: 'Opportunity not found',
@@ -317,25 +317,38 @@ export async function deleteOpportunity(id, options = {}) {
       const userId = await supabase.requireSupabaseUserId();
       assertWorkspaceOwner(options.ownerId);
       if (userId !== options.ownerId) throw accountChangedError();
-      const { error } = await supabaseClient
+      let query = supabaseClient
         .from('opportunities')
         .delete()
         .eq('id', id)
         .eq('user_id', userId);
-      if (error) {
-        throw error;
+      if (Number(options.expectedUpdatedAt) > 0) {
+        query = applyExpectedUpdatedAtFilter(query, options.expectedUpdatedAt);
+        const { data, error } = await query.select('id').maybeSingle();
+        if (error) throw error;
+        if (!data) {
+          // A replay after an acknowledged delete is safe; an updated row is not.
+          const { data: existing, error: lookupError } = await supabaseClient
+            .from('opportunities').select('id').eq('id', id).eq('user_id', userId).maybeSingle();
+          if (lookupError) throw lookupError;
+          if (existing) throw new StaleRecordError('This record changed before it could be deleted.');
+        }
+      } else {
+        const { error } = await query;
+        if (error) throw error;
       }
       notifyOpportunitiesUpdated({ source: 'supabase', type: 'delete' });
     };
 
     await tryRemoteOrEnqueue(
-      { kind: OPPORTUNITY_QUEUE_KIND_DELETE, payload: { id }, options },
+      { kind: OPPORTUNITY_QUEUE_KIND_DELETE, payload: { id, expectedUpdatedAt: options.expectedUpdatedAt }, options },
       attempt,
     );
     return;
   }
 
   const current = readLocalOpportunities();
+  assertRecordIsFresh(current.find((item) => item.id === id), options.expectedUpdatedAt);
   const next = deleteRecordById(current, id, {
     notFoundMessage: 'Opportunity not found',
   });

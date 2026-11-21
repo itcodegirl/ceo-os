@@ -3,6 +3,7 @@ import DeleteConfirmModal from '../ui/DeleteConfirmModal';
 function ContentDeleteConfirmModal({
   isOpen,
   message,
+  error,
   isDeleting = false,
   onCancel,
   onConfirm,
@@ -12,6 +13,7 @@ function ContentDeleteConfirmModal({
       isOpen={isOpen}
       title="Delete Content Item"
       message={message}
+      error={error}
       onCancel={onCancel}
       onConfirm={onConfirm}
       isDeleting={isDeleting}

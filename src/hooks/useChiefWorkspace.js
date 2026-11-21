@@ -1,10 +1,13 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getChiefSource,
   loadChiefWorkspace,
   resetChiefWorkspace,
   saveChiefNotes,
 } from '../lib/chiefRepository';
+import { getWorkspaceOwnerId, assertWorkspaceOwner } from '../lib/workspaceOwnership';
+import { CHIEF_OUTPUT_SAVED_EVENT } from '../lib/chiefLifecycle';
+import { useTextAutosave } from './useTextAutosave';
 import { resolveNextValue } from '../lib/stateUtils';
 
 function resolveNotes(nextNotes) {
@@ -20,8 +23,16 @@ function normalizeWorkspaceResponses(nextResponses) {
 }
 
 export function useChiefWorkspace({ isMountedRef }) {
-  const [notes, setNotesState] = useState('');
+  const ownerId = getWorkspaceOwnerId();
+  const persistNotes = useCallback((value) => {
+    assertWorkspaceOwner(ownerId);
+    return saveChiefNotes(value, { ownerId });
+  }, [ownerId]);
+  const { draft, value: notes, status: notesStatus } = useTextAutosave({
+    resourceKey: `chief-notes:${ownerId}`, save: persistNotes,
+  });
   const [responses, setResponsesState] = useState([]);
+  const responsesRef = useRef([]);
   const [source, setSource] = useState(getChiefSource());
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -41,6 +52,7 @@ export function useChiefWorkspace({ isMountedRef }) {
 
   const loadWorkspace = useCallback(async () => {
     const requestId = beginWorkspaceRequest();
+    const draftRevision = draft.getRevision();
     setIsLoading(true);
     setLoadError('');
 
@@ -51,7 +63,8 @@ export function useChiefWorkspace({ isMountedRef }) {
       }
 
       const workspaceResponses = normalizeWorkspaceResponses(workspace.responses);
-      setNotesState(resolveNotes(workspace.notes));
+      draft.receive(resolveNotes(workspace.notes), draftRevision);
+      responsesRef.current = workspaceResponses;
       setResponsesState(workspaceResponses);
       setSource(workspace.source || getChiefSource());
       return workspaceResponses;
@@ -70,58 +83,45 @@ export function useChiefWorkspace({ isMountedRef }) {
         setIsLoading(false);
       }
     }
-  }, [beginWorkspaceRequest, isMountedRef]);
+  }, [beginWorkspaceRequest, draft, isMountedRef]);
 
   const setResponses = useCallback((nextValue) => {
     invalidatePendingWorkspaceLoad();
-    setResponsesState((currentValue) => {
-      const resolvedValue = resolveNextValue(nextValue, currentValue);
-      return normalizeWorkspaceResponses(resolvedValue);
-    });
+    const next = normalizeWorkspaceResponses(resolveNextValue(nextValue, responsesRef.current));
+    responsesRef.current = next;
+    setResponsesState(next);
+    return next;
   }, [invalidatePendingWorkspaceLoad]);
 
   const setNotes = useCallback((nextNotes) => {
-    invalidatePendingWorkspaceLoad();
-    const normalizedNotes = resolveNotes(nextNotes);
-    setNotesState(normalizedNotes);
-    void saveChiefNotes(normalizedNotes).catch((error) => {
-      setLoadError('Unable to save notes right now.');
-      if (import.meta.env.DEV) {
-        console.error('Failed to persist chief notes', error);
-      }
-    });
-  }, [invalidatePendingWorkspaceLoad]);
+    draft.set(resolveNotes(nextNotes));
+  }, [draft]);
 
   const appendPrompt = useCallback((value) => {
-    const normalizedPrompt = resolveNotes(value).trim();
-    if (!normalizedPrompt) {
-      return;
-    }
+    const prompt = resolveNotes(value).trim();
+    if (!prompt) return;
+    const existing = draft.getSnapshot().value.trimEnd();
+    draft.set(existing ? `${existing}\n\n${prompt}` : prompt);
+  }, [draft]);
 
-    invalidatePendingWorkspaceLoad();
-    setNotesState((existing) => {
-      const normalizedExisting = resolveNotes(existing).trimEnd();
-      const next = normalizedExisting ? `${normalizedExisting}\n\n${normalizedPrompt}` : normalizedPrompt;
-      void saveChiefNotes(next).catch((error) => {
-        setLoadError('Unable to save notes right now.');
-        if (import.meta.env.DEV) {
-          console.error('Failed to persist chief notes', error);
-        }
-      });
-      return next;
-    });
-  }, [invalidatePendingWorkspaceLoad]);
+  useEffect(() => {
+    const refresh = () => { void loadWorkspace(); };
+    window.addEventListener(CHIEF_OUTPUT_SAVED_EVENT, refresh);
+    return () => window.removeEventListener(CHIEF_OUTPUT_SAVED_EVENT, refresh);
+  }, [loadWorkspace]);
 
   const clearWorkspace = useCallback(async () => {
     const requestId = invalidatePendingWorkspaceLoad();
 
     try {
+      await draft.flush();
       await resetChiefWorkspace();
       if (!isMountedRef.current || requestId !== requestIdRef.current) {
         return false;
       }
 
-      setNotesState('');
+      draft.clear();
+      responsesRef.current = [];
       setResponsesState([]);
       setLoadError('');
       return true;
@@ -136,10 +136,12 @@ export function useChiefWorkspace({ isMountedRef }) {
       }
       return false;
     }
-  }, [invalidatePendingWorkspaceLoad, isMountedRef]);
+  }, [draft, invalidatePendingWorkspaceLoad, isMountedRef]);
 
   return {
     notes,
+    notesStatus,
+    retryNotes: draft.flush,
     responses,
     source,
     isLoading,

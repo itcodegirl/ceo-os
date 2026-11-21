@@ -326,7 +326,7 @@ describe('useChiefOfStaff', () => {
     expect(createChiefSession).toHaveBeenCalledWith({
       actionKey: 'summarize',
       notes: 'Status update: closed 3 opportunities',
-    });
+    }, expect.objectContaining({ ownerId: '' }));
     expect(saveChiefOutput).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-1',
       outputType: 'response',
@@ -336,7 +336,7 @@ describe('useChiefOfStaff', () => {
       fallbackReason: 'AI generation is unavailable; this is a local template fallback.',
       errorCode: 'OPENAI_API_KEY_MISSING',
       errorMessage: 'OPENAI_API_KEY is not configured on the server',
-    }));
+    }), expect.objectContaining({ ownerId: '' }));
     expect(result.current.feedback).toBe('AI unavailable. Saved local fallback: summarize title. Review before using.');
     expect(result.current.hasHistory).toBe(true);
   });

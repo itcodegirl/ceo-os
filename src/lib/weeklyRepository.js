@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { isDemoWorkspaceEnabled } from './workspaceSetup';
 import {
   DEFAULT_REVIEW_NOTES,
@@ -486,7 +487,9 @@ export async function saveWeeklyBriefReviewNotes({
   weekStart = getCurrentWeekStart(),
   reviewNotes = DEFAULT_REVIEW_NOTES,
   emitEvent = true,
+  ownerId = getWorkspaceOwnerId(),
 }) {
+  assertWorkspaceOwner(ownerId);
   const normalizedWeekStart = typeof weekStart === 'string' && weekStart
     ? weekStart
     : getCurrentWeekStart();
@@ -498,6 +501,8 @@ export async function saveWeeklyBriefReviewNotes({
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
   if (supabaseClient) {
     const userId = await supabase.requireSupabaseUserId();
+    assertWorkspaceOwner(ownerId);
+    if (userId !== ownerId) throw accountChangedError();
     const { error } = await supabaseClient
       .from('weekly_briefs')
       .upsert(
@@ -523,6 +528,7 @@ export async function saveWeeklyBriefReviewNotes({
     return normalizedReviewNotes;
   }
 
+  assertWorkspaceOwner(ownerId);
   updateLocalWeekPayload(normalizedWeekStart, (current) => ({
     ...current,
     reviewNotes: normalizedReviewNotes,
@@ -544,7 +550,9 @@ export async function createWeeklyItem({
   item,
   sortOrder = 0,
   emitEvent = true,
+  ownerId,
 }) {
+  if (ownerId !== undefined) assertWorkspaceOwner(ownerId);
   const normalizedWeekStart = typeof weekStart === 'string' && weekStart
     ? weekStart
     : getCurrentWeekStart();
@@ -553,6 +561,7 @@ export async function createWeeklyItem({
 
   const supabase = await getSupabaseRuntime();
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
+  if (ownerId !== undefined) assertWorkspaceOwner(ownerId);
   if (supabaseClient) {
     const { userId, brief } = await getSupabaseBriefRow({
       supabase,
@@ -560,6 +569,10 @@ export async function createWeeklyItem({
       weekStart: normalizedWeekStart,
       createIfMissing: true,
     });
+    if (ownerId !== undefined) {
+      assertWorkspaceOwner(ownerId);
+      if (userId !== ownerId) throw accountChangedError();
+    }
     const normalizedItem = normalizeItem(normalizedType, item);
 
     const { data, error } = await supabaseClient
@@ -617,8 +630,10 @@ export async function updateWeeklyItem({
   item,
   sortOrder = 0,
   emitEvent = true,
+  ownerId,
   expectedUpdatedAt,
 }) {
+  if (ownerId !== undefined) assertWorkspaceOwner(ownerId);
   const normalizedWeekStart = typeof weekStart === 'string' && weekStart
     ? weekStart
     : getCurrentWeekStart();
@@ -628,8 +643,13 @@ export async function updateWeeklyItem({
 
   const supabase = await getSupabaseRuntime();
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
+  if (ownerId !== undefined) assertWorkspaceOwner(ownerId);
   if (supabaseClient) {
     const userId = await supabase.requireSupabaseUserId();
+    if (ownerId !== undefined) {
+      assertWorkspaceOwner(ownerId);
+      if (userId !== ownerId) throw accountChangedError();
+    }
     const normalizedItem = normalizeItem(normalizedType, { ...item, id: normalizedItemId });
 
     let query = supabaseClient
@@ -684,7 +704,7 @@ export async function updateWeeklyItem({
       'This weekly item was changed in another window. Reload to see the latest version before saving.',
     );
 
-    const itemWithStamp = { ...item, id: normalizedItemId, updatedAt: stamp };
+    const itemWithStamp = { ...item, id: normalizedItemId, updatedAt: Math.max(stamp, (persisted?.updatedAt || 0) + 1) };
     const updatedCollection = current[descriptor.collectionKey].map((currentItem) => {
       if (String(currentItem.id) !== normalizedItemId) {
         return currentItem;
@@ -719,8 +739,10 @@ export async function deleteWeeklyItem({
   itemType,
   itemId,
   emitEvent = true,
+  ownerId,
   expectedUpdatedAt,
 }) {
+  if (ownerId !== undefined) assertWorkspaceOwner(ownerId);
   const normalizedWeekStart = typeof weekStart === 'string' && weekStart
     ? weekStart
     : getCurrentWeekStart();
@@ -730,8 +752,13 @@ export async function deleteWeeklyItem({
 
   const supabase = await getSupabaseRuntime();
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
+  if (ownerId !== undefined) assertWorkspaceOwner(ownerId);
   if (supabaseClient) {
     const userId = await supabase.requireSupabaseUserId();
+    if (ownerId !== undefined) {
+      assertWorkspaceOwner(ownerId);
+      if (userId !== ownerId) throw accountChangedError();
+    }
     let query = supabaseClient
       .from('weekly_brief_items')
       .delete()

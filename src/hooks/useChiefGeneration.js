@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { generateChiefOfStaffResponse, getChiefActionTitle } from '../lib/openai';
 import { createChiefSession, saveChiefOutput } from '../lib/chiefRepository';
 import { FEEDBACK_KIND } from '../lib/chiefFeedback';
+import { captureChiefWorkspace, assertChiefWorkspace } from '../lib/chiefLifecycle';
 import { buildCreateId } from '../lib/utils';
 
 export function useChiefGeneration({
@@ -23,9 +24,10 @@ export function useChiefGeneration({
   onAfterResponseSaved,
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const generatingRef = useRef(false);
 
   const handleAction = useCallback(async (actionKey) => {
-    if (isGenerating) {
+    if (generatingRef.current) {
       return;
     }
 
@@ -37,6 +39,8 @@ export function useChiefGeneration({
       return;
     }
 
+    generatingRef.current = true;
+    const workspace = captureChiefWorkspace();
     setIsGenerating(true);
     pushFeedback(FEEDBACK_KIND.progress, 'Generating a new draft for your current notes.');
     setLoadError('');
@@ -51,7 +55,7 @@ export function useChiefGeneration({
       const session = await createChiefSession({
         actionKey,
         notes: notesText,
-      });
+      }, workspace);
 
       const nextResponse = await generateChiefOfStaffResponse({
         actionKey,
@@ -59,11 +63,10 @@ export function useChiefGeneration({
         correlationId,
       });
 
-      if (!isMountedRef.current) {
-        return;
-      }
+      assertChiefWorkspace(workspace);
 
       if (!nextResponse.content) {
+        if (!isMountedRef.current) return;
         pushFeedback(FEEDBACK_KIND.error, 'No output generated. Add more context and try again.');
         trackTelemetry('generate_completed_empty', {
           actionKey,
@@ -84,17 +87,13 @@ export function useChiefGeneration({
         fallbackReason: nextResponse.fallbackReason || '',
         errorCode: nextResponse.errorCode || '',
         errorMessage: nextResponse.errorMessage || '',
-      });
+      }, workspace);
 
       if (!isMountedRef.current) {
         return;
       }
 
-      let updatedResponses = [];
-      setResponses((current) => {
-        updatedResponses = [savedOutput, ...current];
-        return updatedResponses;
-      });
+      const updatedResponses = setResponses((current) => [savedOutput, ...current.filter((item) => item.id !== savedOutput.id)]);
 
       if (typeof onAfterResponseSaved === 'function') {
         try {
@@ -149,6 +148,7 @@ export function useChiefGeneration({
         correlationId,
       });
     } finally {
+      generatingRef.current = false;
       if (isMountedRef.current) {
         setIsGenerating(false);
       }
@@ -157,7 +157,6 @@ export function useChiefGeneration({
     canGenerate,
     hasNotes,
     isMountedRef,
-    isGenerating,
     notesText,
     onAfterResponseSaved,
     pushFeedback,

@@ -3,7 +3,7 @@ import SectionCard from '../ui/SectionCard';
 import ConfirmModal from '../ui/ConfirmModal';
 import EmptyHint from '../ui/EmptyHint';
 import WeeklyTextList from './WeeklyTextList';
-import WeeklyEditorModal from './WeeklyEditorModal';
+import WeeklyEditorModal from './LazyWeeklyEditorModal';
 import { useWeeklySectionEditor } from '../../hooks/useWeeklySectionEditor';
 
 function WinsSection({ items, setItems, defaultItems }) {
@@ -13,13 +13,17 @@ function WinsSection({ items, setItems, defaultItems }) {
   // The README narrates this cross-feature connection but only two of the
   // three Weekly Brief sections were communicating it back to the user.
   const [impactMessage, setImpactMessage] = useState('');
-  const setWinItems = useCallback((nextValue) => {
-    setItems(nextValue);
+  const setWinItems = useCallback(async (nextValue, options) => {
+    await setItems(nextValue, options);
     setImpactMessage('This shows up as your Focus Home quick-win and momentum signal.');
   }, [setItems]);
   const {
     formValues,
     formError,
+    isSaving,
+    isDeleting,
+    deleteError,
+    reloadEditor,
     isEditorOpen,
     isEditing,
     isDeleteConfirmOpen,
@@ -36,6 +40,7 @@ function WinsSection({ items, setItems, defaultItems }) {
   } = useWeeklySectionEditor({
     type: 'win',
     defaultItems,
+    items,
     setItems: setWinItems,
   });
 
@@ -72,6 +77,8 @@ function WinsSection({ items, setItems, defaultItems }) {
         editorType="win"
         formValues={formValues}
         formError={formError}
+        isSaving={isSaving}
+        onReload={reloadEditor}
         isEditing={isEditing}
         onClose={closeEditor}
         onSubmit={handleEditorSubmit}
@@ -82,6 +89,8 @@ function WinsSection({ items, setItems, defaultItems }) {
         isOpen={isDeleteConfirmOpen}
         title="Delete Win"
         message={deletePrompt}
+        error={deleteError}
+        isConfirming={isDeleting}
         onCancel={closeDeleteConfirm}
         onConfirm={handleConfirmDelete}
         cancelLabel="Cancel"

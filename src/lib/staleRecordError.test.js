@@ -60,9 +60,9 @@ describe('assertRecordIsFresh', () => {
     )).not.toThrow();
   });
 
-  it('skips the check when expectedUpdatedAt is missing or non-positive', () => {
+  it('skips missing revisions but protects an explicitly observed legacy revision', () => {
     expect(() => assertRecordIsFresh({ updatedAt: 1700000000000 }, undefined)).not.toThrow();
-    expect(() => assertRecordIsFresh({ updatedAt: 1700000000000 }, 0)).not.toThrow();
+    expect(() => assertRecordIsFresh({ updatedAt: 1700000000000 }, 0)).toThrow(StaleRecordError);
     expect(() => assertRecordIsFresh({ updatedAt: 1700000000000 }, -5)).not.toThrow();
     expect(() => assertRecordIsFresh({ updatedAt: 1700000000000 }, 'NaN')).not.toThrow();
   });

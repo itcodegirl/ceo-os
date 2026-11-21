@@ -89,7 +89,7 @@ describe('useCrudPage', () => {
       await result.current.handleConfirmDeleteSelected();
     });
 
-    expect(deleteItem).toHaveBeenCalledWith('2');
+    expect(deleteItem).toHaveBeenCalledWith('2', { expectedUpdatedAt: 0 });
     expect(result.current.items.find((item) => item.id === '2')).toBeUndefined();
     expect(result.current.selectedItem).toBeNull();
   });
@@ -392,8 +392,8 @@ describe('useCrudPage', () => {
       await result.current.handleConfirmDeleteSelected();
     });
 
-    expect(deleteItem).toHaveBeenCalledWith('1');
-    expect(result.current.loadError).toBe('Unable to delete this record right now.');
+    expect(deleteItem).toHaveBeenCalledWith('1', { expectedUpdatedAt: 0 });
+    expect(result.current.deleteError).toBe('Unable to delete this record right now.');
     expect(result.current.isDeleteConfirmOpen).toBe(true);
     expect(result.current.selectedItem).toEqual({ id: '1', name: 'Opportunity A' });
     expect(result.current.items).toEqual([{ id: '1', name: 'Opportunity A' }]);

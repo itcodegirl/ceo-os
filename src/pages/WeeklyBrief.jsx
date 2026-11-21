@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import Button from '../components/ui/Button';
 import SectionCard from '../components/ui/SectionCard';
 import PageHeader from '../components/ui/PageHeader';
 import SummaryCards from '../components/ui/SummaryCards';
@@ -19,13 +19,11 @@ import { buildAutosaveHelperText, buildSourceNotice } from '../lib/uiCopy';
 import '../styles/forms.css';
 import '../styles/weekly.css';
 
-const REVIEW_NOTES_DEBOUNCE_MS = 600;
-
 function describeReviewNotesStatus({ status, hasPending, hasError }) {
   if (hasError) {
-    return { tone: 'error', text: 'Couldn’t save your reflection. We’ll keep trying.' };
+    return { tone: 'error', text: 'Couldn’t save your reflection. Your draft is kept here; retry to save it.' };
   }
-  if (hasPending || status === 'saving') {
+  if (hasPending || status === 'dirty' || status === 'saving') {
     return { tone: 'saving', text: 'Saving your reflection…' };
   }
   if (status === 'saved') {
@@ -36,11 +34,13 @@ function describeReviewNotesStatus({ status, hasPending, hasError }) {
 
 function WeeklyBrief() {
   const {
+    weekStart,
     source,
     isLoading,
     loadError,
     reviewNotes,
     reviewNotesStatus,
+    retryReviewNotes,
     priorities,
     wins,
     blockers,
@@ -60,45 +60,10 @@ function WeeklyBrief() {
     pausedText: 'Autosave is paused until the weekly brief saves successfully again.',
   });
 
-  // Debounced review-notes autosave. Local draft mirrors the input synchronously
-  // so typing stays instant; commits to the hook fire 600ms after the last keystroke.
-  const [reviewNotesDraft, setReviewNotesDraft] = useState(reviewNotes);
-  const draftRef = useRef(reviewNotes);
-  const debounceTimerRef = useRef(null);
-  const [hasPendingSave, setHasPendingSave] = useState(false);
-
-  useEffect(() => {
-    if (reviewNotesStatus !== 'saving' && reviewNotes !== draftRef.current) {
-      draftRef.current = reviewNotes;
-      setReviewNotesDraft(reviewNotes);
-    }
-  }, [reviewNotes, reviewNotesStatus]);
-
-  useEffect(() => () => {
-    if (debounceTimerRef.current) {
-      window.clearTimeout(debounceTimerRef.current);
-    }
-  }, []);
-
-  const handleReviewNotesChange = (event) => {
-    const value = event.target.value;
-    draftRef.current = value;
-    setReviewNotesDraft(value);
-    setHasPendingSave(true);
-    if (debounceTimerRef.current) {
-      window.clearTimeout(debounceTimerRef.current);
-    }
-    debounceTimerRef.current = window.setTimeout(() => {
-      debounceTimerRef.current = null;
-      setHasPendingSave(false);
-      setReviewNotes(draftRef.current);
-    }, REVIEW_NOTES_DEBOUNCE_MS);
-  };
-
   const reviewNotesStatusDescriptor = describeReviewNotesStatus({
     status: reviewNotesStatus,
-    hasPending: hasPendingSave,
-    hasError: Boolean(loadError) || reviewNotesStatus === 'error',
+
+    hasError: reviewNotesStatus === 'error',
   });
 
   return (
@@ -158,8 +123,8 @@ function WeeklyBrief() {
             className="form-field weekly-review-notes__field"
             labelClassName="form-field__label"
             controlClassName="weekly-review-notes__control"
-            value={reviewNotesDraft}
-            onChange={handleReviewNotesChange}
+            value={reviewNotes}
+            onChange={(event) => setReviewNotes(event.target.value)}
             rows={5}
             placeholder="Two or three honest sentences: what moved, what stalled, what surprised you. No need to make it tidy."
           />
@@ -173,22 +138,24 @@ function WeeklyBrief() {
               {reviewNotesStatusDescriptor.text}
             </p>
           ) : null}
-          <p className="helper-text" aria-live="polite">{reviewNotesHelper}</p>
+          {reviewNotesStatus === 'error' ? (
+            <Button type="button" onClick={retryReviewNotes}>Retry saving reflection</Button>
+          ) : <p className="helper-text" aria-live="polite">{reviewNotesHelper}</p>}
         </SectionCard>
 
-        <WinsSection
+        <WinsSection key={`${weekStart}-WinsSection`}
           items={winItems}
           setItems={setWins}
           defaultItems={defaultWins}
         />
 
-        <BlockersSection
+        <BlockersSection key={`${weekStart}-BlockersSection`}
           items={blockerItems}
           setItems={setBlockers}
           defaultItems={defaultBlockers}
         />
 
-        <PrioritiesSection
+        <PrioritiesSection key={`${weekStart}-PrioritiesSection`}
           items={priorityItems}
           setItems={setPriorities}
           defaultItems={defaultPriorities}
@@ -199,7 +166,7 @@ function WeeklyBrief() {
         priorities={priorityItems}
         wins={winItems}
         blockers={blockerItems}
-        reviewNotes={reviewNotesDraft}
+        reviewNotes={reviewNotes}
       />
     </section>
   );

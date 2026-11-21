@@ -69,6 +69,7 @@ function OpportunityCrudPage() {
     handleCloseDeleteConfirm,
     handleConfirmDeleteSelected,
     deletePrompt,
+    deleteError,
   } = useCrudPage({
     defaultFormValues: DEFAULT_FORM,
     listItems: listOpportunities,
@@ -236,6 +237,7 @@ function OpportunityCrudPage() {
             <OpportunityDeleteConfirmModal
               isOpen={isDeleteConfirmOpen}
               message={deletePrompt}
+              error={deleteError}
               onCancel={handleCloseDeleteConfirm}
               onConfirm={handleConfirmDeleteSelected}
               isDeleting={isDeleting}

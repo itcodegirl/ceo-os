@@ -45,6 +45,8 @@ export function useChiefOfStaff() {
 
   const {
     notes,
+    notesStatus,
+    retryNotes,
     responses,
     source,
     isLoading,
@@ -127,7 +129,7 @@ export function useChiefOfStaff() {
   }, [refreshWorkspace]);
 
   useEffect(() => {
-    if (!notesText || isGenerating) {
+    if (!notesText || notesStatus !== 'saved' || isGenerating) {
       return undefined;
     }
 
@@ -140,7 +142,7 @@ export function useChiefOfStaff() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isGenerating, notesText, softUpdateFeedback]);
+  }, [isGenerating, notesStatus, notesText, softUpdateFeedback]);
 
   const handleClearWorkspace = useCallback(async () => {
     const didClear = await clearWorkspace();
@@ -156,6 +158,8 @@ export function useChiefOfStaff() {
   return useMemo(
     () => ({
       notes: notesText,
+      notesStatus,
+      retryNotes,
       responses,
       // Surface the bare text on `feedback` (keeps the long-standing public
       // shape that callers and tests rely on) and the structural metadata on
@@ -182,6 +186,8 @@ export function useChiefOfStaff() {
     }),
     [
       notesText,
+      notesStatus,
+      retryNotes,
       responses,
       feedbackState.text,
       feedbackState.kind,

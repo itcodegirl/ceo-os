@@ -16,7 +16,10 @@ import {
   DEFAULT_REVIEW_NOTES,
 } from '../lib/weeklyData';
 import { resolveNextValue, shallowEqualRecordArrays, shallowEqualRecords } from '../lib/stateUtils';
-import { isStaleRecordError } from '../lib/staleRecordError';
+import { getWorkspaceOwnerId, assertWorkspaceOwner } from '../lib/workspaceOwnership';
+import { useTextAutosave } from './useTextAutosave';
+import { enqueueTextWrite } from '../lib/textAutosave';
+import { isStaleRecordError, StaleRecordError } from '../lib/staleRecordError';
 
 const STALE_RECORD_MESSAGE = 'A weekly item was changed in another window. We pulled the latest version. Try your edit again.';
 
@@ -47,8 +50,14 @@ export function useWeeklyBrief() {
   const [source, setSource] = useState(resolveWeeklySource());
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [reviewNotes, setReviewNotesState] = useState(DEFAULT_REVIEW_NOTES);
-  const [reviewNotesStatus, setReviewNotesStatus] = useState('idle');
+  const ownerId = getWorkspaceOwnerId();
+  const saveNotes = useCallback((value) => {
+    assertWorkspaceOwner(ownerId);
+    return saveWeeklyBriefReviewNotes({ weekStart, reviewNotes: value, ownerId });
+  }, [ownerId, weekStart]);
+  const { draft: reviewDraft, value: reviewNotes, status: reviewNotesStatus } = useTextAutosave({
+    resourceKey: `weekly:${ownerId}:${weekStart}`, save: saveNotes,
+  });
   const [priorities, setPrioritiesState] = useState([]);
   const [wins, setWinsState] = useState([]);
   const [blockers, setBlockersState] = useState([]);
@@ -59,7 +68,6 @@ export function useWeeklyBrief() {
   // the updaters means React 18 StrictMode's dev-only double-invocation of
   // updaters can't fire duplicate writes. Every place that commits one of these
   // values updates both the state and its ref in lock-step.
-  const reviewNotesRef = useRef(reviewNotes);
   const prioritiesRef = useRef(priorities);
   const winsRef = useRef(wins);
   const blockersRef = useRef(blockers);
@@ -93,6 +101,7 @@ export function useWeeklyBrief() {
   }, []);
 
   const loadWeeklyBrief = useCallback(async ({ silent = false } = {}) => {
+    const draftRevision = reviewDraft.getRevision();
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
@@ -122,10 +131,7 @@ export function useWeeklyBrief() {
       setLoadError('');
       setSource((current) => (current === nextSource ? current : nextSource));
 
-      if (reviewNotesRef.current !== nextReviewNotes) {
-        reviewNotesRef.current = nextReviewNotes;
-        setReviewNotesState(nextReviewNotes);
-      }
+      reviewDraft.receive(nextReviewNotes, draftRevision);
       if (!shallowEqualRecordArrays(prioritiesRef.current, nextPriorities)) {
         prioritiesRef.current = nextPriorities;
         setPrioritiesState(nextPriorities);
@@ -152,7 +158,7 @@ export function useWeeklyBrief() {
         setIsLoading(false);
       }
     }
-  }, [isMountedRef, weekStart]);
+  }, [isMountedRef, reviewDraft, weekStart]);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -194,10 +200,15 @@ export function useWeeklyBrief() {
     void loadWeeklyBrief({ silent: true });
   }, [loadWeeklyBrief]);
 
-  const persistCollectionDiff = useCallback(async (itemType, previousItems, nextItems) => {
+  const persistCollectionDiff = useCallback(async (itemType, previousItems, nextItems, options = {}) => {
+    assertWorkspaceOwner(ownerId);
+    if (options.itemId && !previousItems.some((item) => String(item.id) === String(options.itemId))) {
+      throw new StaleRecordError('This item was removed in another window. Your draft is still here.');
+    }
     const previousMap = new Map(previousItems.map((item) => [String(item.id), item]));
     const nextMap = new Map(nextItems.map((item) => [String(item.id), item]));
     let hasChanges = false;
+    const persistedItems = [...nextItems];
 
     const deletedItems = [];
     previousMap.forEach((item, id) => {
@@ -208,13 +219,14 @@ export function useWeeklyBrief() {
 
     for (let index = 0; index < deletedItems.length; index += 1) {
       const deletedItem = deletedItems[index];
-      const expectedUpdatedAt = Number(deletedItem?.updatedAt);
+      const expectedUpdatedAt = Number(options.itemId === String(deletedItem.id) ? options.expectedUpdatedAt : deletedItem?.updatedAt);
       await deleteWeeklyItem({
         weekStart,
+        ownerId,
         itemType,
         itemId: String(deletedItem.id),
         emitEvent: false,
-        ...(Number.isFinite(expectedUpdatedAt) && expectedUpdatedAt > 0
+        ...(Number.isFinite(expectedUpdatedAt) && expectedUpdatedAt >= 0
           ? { expectedUpdatedAt }
           : {}),
       });
@@ -227,30 +239,34 @@ export function useWeeklyBrief() {
       const previousItem = previousMap.get(nextId);
 
       if (!previousItem) {
-        await createWeeklyItem({
+        const saved = await createWeeklyItem({
           weekStart,
+          ownerId,
           itemType,
           item: nextItem,
           sortOrder: index,
           emitEvent: false,
         });
+        if (saved) persistedItems[index] = saved;
         hasChanges = true;
         continue;
       }
 
       if (!shallowEqualRecords(previousItem, nextItem)) {
-        const expectedUpdatedAt = Number(previousItem?.updatedAt);
-        await updateWeeklyItem({
+        const expectedUpdatedAt = Number(options.itemId === nextId ? options.expectedUpdatedAt : previousItem?.updatedAt);
+        const saved = await updateWeeklyItem({
           weekStart,
+          ownerId,
           itemType,
           itemId: nextId,
           item: nextItem,
           sortOrder: index,
           emitEvent: false,
-          ...(Number.isFinite(expectedUpdatedAt) && expectedUpdatedAt > 0
+          ...(Number.isFinite(expectedUpdatedAt) && expectedUpdatedAt >= 0
             ? { expectedUpdatedAt }
             : {}),
         });
+        if (saved) persistedItems[index] = saved;
         hasChanges = true;
       }
     }
@@ -263,46 +279,20 @@ export function useWeeklyBrief() {
         itemType,
       });
     }
-  }, [weekStart]);
+    return persistedItems;
+  }, [ownerId, weekStart]);
 
   const setReviewNotes = useCallback((nextValue) => {
-    const currentValue = reviewNotesRef.current;
-    const resolvedValue = resolveNextValue(nextValue, currentValue);
-    const normalizedValue = typeof resolvedValue === 'string' ? resolvedValue : DEFAULT_REVIEW_NOTES;
-
-    // Commit the optimistic value first (state + ref), then persist. Persistence
-    // lives outside the updater so a StrictMode double-invoke can't double-save.
-    reviewNotesRef.current = normalizedValue;
-    setReviewNotesState(normalizedValue);
-    setReviewNotesStatus('saving');
-
-    Promise.resolve(saveWeeklyBriefReviewNotes({
-      weekStart,
-      reviewNotes: normalizedValue,
-    }))
-      .then(() => {
-        if (isMountedRef.current) {
-          setReviewNotesStatus('saved');
-        }
-      })
-      .catch((error) => {
-        if (isMountedRef.current) {
-          setReviewNotesStatus('error');
-        }
-        recoverAfterPersistenceFailure(
-          'Unable to save weekly review notes right now.',
-          'Failed to save weekly review notes',
-          error,
-        );
-      });
-  }, [isMountedRef, recoverAfterPersistenceFailure, weekStart]);
+    const resolved = resolveNextValue(nextValue, reviewDraft.getSnapshot().value);
+    reviewDraft.set(typeof resolved === 'string' ? resolved : DEFAULT_REVIEW_NOTES);
+  }, [reviewDraft]);
 
   // Shared implementation for the three collection setters. Reads the previous
   // value from the ref, commits the optimistic next value (state + ref), then
   // diffs and persists — all outside any setState updater so StrictMode's
   // double-invoke can't fire duplicate writes. On failure it recovers from the
   // persisted state via a silent reload.
-  const commitCollection = useCallback((ref, setState, itemType, nextValue, errorMessage, logLabel) => {
+  const commitCollection = useCallback((ref, setState, itemType, nextValue, errorMessage, logLabel, options) => {
     const currentValue = ref.current;
     const resolvedValue = resolveNextValue(nextValue, currentValue);
     const normalizedValue = normalizeArrayValue(resolvedValue, []);
@@ -310,45 +300,56 @@ export function useWeeklyBrief() {
     ref.current = normalizedValue;
     setState(normalizedValue);
 
-    void persistCollectionDiff(itemType, currentValue, normalizedValue).catch((error) => {
+    return enqueueTextWrite(`weekly-items:${ownerId}:${weekStart}:${itemType}`, () =>
+      persistCollectionDiff(itemType, currentValue, normalizedValue, options)).then((persisted) => {
+      if (ref.current === normalizedValue) {
+        ref.current = persisted;
+        if (isMountedRef.current) setState(persisted);
+      }
+    }).catch((error) => {
+      if (ref.current === normalizedValue) { ref.current = currentValue; setState(currentValue); }
       recoverAfterPersistenceFailure(
         isStaleRecordError(error) ? STALE_RECORD_MESSAGE : errorMessage,
         logLabel,
         error,
       );
+      throw error;
     });
-  }, [persistCollectionDiff, recoverAfterPersistenceFailure]);
+  }, [isMountedRef, ownerId, weekStart, persistCollectionDiff, recoverAfterPersistenceFailure]);
 
-  const setPriorities = useCallback((nextValue) => {
-    commitCollection(
+  const setPriorities = useCallback((nextValue, options) => {
+    return commitCollection(
       prioritiesRef,
       setPrioritiesState,
       'priority',
       nextValue,
       'Unable to save weekly priorities right now.',
       'Failed to persist weekly priorities',
+      options,
     );
   }, [commitCollection]);
 
-  const setWins = useCallback((nextValue) => {
-    commitCollection(
+  const setWins = useCallback((nextValue, options) => {
+    return commitCollection(
       winsRef,
       setWinsState,
       'win',
       nextValue,
       'Unable to save weekly wins right now.',
       'Failed to persist weekly wins',
+      options,
     );
   }, [commitCollection]);
 
-  const setBlockers = useCallback((nextValue) => {
-    commitCollection(
+  const setBlockers = useCallback((nextValue, options) => {
+    return commitCollection(
       blockersRef,
       setBlockersState,
       'blocker',
       nextValue,
       'Unable to save weekly blockers right now.',
       'Failed to persist weekly blockers',
+      options,
     );
   }, [commitCollection]);
 
@@ -359,6 +360,7 @@ export function useWeeklyBrief() {
     loadError,
     reviewNotes,
     reviewNotesStatus,
+    retryReviewNotes: reviewDraft.flush,
     priorities,
     wins,
     blockers,

@@ -1,3 +1,6 @@
+import { captureChiefWorkspace, assertChiefWorkspace, invalidateChiefWorkspace, CHIEF_OUTPUT_SAVED_EVENT } from './chiefLifecycle';
+import { enqueueTextWrite } from './textAutosave';
+import { assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { buildCreateId } from './utils';
 import { getSupabaseRuntime, isSupabaseRuntimeEnabled } from './supabaseRuntime';
 import { STORAGE_DOMAINS, readVersionedStoragePayload } from './dataSchema';
@@ -124,6 +127,7 @@ async function writeLatestSupabaseChiefNotes({
   supabase,
   supabaseClient,
   notes,
+  context,
 }) {
   const userId = await supabase.requireSupabaseUserId();
   const { data: latestSession, error: lookupError } = await supabaseClient
@@ -138,6 +142,7 @@ async function writeLatestSupabaseChiefNotes({
     throw lookupError;
   }
 
+  assertChiefWorkspace(context);
   const sessionId = normalizeSupabaseId(latestSession?.id);
   if (!sessionId) {
     const { error: insertError } = await supabaseClient
@@ -168,25 +173,35 @@ async function writeLatestSupabaseChiefNotes({
   return true;
 }
 
-async function withSupabaseAuthFallback(operation, localFallback) {
+async function withSupabaseAuthFallback(operation, localFallback, context = captureChiefWorkspace()) {
+  const local = () => { assertChiefWorkspace(context); return localFallback(); };
+  assertChiefWorkspace(context);
   if (!isSupabaseRuntimeEnabled) {
-    return localFallback();
+    return local();
   }
 
   const supabase = await getSupabaseRuntime();
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
   if (!supabaseClient) {
-    return localFallback();
+    return local();
   }
 
   try {
     return await operation({
-      supabase,
+      supabase: {
+        ...supabase,
+        requireSupabaseUserId: async () => {
+          const userId = await supabase.requireSupabaseUserId();
+          assertChiefWorkspace(context);
+          if (userId !== context.ownerId) throw accountChangedError();
+          return userId;
+        },
+      },
       supabaseClient,
     });
   } catch (error) {
     if (isSupabaseAuthError(error)) {
-      return localFallback();
+      return local();
     }
     throw error;
   }
@@ -248,7 +263,9 @@ export async function loadChiefWorkspace() {
   );
 }
 
-export async function saveChiefNotes(notes) {
+export async function saveChiefNotes(notes, { ownerId = captureChiefWorkspace().ownerId } = {}) {
+  assertWorkspaceOwner(ownerId);
+  const context = captureChiefWorkspace();
   const normalizedNotes = typeof notes === 'string' ? notes : '';
   writeLocalChiefNotes(normalizedNotes);
 
@@ -258,14 +275,16 @@ export async function saveChiefNotes(notes) {
         supabase,
         supabaseClient,
         notes: normalizedNotes,
+        context,
       });
       return normalizedNotes;
     },
     () => normalizedNotes,
+    context,
   );
 }
 
-export async function createChiefSession({ actionKey, notes }) {
+export async function createChiefSession({ actionKey, notes }, context = captureChiefWorkspace()) {
   const normalizedActionKey = typeof actionKey === 'string' ? actionKey : '';
   const normalizedNotes = typeof notes === 'string' ? notes : '';
 
@@ -292,16 +311,26 @@ export async function createChiefSession({ actionKey, notes }) {
       };
     },
     () => {
-      writeLocalChiefNotes(normalizedNotes);
       return {
         id: buildCreateId(),
         source: 'local',
       };
     },
+    context,
   );
 }
 
-export async function saveChiefOutput({
+export function saveChiefOutput(payload, context = captureChiefWorkspace()) {
+  return enqueueTextWrite(`chief-output:${context.ownerId}`, async () => {
+    assertChiefWorkspace(context);
+    const saved = await persistChiefOutput(payload, context);
+    assertChiefWorkspace(context);
+    window.dispatchEvent(new Event(CHIEF_OUTPUT_SAVED_EVENT));
+    return saved;
+  });
+}
+
+async function persistChiefOutput({
   sessionId,
   outputType = 'response',
   title,
@@ -311,7 +340,7 @@ export async function saveChiefOutput({
   fallbackReason = '',
   errorCode = '',
   errorMessage = '',
-}) {
+}, context) {
   const normalizedOutput = normalizeChiefResponse({
     id: buildCreateId(),
     title,
@@ -364,10 +393,17 @@ export async function saveChiefOutput({
       writeLocalChiefResponses(next);
       return normalizedOutput;
     },
+    context,
   );
 }
 
-export async function resetChiefWorkspace() {
+export function resetChiefWorkspace() {
+  invalidateChiefWorkspace();
+  const context = captureChiefWorkspace();
+  return enqueueTextWrite(`chief-output:${context.ownerId}`, () => clearChiefWorkspace(context));
+}
+
+async function clearChiefWorkspace(context) {
   return withSupabaseAuthFallback(
     async ({ supabase, supabaseClient }) => {
       const userId = await supabase.requireSupabaseUserId();
@@ -402,5 +438,6 @@ export async function resetChiefWorkspace() {
         // best-effort: a failed remove on one key shouldn't crash the reset.
       }
     },
+    context,
   );
 }

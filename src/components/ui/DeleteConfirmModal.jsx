@@ -4,6 +4,7 @@ function DeleteConfirmModal({
   isOpen,
   title = 'Confirm Delete',
   message,
+  error,
   onCancel,
   onConfirm,
   isDeleting = false,
@@ -13,6 +14,7 @@ function DeleteConfirmModal({
       isOpen={isOpen}
       title={title}
       message={message}
+      error={error}
       onCancel={onCancel}
       onConfirm={onConfirm}
       isConfirming={isDeleting}

@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import SectionCard from '../ui/SectionCard';
 import ConfirmModal from '../ui/ConfirmModal';
 import WeeklyTextList from './WeeklyTextList';
-import WeeklyEditorModal from './WeeklyEditorModal';
+import WeeklyEditorModal from './LazyWeeklyEditorModal';
 import { useWeeklySectionEditor } from '../../hooks/useWeeklySectionEditor';
 
 const PRIORITY_STATUS_DOT_CLASS = {
@@ -14,13 +14,17 @@ const PRIORITY_STATUS_DOT_CLASS = {
 function PrioritiesSection({ items, setItems, defaultItems }) {
   const priorityItems = Array.isArray(items) ? items : defaultItems;
   const [impactMessage, setImpactMessage] = useState('');
-  const setPriorityItems = useCallback((nextValue) => {
-    setItems(nextValue);
+  const setPriorityItems = useCallback(async (nextValue, options) => {
+    await setItems(nextValue, options);
     setImpactMessage('This will influence your Focus Home recommendations.');
   }, [setItems]);
   const {
     formValues,
     formError,
+    isSaving,
+    isDeleting,
+    deleteError,
+    reloadEditor,
     isEditorOpen,
     isEditing,
     isDeleteConfirmOpen,
@@ -37,6 +41,7 @@ function PrioritiesSection({ items, setItems, defaultItems }) {
   } = useWeeklySectionEditor({
     type: 'priority',
     defaultItems,
+    items,
     setItems: setPriorityItems,
   });
 
@@ -71,6 +76,8 @@ function PrioritiesSection({ items, setItems, defaultItems }) {
         editorType="priority"
         formValues={formValues}
         formError={formError}
+        isSaving={isSaving}
+        onReload={reloadEditor}
         isEditing={isEditing}
         onClose={closeEditor}
         onSubmit={handleEditorSubmit}
@@ -81,6 +88,8 @@ function PrioritiesSection({ items, setItems, defaultItems }) {
         isOpen={isDeleteConfirmOpen}
         title="Delete Priority"
         message={deletePrompt}
+        error={deleteError}
+        isConfirming={isDeleting}
         onCancel={closeDeleteConfirm}
         onConfirm={handleConfirmDelete}
         cancelLabel="Cancel"

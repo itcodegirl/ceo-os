@@ -43,7 +43,9 @@ describe('useWeeklyBrief', () => {
   let originalCancelAnimationFrame;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    window.sessionStorage.clear();
+    getCurrentWeekStart.mockReturnValue(currentWeekStart);
     originalRequestAnimationFrame = window.requestAnimationFrame;
     originalCancelAnimationFrame = window.cancelAnimationFrame;
 
@@ -91,7 +93,7 @@ describe('useWeeklyBrief', () => {
       blockers: [],
     });
 
-    createWeeklyItem.mockResolvedValue({ id: 'created' });
+    createWeeklyItem.mockImplementation(async ({ item }) => item);
     deleteWeeklyItem.mockResolvedValue(undefined);
     getCurrentWeekStart.mockReturnValue(currentWeekStart);
 
@@ -338,7 +340,7 @@ describe('useWeeklyBrief', () => {
     }
   });
 
-  it('recovers review notes from persisted state when a save fails', async () => {
+  it('keeps the reflection draft when a save fails and saves it on retry', async () => {
     getWeeklyBriefByWeek
       .mockResolvedValueOnce({
         reviewNotes: 'Persisted notes',
@@ -368,12 +370,14 @@ describe('useWeeklyBrief', () => {
     });
 
     expect(result.current.reviewNotes).toBe('Unsaved notes');
+    await waitFor(() => expect(result.current.reviewNotesStatus).toBe('error'));
+    expect(result.current.reviewNotes).toBe('Unsaved notes');
+    await act(async () => { await result.current.refreshWeeklyBrief(); });
+    expect(result.current.reviewNotes).toBe('Unsaved notes');
+    saveWeeklyBriefReviewNotes.mockResolvedValue('Unsaved notes');
+    await act(async () => { await result.current.retryReviewNotes(); });
+    expect(result.current.reviewNotesStatus).toBe('saved');
 
-    await waitFor(() => {
-      expect(result.current.reviewNotes).toBe('Persisted notes');
-    });
-
-    expect(result.current.loadError).toBe('');
   });
 
   it('recovers priorities from persisted state when collection persistence fails', async () => {
@@ -402,11 +406,9 @@ describe('useWeeklyBrief', () => {
       expect(result.current.priorities).toEqual(persistedPriorities);
     });
 
-    act(() => {
-      result.current.setPriorities([]);
+    await act(async () => {
+      await expect(result.current.setPriorities([])).rejects.toThrow('delete failed');
     });
-
-    expect(result.current.priorities).toEqual([]);
 
     await waitFor(() => {
       expect(result.current.priorities).toEqual(persistedPriorities);
@@ -462,7 +464,7 @@ describe('useWeeklyBrief', () => {
       blockers: [],
       source: 'local',
     });
-    createWeeklyItem.mockResolvedValue({ id: 'created' });
+    createWeeklyItem.mockImplementation(async ({ item }) => item);
 
     const { result } = renderHook(() => useWeeklyBrief());
 
@@ -484,4 +486,13 @@ describe('useWeeklyBrief', () => {
       ]);
     });
   });
+  it('returns saved revisions before the next editor can open', async () => {
+    getWeeklyBriefByWeek.mockResolvedValue({ priorities: [], wins: [], blockers: [], source: 'local' });
+    createWeeklyItem.mockImplementation(async ({ item }) => ({ ...item, updatedAt: 1234 }));
+    const { result } = renderHook(() => useWeeklyBrief());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await act(async () => { await result.current.setPriorities([{ id: 'p1', title: 'New priority' }]); });
+    expect(result.current.priorities[0].updatedAt).toBe(1234);
+  });
+
 });

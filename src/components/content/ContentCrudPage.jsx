@@ -95,6 +95,7 @@ function ContentCrudPage() {
     handleCloseDeleteConfirm,
     handleConfirmDeleteSelected,
     deletePrompt,
+    deleteError,
   } = useCrudPage({
     defaultFormValues: DEFAULT_FORM,
     listItems: listContentItems,
@@ -253,6 +254,7 @@ function ContentCrudPage() {
             <ContentDeleteConfirmModal
               isOpen={isDeleteConfirmOpen}
               message={deletePrompt}
+              error={deleteError}
               onCancel={handleCloseDeleteConfirm}
               onConfirm={handleConfirmDeleteSelected}
               isDeleting={isDeleting}

@@ -16,6 +16,8 @@ function WeeklyEditorModal({
   formValues,
   formError,
   isEditing,
+  isSaving = false,
+  onReload,
   onClose,
   onSubmit,
   onFormChange,
@@ -23,6 +25,7 @@ function WeeklyEditorModal({
   return (
     <Modal isOpen={isOpen} title={title} onClose={onClose}>
       <form className="weekly-form" onSubmit={onSubmit}>
+        <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'grid', gap: 'inherit' }}>
         {editorType === 'priority' ? (
           <>
             <Input
@@ -131,13 +134,15 @@ function WeeklyEditorModal({
         ) : null}
 
         <div className="weekly-modal-actions">
+          {formError && isEditing ? <Button type="button" variant="ghost" onClick={onReload}>Reload latest item</Button> : null}
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" icon={{ name: 'check', size: 14 }}>
-            {isEditing ? 'Save Changes' : 'Create'}
+            {isSaving ? 'Saving…' : isEditing ? 'Save Changes' : 'Create'}
           </Button>
         </div>
+        </fieldset>
       </form>
     </Modal>
   );

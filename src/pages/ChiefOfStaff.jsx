@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import ChiefOutputPanel from "../components/chief/ChiefOutputPanel";
 import ChiefOutputPicker from "../components/chief/ChiefOutputPicker";
-import ChiefHistoryList from "../components/chief/ChiefHistoryList";
 import { getChiefResponseId } from "../components/chief/chiefHistory";
 import Button from "../components/ui/Button";
 import ConfirmModal from "../components/ui/ConfirmModal";
@@ -13,6 +12,7 @@ import { buildSourceNotice } from "../lib/uiCopy";
 import { MAX_NOTES_LENGTH } from "../../shared/chiefConfig.js";
 import "../styles/chief-of-staff.css";
 
+const ChiefHistoryList = lazy(() => import("../components/chief/ChiefHistoryList"));
 const ChiefTelemetryDiagnosticsPanel = lazy(() =>
   import("../components/chief/ChiefTelemetryDiagnosticsPanel")
 );
@@ -20,6 +20,8 @@ const ChiefTelemetryDiagnosticsPanel = lazy(() =>
 export default function ChiefOfStaff() {
   const {
     notes,
+    notesStatus,
+    retryNotes,
     setNotes,
     responses,
     feedback,
@@ -174,6 +176,12 @@ export default function ChiefOfStaff() {
             retryDisabled={isGenerating}
           />
 
+          <p className="chief-helper-text" role="status">
+            {notesStatus === 'error' ? 'Could not save your notes. Your draft is kept here.'
+              : notesStatus === 'saved' ? 'Notes saved.'
+                : notesStatus === 'dirty' || notesStatus === 'saving' ? 'Saving notes…' : ''}
+          </p>
+          {notesStatus === 'error' ? <Button type="button" onClick={retryNotes}>Retry saving notes</Button> : null}
           <label htmlFor="chief-notes-input" className="sr-only">
             Founder notes
           </label>
@@ -184,8 +192,8 @@ export default function ChiefOfStaff() {
             onChange={(event) => setNotes(event.target.value)}
             placeholder="Paste founder notes, meeting takeaways, risks, priorities, or rough ideas here..."
             maxLength={MAX_NOTES_LENGTH}
-            disabled={isGenerating}
-            aria-disabled={isGenerating}
+            disabled={isGenerating || isResetting}
+            aria-disabled={isGenerating || isResetting}
             aria-label="Founder notes for chief of staff workspace"
             aria-describedby="chief-notes-meta chief-action-hint"
             aria-invalid={notesLimitReached}
@@ -267,11 +275,15 @@ export default function ChiefOfStaff() {
           isTaskAccepting={isTaskAccepting}
         />
 
-        <ChiefHistoryList
-          items={responseList}
-          selectedId={selectedResponseId}
-          onSelect={handleSelectResponse}
-        />
+        {responseList.length > 1 ? (
+          <Suspense fallback={<p role="status">Loading output history…</p>}>
+            <ChiefHistoryList
+              items={responseList}
+              selectedId={selectedResponseId}
+              onSelect={handleSelectResponse}
+            />
+          </Suspense>
+        ) : null}
       </div>
 
       <ConfirmModal

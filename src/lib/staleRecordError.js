@@ -96,15 +96,16 @@ export function applyExpectedUpdatedAtFilter(query, expectedUpdatedAt) {
  * caller expected. Used by the local-first repositories (opportunities,
  * content, weekly items) to reject two-tab conflicts before mutating.
  *
- * - If `expectedUpdatedAt` is missing or non-positive, the check is skipped.
- *   This keeps the legacy contract for callers that don't track timestamps.
+ * - If `expectedUpdatedAt` is missing or negative, the check is skipped.
+ *   An explicit zero records a legacy version: a later stamped edit conflicts.
  * - If the persisted record has no positive updatedAt yet (legacy data), the
  *   check is also skipped so old payloads keep saving cleanly.
  * - Otherwise, a mismatch throws a StaleRecordError with the supplied message.
  */
 export function assertRecordIsFresh(persistedRecord, expectedUpdatedAt, message) {
   const expected = Number(expectedUpdatedAt);
-  if (!Number.isFinite(expected) || expected <= 0) {
+  if (expectedUpdatedAt === undefined || expectedUpdatedAt === null || expectedUpdatedAt === ''
+    || !Number.isFinite(expected) || expected < 0) {
     return;
   }
   if (!persistedRecord) {

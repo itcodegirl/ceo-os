@@ -62,14 +62,14 @@ const OFFLINE_QUEUE_HANDLERS = {
     createOpportunity(payload, { skipQueue: true, ownerId: entry.ownerId }),
   [OPPORTUNITY_QUEUE_KIND_UPDATE]: ({ id, payload, expectedUpdatedAt } = {}, entry) =>
     updateOpportunity(id, payload, { skipQueue: true, expectedUpdatedAt, ownerId: entry.ownerId }),
-  [OPPORTUNITY_QUEUE_KIND_DELETE]: ({ id } = {}, entry) =>
-    deleteOpportunity(id, { skipQueue: true, ownerId: entry.ownerId }),
+  [OPPORTUNITY_QUEUE_KIND_DELETE]: ({ id, expectedUpdatedAt } = {}, entry) =>
+    deleteOpportunity(id, { skipQueue: true, ownerId: entry.ownerId, expectedUpdatedAt }),
   [CONTENT_QUEUE_KIND_CREATE]: (payload, entry) =>
     createContentItem(payload, { skipQueue: true, ownerId: entry.ownerId }),
   [CONTENT_QUEUE_KIND_UPDATE]: ({ id, payload, expectedUpdatedAt } = {}, entry) =>
     updateContentItem(id, payload, { skipQueue: true, expectedUpdatedAt, ownerId: entry.ownerId }),
-  [CONTENT_QUEUE_KIND_DELETE]: ({ id } = {}, entry) =>
-    deleteContentItem(id, { skipQueue: true, ownerId: entry.ownerId }),
+  [CONTENT_QUEUE_KIND_DELETE]: ({ id, expectedUpdatedAt } = {}, entry) =>
+    deleteContentItem(id, { skipQueue: true, ownerId: entry.ownerId, expectedUpdatedAt }),
   // Notebook replays push the page's *latest* local copy, not a stale payload.
   [NOTEBOOK_PAGE_QUEUE_KIND_PUSH]: ({ id } = {}) =>
     syncNotebookPage(id, { skipQueue: true }),

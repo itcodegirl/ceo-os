@@ -5,6 +5,7 @@ function ConfirmModal({
   isOpen,
   title = 'Confirm Action',
   message,
+  error,
   onCancel,
   onConfirm,
   cancelLabel = 'Cancel',
@@ -16,6 +17,7 @@ function ConfirmModal({
   return (
     <Modal isOpen={isOpen} title={title} onClose={onCancel}>
       {message ? <p className="helper-text">{message}</p> : null}
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
       <div className="modal-actions">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={isConfirming} aria-label={cancelAriaLabel}>
           {cancelLabel}
