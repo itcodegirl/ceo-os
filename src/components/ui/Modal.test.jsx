@@ -16,6 +16,23 @@ describe('src/components/ui/Modal', () => {
     window.localStorage.clear();
   });
 
+  it('does not steal focus already placed inside the dialog before its opening frame', () => {
+    let openingFrame;
+    const frameSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      openingFrame = callback;
+      return 1;
+    });
+    try {
+      render(<Modal isOpen title="Actions" onClose={vi.fn()}><ModalContent /></Modal>);
+      const action = screen.getByRole('button', { name: 'Last action' });
+      action.focus();
+      openingFrame();
+      expect(action).toHaveFocus();
+    } finally {
+      frameSpy.mockRestore();
+    }
+  });
+
   it('traps focus in the modal with Tab and Shift+Tab', async () => {
     const onClose = vi.fn();
 

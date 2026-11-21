@@ -76,6 +76,9 @@ function Modal({ isOpen, title, onClose, children, className = '', initialFocusR
     };
 
     const requestInitialFocus = () => {
+      // Opening focus runs on the next frame. Respect a control the user
+      // already focused in the meantime (including in a child dialog).
+      if (panelRef.current?.contains(document.activeElement)) return;
       if (initialFocusRef?.current) {
         initialFocusRef.current.focus();
         return;

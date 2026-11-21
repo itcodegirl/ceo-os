@@ -4,6 +4,12 @@ Base: `3abae93`, the deployed Notebook selection fix. This batch addresses
 the audit's A06, A07, A11, and A14, plus the action-level error feedback
 associated with those findings (part of A16).
 
+The production-build browser run also reproduced an opening-focus race in
+the shared modal. Its delayed initial-focus callback now respects focus
+already placed inside the dialog. A deterministic unit test failed before
+the fix and passes afterward. This fixes that keyboard race only; the audit's
+broader stacked-dialog work (A21) remains outside this batch.
+
 ## Changes
 
 - **A06 — Weekly reflection:** a single autosave controller owns the current
@@ -49,7 +55,7 @@ edit conflict, Chief-note retry and reload, and stale deletion in both pipelines
 
 ## Validation
 
-- `npm run verify`: lint, typecheck, **1,039 unit/integration tests**, and
+- `npm run verify`: lint, typecheck, **1,040 unit/integration tests**, and
   production build passed. One optional real-Supabase test remains skipped
   because credentials are unavailable.
 - Full Chromium suite: **77 tests passed**, including previous P1/Notebook
