@@ -86,4 +86,61 @@ test.describe('Notebook cards, questions, and ideas', () => {
     await source.click();
     await expect(page.getByLabel('Page title')).toHaveValue('Launch plan');
   });
+
+  for (const selection of ['backward line', 'forward line', 'backward characters', 'mouse paragraph']) {
+    test(`laptop ${selection} selection survives autosave and creates a persistent to-do`, async ({ page }) => {
+      await page.setViewportSize({ width: 1366, height: 650 });
+      await openNewLearningPage(page, `Laptop ${selection}`);
+
+      const text = 'Book the venue';
+      const notes = page.getByRole('textbox', { name: 'My Notes', exact: true });
+      await notes.click();
+      await page.keyboard.type(text);
+      if (selection === 'forward line') {
+        await page.keyboard.press('Home');
+        await page.keyboard.press('Shift+End');
+      } else if (selection === 'backward characters') {
+        await page.keyboard.down('Shift');
+        for (let index = 0; index < text.length; index += 1) await page.keyboard.press('ArrowLeft');
+        await page.keyboard.up('Shift');
+      } else if (selection === 'mouse paragraph') {
+        await notes.locator('p').click({ clickCount: 3 });
+      } else {
+        await page.keyboard.press('Shift+Home');
+      }
+
+      // The selection must remain useful after the delayed focus restoration
+      // and the autosave render, not just for a single animation frame.
+      await expect(page.locator('.notebook-status')).toHaveAttribute('data-status', 'saved');
+      expect(await page.evaluate(() => window.getSelection()?.toString().trim())).toBe(text);
+      const menu = page.getByRole('toolbar', { name: 'Selection actions in My Notes' });
+      const addTodo = menu.getByRole('button', { name: 'Add the selection as a to-do' });
+      await expect(addTodo).toBeInViewport({ ratio: 1 });
+
+      if (selection === 'forward line') {
+        // The floating menu is a tab stop followed by its roving toolbar.
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Tab');
+        await expect(menu.getByRole('button', { name: 'Highlight', exact: true })).toBeFocused();
+        await page.keyboard.press('End');
+        await expect(addTodo).toBeFocused();
+        await page.keyboard.press('Enter');
+      } else {
+        await addTodo.click();
+      }
+
+      const panel = page.getByRole('complementary', { name: 'Cards, questions, ideas, and lists' });
+      await expect(panel.getByRole('tab', { name: /Lists/ })).toHaveAttribute('aria-selected', 'true');
+      await expect(panel.getByRole('checkbox', { name: text, exact: true })).toHaveCount(1);
+      await page.reload();
+      await panel.getByRole('tab', { name: /Lists/ }).click();
+      await expect(panel.getByRole('checkbox', { name: text, exact: true })).not.toBeChecked();
+      await expect(notes).toHaveText(text);
+
+      await page.getByRole('link', { name: 'Focus Home', exact: true }).first().click();
+      await page.getByRole('link', { name: `Laptop ${selection}: open the page this reminder came from` }).click();
+      await expect(page.getByLabel('Page title')).toHaveValue(`Laptop ${selection}`);
+      await expect(notes).toHaveText(text);
+    });
+  }
 });

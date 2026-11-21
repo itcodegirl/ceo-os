@@ -2,6 +2,12 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-11-21 - Notebook selection-to-to-do
+
+- Preserve native keyboard selections before the editor's delayed focus restoration can replace them with the previous caret position.
+- Keep the selection menu available through autosave, so selected writing can become a to-do linked to its Notebook page and visible on Focus Home.
+- Add laptop browser coverage for backward/forward line selection, character selection, mouse selection, keyboard menu activation, and persistence after reload.
+
 ## 2026-11-21 - P1 editing, authentication, and account ownership fixes
 
 - Capture keeps spaces, newlines, and intentionally empty text while editing saved notes.
