@@ -40,6 +40,7 @@ function StickyNoteCard({
       </label>
       <textarea
         id={`capture-note-${note.id}`}
+        className="form-input"
         value={note.text}
         rows={4}
         onChange={(event) => onEdit(note.id, {
@@ -53,6 +54,7 @@ function StickyNoteCard({
         </label>
         <select
           id={`capture-category-${note.id}`}
+          className="form-input"
           value={note.category}
           onChange={(event) => onEdit(note.id, {
             text: note.text,

@@ -150,13 +150,6 @@ function WeeklyBrief() {
         What you log here shapes the next-move recommendations on Focus Home.
       </p>
 
-      <WeeklyBriefSummary
-        priorities={priorityItems}
-        wins={winItems}
-        blockers={blockerItems}
-        reviewNotes={reviewNotesDraft}
-      />
-
       <div className="weekly-grid">
         <SectionCard title="Look back" iconName="weekly">
           <Textarea

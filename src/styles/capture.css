@@ -1,6 +1,11 @@
 .capture-page {
 	display: grid;
 	gap: var(--space-page-section-gap);
+	align-items: start;
+}
+
+.capture-page > .page-intro {
+	grid-column: 1 / -1;
 }
 
 .capture-page h2 {
@@ -11,26 +16,56 @@
 .capture-composer {
 	display: grid;
 	gap: 0.75rem;
+	min-width: 0;
 }
 
 .capture-composer__form {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
 	gap: 0.6rem;
 }
 
+.capture-composer__form > label,
+.capture-composer__form > textarea {
+	grid-column: 1 / -1;
+}
+
 .capture-composer__form textarea {
-	resize: vertical;
-	min-height: 6.4rem;
+	resize: none;
+	min-height: 7.5rem;
+	line-height: 1.5;
 }
 
 .capture-composer__actions {
 	display: flex;
 	justify-content: flex-start;
+	align-items: stretch;
+}
+
+.capture-composer__actions .action-button {
+	width: 100%;
+	padding-inline: 0.5rem;
+	white-space: normal;
+}
+
+.capture-page select {
+	font: inherit;
 }
 
 .capture-wall {
 	display: grid;
 	gap: 0.75rem;
+	min-width: 0;
+}
+
+.capture-wall .sticky-wall {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+	align-items: start;
+}
+
+.capture-wall .empty-state {
+	min-height: 16rem;
+	justify-content: center;
 }
 
 .capture-wall__header {
@@ -41,6 +76,7 @@
 .sticky-note {
 	display: grid;
 	gap: 0.65rem;
+	min-width: 0;
 }
 
 .sticky-note__meta {
@@ -48,47 +84,48 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 0.5rem;
+	flex-wrap: wrap;
 }
 
 .sticky-note textarea {
-	resize: vertical;
-	min-height: 7.5rem;
+	resize: none;
+	min-height: 7rem;
+	line-height: 1.5;
 	background: transparent;
 }
 
 .sticky-note__controls {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	align-items: center;
 	gap: 0.5rem;
 }
 
 .sticky-note__controls select {
-	min-width: 9.5rem;
+	grid-column: 1 / -1;
+	min-width: 0;
+}
+
+.sticky-note__controls .action-button {
+	padding-inline: 0.45rem;
+	min-height: 2.5rem;
+	white-space: normal;
+}
+
+@media (min-width: 1000px) {
+	.capture-page {
+		grid-template-columns: minmax(17rem, 20rem) minmax(0, 1fr);
+	}
 }
 
 @media (max-width: 640px) {
-	.capture-composer__actions .action-button {
-		width: 100%;
+	.capture-page .form-input {
+		font-size: 1rem;
 	}
 
-	/* The sticky now hosts up to four promotion buttons + the category
-	 * select. A vertical stack pushes the card to ~360px tall on mobile;
-	 * a 2-column grid for the buttons keeps every action above the fold. */
-	.sticky-note__controls {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem;
-	}
-
-	.sticky-note__controls select {
-		grid-column: 1 / -1;
-		min-width: 0;
-		width: 100%;
-	}
-
-	.sticky-note__controls .action-button {
-		width: 100%;
+	.sticky-note__controls .action-button,
+	.capture-page select {
+		min-height: 2.75rem;
 	}
 }
 
@@ -126,7 +163,6 @@
 }
 
 .capture-composer__local-only-notice {
-	margin-top: 0.35rem;
-	font-style: italic;
-	opacity: 0.9;
+	font-size: var(--fs-caption);
+	line-height: 1.5;
 }

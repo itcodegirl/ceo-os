@@ -64,15 +64,6 @@ function TodayFocusPanel({
           <p className="focus-home__next-move-reason">{nextMoveReason}</p>
         </div>
 
-        <div className="focus-home__safe-ignore" aria-label="Safe to ignore for now">
-          <p className="focus-home__subheading">Safe to ignore for now</p>
-          <ul className="focus-home__safe-ignore-list">
-            {safeToIgnore.map((item, index) => (
-              <li key={`safe-ignore-${index + 1}`}>{item}</li>
-            ))}
-          </ul>
-        </div>
-
         <div className="focus-home__actions">
           <Button type="button" onClick={onDoThisNext} icon={{ name: 'action' }}>
             Tell me what to do next
@@ -84,6 +75,15 @@ function TodayFocusPanel({
             I'm overwhelmed
           </Button>
         </p>
+
+        <div className="focus-home__safe-ignore" aria-label="Safe to ignore for now">
+          <p className="focus-home__subheading">Safe to ignore for now</p>
+          <ul className="focus-home__safe-ignore-list">
+            {safeToIgnore.map((item, index) => (
+              <li key={`safe-ignore-${index + 1}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
 
         {isFocusDataLoading ? (
           <p className="helper-text" role="status" aria-live="polite">

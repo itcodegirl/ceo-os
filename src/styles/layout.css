@@ -1,7 +1,7 @@
 .app-shell {
 	min-height: 100vh;
 	display: grid;
-	grid-template-columns: minmax(220px, 270px) 1fr;
+	grid-template-columns: clamp(210px, 16vw, 250px) minmax(0, 1fr);
 	min-width: 0;
 	overflow-x: hidden;
 }
@@ -28,7 +28,7 @@
 .sidebar {
 	background: var(--surface-sidebar);
 	border-right: 1px solid var(--border);
-	padding: 2rem 1.25rem;
+	padding: 1.25rem 1rem;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
@@ -37,7 +37,7 @@
 }
 
 .sidebar__header {
-	margin-bottom: 1.5rem;
+	margin-bottom: 1rem;
 	padding: 0.25rem 1rem 0.25rem 0.95rem;
 	border-bottom: 1px solid var(--border);
 	display: flex;
@@ -110,7 +110,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 0.4rem;
-	margin-bottom: 1.1rem;
+	margin-bottom: 0.65rem;
 }
 
 .sidebar__group:last-child {
@@ -146,7 +146,8 @@
 }
 
 .sidebar__link {
-	padding: 0.85rem 1rem;
+	padding: 0.65rem 0.8rem;
+	min-height: 2.75rem;
 	border-radius: 12px;
 	position: relative;
 	transition: background-color var(--duration-base, 200ms) var(--easing-standard, ease),
@@ -225,11 +226,11 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: clamp(1rem, 2vw, 1.35rem) clamp(1rem, 2.5vw, 2rem);
+	padding: 0.75rem clamp(1rem, 2vw, 1.5rem);
 	border-bottom: 1px solid var(--border);
 	background: var(--surface-topbar);
 	gap: 1rem;
-	min-height: 6rem;
+	min-height: 4.5rem;
 }
 
 .topbar__label {
@@ -533,8 +534,31 @@ button.sync-status-pill--retry:focus-visible {
 }
 
 .app-content {
-	padding: clamp(1rem, 2vw, 2rem);
+	padding: clamp(1rem, 2vw, 1.5rem);
 	min-width: 0;
+}
+
+/* Workspace context stays available without preceding the task on every route. */
+.workspace-signals {
+	margin-top: var(--space-page-section-gap);
+	border-top: 1px solid var(--border);
+	color: var(--text-muted);
+}
+
+.workspace-signals > summary {
+	padding-block: 0.85rem;
+	width: fit-content;
+	cursor: pointer;
+	font-size: var(--fs-helper);
+}
+
+.workspace-signals > summary:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+}
+
+.workspace-signals .system-pulse {
+	margin: 0;
 }
 
 .app-content > section,
@@ -560,8 +584,7 @@ button.sync-status-pill--retry:focus-visible {
 	}
 
 	.topbar__right {
-		width: 100%;
-		justify-content: flex-start;
+		flex: 1;
 	}
 
 	.system-pulse__nodes {

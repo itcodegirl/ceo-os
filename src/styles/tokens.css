@@ -176,10 +176,10 @@
   --fs-body-sm: 0.86rem;
   --fs-body: 1rem;
 
-  --space-card-padding: 1.25rem;
+  --space-card-padding: 1rem;
   --space-card-inner-gap: 1rem;
-  --space-page-section-gap: 1.45rem;
-  --space-page-intro-vertical: 1.45rem;
+  --space-page-section-gap: 1rem;
+  --space-page-intro-vertical: 0rem;
   --space-title-to-content: 0.94rem;
   --space-stack-gap: 1rem;
   --space-list-gap: var(--space-list-gap-comfy);

@@ -117,9 +117,9 @@ function AppShellInner() {
     // own panels, so the System Pulse strip there is duplicate chrome that
     // works against the calm-OS thesis. Settings and Ops Reliability are
     // configuration/diagnostic surfaces that don't need the cross-system
-    // signal at all. The Notebook is a writing surface: the strip would be
-    // chrome above the page, and it reloads on every autosave.
-    return path !== '/' && path !== '/settings' && path !== '/ops-reliability' && path !== '/notebook';
+    // signal at all. Capture and the Notebook are writing surfaces that
+    // do not need extra signals alongside their autosaving editors.
+    return !['/', '/settings', '/ops-reliability', '/notebook', '/capture'].includes(path);
   }, [location.pathname]);
 
   usePageMeta(appName);
@@ -153,7 +153,6 @@ function AppShellInner() {
         <StorageCorruptionBanner />
         <StorageQuotaBanner />
         <LocalOnlyNotice />
-        {showSystemPulse ? <SystemPulse /> : null}
         <main className="app-content" id="main-content" tabIndex="-1" ref={mainRef}>
           <ErrorBoundary
             key={location.pathname}
@@ -163,6 +162,12 @@ function AppShellInner() {
           >
             <Outlet />
           </ErrorBoundary>
+          {showSystemPulse ? (
+            <details className="workspace-signals" key={`signals:${location.pathname}`}>
+              <summary>Workspace signals</summary>
+              <SystemPulse />
+            </details>
+          ) : null}
         </main>
       </div>
     </div>

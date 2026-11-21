@@ -315,29 +315,6 @@ function Dashboard() {
         retryAriaLabel="Retry loading focus command center data"
       />
 
-      {showFirstRunSetup ? (
-        <section className="focus-home__setup" aria-label="Choose local workspace setup">
-          <div>
-            <h2>Choose how this device starts</h2>
-            <p className="helper-text">
-              Demo data is showing so you can explore. Start blank for real work, or keep the demo workspace for review.
-            </p>
-          </div>
-          <div className="focus-home__setup-actions">
-            <Button type="button" onClick={handleStartBlankWorkspace} icon={{ name: 'check', size: 14 }}>
-              Start blank
-            </Button>
-            <LoadDemoWorkspaceButton
-              onLoaded={() => showToast('Demo workspace loaded on this device.')}
-              onError={() => showToast('Unable to load demo workspace right now.')}
-            />
-          </div>
-          <p className="helper-text">
-            Restore from a JSON backup or connect a Supabase workspace from Settings &gt; Workspace data.
-          </p>
-        </section>
-      ) : null}
-
       <div className="focus-home__grid">
         <TodayFocusPanel
           mainFocus={mainFocus}
@@ -376,6 +353,29 @@ function Dashboard() {
           />
         </ErrorBoundary>
       </div>
+
+      {showFirstRunSetup ? (
+        <section className="focus-home__setup" aria-label="Choose local workspace setup">
+          <div>
+            <h2>Choose how this device starts</h2>
+            <p className="helper-text">
+              Demo data is showing so you can explore. Start blank for real work, or keep the demo workspace for review.
+            </p>
+          </div>
+          <div className="focus-home__setup-actions">
+            <Button type="button" onClick={handleStartBlankWorkspace} icon={{ name: 'check', size: 14 }}>
+              Start blank
+            </Button>
+            <LoadDemoWorkspaceButton
+              onLoaded={() => showToast('Demo workspace loaded on this device.')}
+              onError={() => showToast('Unable to load demo workspace right now.')}
+            />
+          </div>
+          <p className="helper-text">
+            Restore from a JSON backup or connect a Supabase workspace from Settings &gt; Workspace data.
+          </p>
+        </section>
+      ) : null}
 
       {/*
        * Focus tools drawer — kept off the top fold to reduce cognitive load.

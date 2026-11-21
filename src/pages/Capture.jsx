@@ -16,6 +16,7 @@ import {
 import { buildAutosaveHelperText } from '../lib/uiCopy';
 import { useToast } from '../hooks/useToast';
 import { useCaptureNotePromotions } from '../hooks/useCaptureNotePromotions';
+import '../styles/forms.css';
 import '../styles/capture.css';
 
 function formatCategoryLabel(category) {
@@ -184,18 +185,15 @@ function Capture() {
     <section className="capture-page">
       <PageHeader
         title="Capture"
-        description="Fast sticky-note style capture for ideas, tasks, opportunities, content drafts, and private thoughts."
+        description="Get the thought out of your head. Decide what to do with it later."
       />
 
       <section className="capture-composer focus-panel" aria-label="Create a capture note">
         <h2>Brain Dump</h2>
         <p className="supportive-copy">
-          Drop the thought here. Keep it messy now, organize later.
+          Keep it messy. Organize later.
         </p>
-        <p className="helper-text capture-composer__local-only-notice">
-          Stays on this device. Promote a note when you want it in your synced workspace.
-        </p>
-        <form onSubmit={createNote} className="capture-composer__form">
+        <form onSubmit={createNote} className="capture-composer__form" noValidate>
           <label htmlFor="capture-note-text" className="helper-text">Note</label>
           <p id="capture-composer-helper" className="sr-only">
             Capture one thought, task, or idea at a time.
@@ -203,9 +201,10 @@ function Capture() {
           <textarea
             ref={composerTextareaRef}
             id="capture-note-text"
+            className="form-input"
             value={draftText}
             onChange={handleDraftTextChange}
-            rows={3}
+            rows={4}
             placeholder="What do you want to remember?"
             aria-describedby={captureComposerDescriptionId}
             aria-invalid={errorMessage ? 'true' : undefined}
@@ -214,6 +213,7 @@ function Capture() {
           <label htmlFor="capture-note-category" className="helper-text">Category</label>
           <select
             id="capture-note-category"
+            className="form-input"
             value={draftCategory}
             onChange={handleDraftCategoryChange}
           >
@@ -230,6 +230,9 @@ function Capture() {
             </Button>
           </div>
         </form>
+        <p className="helper-text capture-composer__local-only-notice">
+          Stays on this device. Promote a note when you want it in your synced workspace.
+        </p>
         {errorMessage ? (
           <p id="capture-composer-error" role="alert" className="form-error">
             {errorMessage}

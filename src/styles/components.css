@@ -177,6 +177,26 @@
   line-height: 1.1;
 }
 
+/* Counts should leave room for the records they summarize on laptop screens. */
+@media (min-width: 861px) {
+  .summary-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: center;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+  }
+
+  .summary-card__value {
+    font-size: 1.5rem;
+  }
+
+  .summary-card > .helper-text {
+    grid-column: 1 / -1;
+    line-height: 1.4;
+  }
+}
+
 .section-card {
   background: var(--surface-card);
   border: 1px solid var(--border);
@@ -983,6 +1003,23 @@ textarea:focus-visible,
 .local-only-notice__dismiss:focus-visible {
   background: var(--surface-input);
   border-color: var(--border-accent);
+}
+
+@media (min-width: 1101px) {
+  .local-only-notice {
+    align-items: center;
+    padding-block: 0.5rem;
+  }
+
+  .local-only-notice__body {
+    display: block;
+    line-height: 1.5;
+  }
+
+  .local-only-notice__text {
+    display: inline;
+    margin-inline-start: 0.65rem;
+  }
 }
 
 @media (max-width: 540px) {

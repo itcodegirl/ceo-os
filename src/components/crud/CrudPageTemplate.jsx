@@ -86,8 +86,6 @@ function CrudPageTemplate({
 
       {isLoading && loadingAnnouncement ? <p className="sr-only" role="status" aria-live="polite">{loadingAnnouncement}</p> : null}
 
-      {isLoading ? summaryLoadingContent : summaryContent}
-
       <SectionCard
         title={sectionTitle}
         iconName={sectionIconName}
@@ -107,6 +105,8 @@ function CrudPageTemplate({
           sectionContent
         )}
       </SectionCard>
+
+      {isLoading ? summaryLoadingContent : summaryContent}
 
       {itemModal}
       {formModal}

@@ -43,10 +43,6 @@ export default function ChiefOutputPicker({
         </select>
       </div>
 
-      <p className="chief-make__hint" id={hintId}>
-        {config.hint}
-      </p>
-
       <Button
         type="button"
         onClick={onGenerate}
@@ -55,6 +51,9 @@ export default function ChiefOutputPicker({
       >
         {isGenerating ? `Generating ${label}…` : `Generate ${label}`}
       </Button>
+      <p className="chief-make__hint" id={hintId}>
+        {config.hint}
+      </p>
     </div>
   );
 }
