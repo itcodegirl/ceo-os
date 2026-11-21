@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { getSupabaseRuntime } from './supabaseRuntime';
 
 /**
@@ -6,15 +7,22 @@ import { getSupabaseRuntime } from './supabaseRuntime';
  * configured or nobody is signed in. Other errors propagate.
  */
 export async function getSyncSession() {
+  const ownerId = getWorkspaceOwnerId();
   const runtime = await getSupabaseRuntime();
   if (!runtime) return null;
   const client = await runtime.getSupabaseClient();
   if (!client) return null;
   try {
     const userId = await runtime.requireSupabaseUserId();
+    assertWorkspaceOwner(ownerId);
+    if (userId !== ownerId) throw accountChangedError();
     return userId ? { client, userId } : null;
   } catch (error) {
     if (error?.code === 'SUPABASE_AUTH_REQUIRED') return null;
     throw error;
   }
+}
+
+export function assertSyncSession(session) {
+  assertWorkspaceOwner(session.userId);
 }

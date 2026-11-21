@@ -1,5 +1,7 @@
+import { getWorkspaceOwnerId, subscribeWorkspaceAccount } from '../lib/workspaceOwnership';
+import { useAuthSession } from '../hooks/useAuthSession';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import Sidebar from '../components/ui/Sidebar';
 import Topbar from '../components/ui/Topbar';
 import SystemPulse from '../components/ui/SystemPulse';
@@ -56,18 +58,18 @@ import { useNotebookBackgroundSync } from '../hooks/useNotebookBackgroundSync';
 // drainOfflineQueue contract already keeps the entry in place when replay
 // rejects, and a new attempt fires on the next reconnect.
 const OFFLINE_QUEUE_HANDLERS = {
-  [OPPORTUNITY_QUEUE_KIND_CREATE]: (payload) =>
-    createOpportunity(payload, { skipQueue: true }),
-  [OPPORTUNITY_QUEUE_KIND_UPDATE]: ({ id, payload, expectedUpdatedAt } = {}) =>
-    updateOpportunity(id, payload, { skipQueue: true, expectedUpdatedAt }),
-  [OPPORTUNITY_QUEUE_KIND_DELETE]: ({ id } = {}) =>
-    deleteOpportunity(id, { skipQueue: true }),
-  [CONTENT_QUEUE_KIND_CREATE]: (payload) =>
-    createContentItem(payload, { skipQueue: true }),
-  [CONTENT_QUEUE_KIND_UPDATE]: ({ id, payload, expectedUpdatedAt } = {}) =>
-    updateContentItem(id, payload, { skipQueue: true, expectedUpdatedAt }),
-  [CONTENT_QUEUE_KIND_DELETE]: ({ id } = {}) =>
-    deleteContentItem(id, { skipQueue: true }),
+  [OPPORTUNITY_QUEUE_KIND_CREATE]: (payload, entry) =>
+    createOpportunity(payload, { skipQueue: true, ownerId: entry.ownerId }),
+  [OPPORTUNITY_QUEUE_KIND_UPDATE]: ({ id, payload, expectedUpdatedAt } = {}, entry) =>
+    updateOpportunity(id, payload, { skipQueue: true, expectedUpdatedAt, ownerId: entry.ownerId }),
+  [OPPORTUNITY_QUEUE_KIND_DELETE]: ({ id } = {}, entry) =>
+    deleteOpportunity(id, { skipQueue: true, ownerId: entry.ownerId }),
+  [CONTENT_QUEUE_KIND_CREATE]: (payload, entry) =>
+    createContentItem(payload, { skipQueue: true, ownerId: entry.ownerId }),
+  [CONTENT_QUEUE_KIND_UPDATE]: ({ id, payload, expectedUpdatedAt } = {}, entry) =>
+    updateContentItem(id, payload, { skipQueue: true, expectedUpdatedAt, ownerId: entry.ownerId }),
+  [CONTENT_QUEUE_KIND_DELETE]: ({ id } = {}, entry) =>
+    deleteContentItem(id, { skipQueue: true, ownerId: entry.ownerId }),
   // Notebook replays push the page's *latest* local copy, not a stale payload.
   [NOTEBOOK_PAGE_QUEUE_KIND_PUSH]: ({ id } = {}) =>
     syncNotebookPage(id, { skipQueue: true }),
@@ -175,8 +177,10 @@ function AppShellInner() {
 }
 
 function AppLayout() {
+  useAuthSession();
+  const ownerId = useSyncExternalStore(subscribeWorkspaceAccount, getWorkspaceOwnerId, () => '');
   return (
-    <ToastProvider>
+    <ToastProvider key={ownerId}>
       <AppShellInner />
     </ToastProvider>
   );

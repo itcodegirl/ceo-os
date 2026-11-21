@@ -2,6 +2,14 @@
 
 All notable updates are documented here for portfolio and release-review context.
 
+## 2026-11-21 - P1 editing, authentication, and account ownership fixes
+
+- Capture keeps spaces, newlines, and intentionally empty text while editing saved notes.
+- Blank Weekly Brief workspaces stay empty in a new week; explicit demo mode still seeds sample work.
+- Chief of Staff sends the signed-in Supabase session token and verifies it on the server before AI generation. Server secrets stay out of browser code; signed-out failures retain the labeled local template.
+- Notebook pages/items and reminders are isolated by their original account, including pending writes, deletions, late network responses, and backups. Signing out restores the separate local workspace. Unowned legacy operations are preserved without automatic replay.
+- Regression coverage includes sequential typing, week rollover, two-account cache preservation, account changes during requests, and server-side token verification.
+
 ## 2026-10-04 - Supabase security hardening
 
 Branch `claude/supabase-security-hardening`. Migration

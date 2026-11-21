@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, normalizeDeletionRecords, selectWorkspaceStore, mergeWorkspaceStore } from '../../workspaceOwnership';
 // notebookItemsRepository — cards, questions, and ideas made from notebook
 // writing. Local-first with account sync, like notebook pages
 // (notebookPagesRepository.js explains why the local store is the working copy).
@@ -14,7 +15,7 @@
 import { buildCreateId } from '../../utils';
 import { STORAGE_DOMAINS } from '../../dataSchema';
 import { readVersionedLocalStorage, writeVersionedLocalStorage } from '../../versionedStorage';
-import { getSyncSession } from '../../syncSession';
+import { getSyncSession, assertSyncSession } from '../../syncSession';
 import { tryRemoteOrEnqueue } from '../../offlineWriteQueueIntegration';
 import { applyExpectedUpdatedAtFilter } from '../../staleRecordError';
 import { relinkReminderSource } from '../../remindersRepository';
@@ -76,17 +77,21 @@ function normalizeStore(kind, value) {
   const store = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   return {
     items: Array.isArray(store.items) ? store.items.map((item) => normalizeItem(kind, item)).filter(Boolean) : [],
-    deletedIds: Array.isArray(store.deletedIds) ? store.deletedIds.filter((id) => typeof id === 'string') : [],
+    deletedIds: normalizeDeletionRecords(store.deletedIds),
   };
 }
 
-function readStore(kind) {
+function readRawStore(kind) {
   if (typeof window === 'undefined') return normalizeStore(kind, null);
   return normalizeStore(kind, readVersionedLocalStorage(configFor(kind).domain, null));
 }
 
+function readStore(kind) {
+  return selectWorkspaceStore(readRawStore(kind), 'items', 'deletedIds');
+}
+
 function writeStore(kind, store) {
-  writeVersionedLocalStorage(configFor(kind).domain, store, 'Failed to save on this device.');
+  writeVersionedLocalStorage(configFor(kind).domain, mergeWorkspaceStore(readRawStore(kind), store, 'items', 'deletedIds'), 'Failed to save on this device.');
 }
 
 function emitUpdated(kind, detail = {}) {
@@ -120,6 +125,7 @@ export function getNotebookItem(kind, id) {
 export function createItem(kind, { draft, pageId = '', source } = {}) {
   configFor(kind);
   const item = createNotebookItem(kind, { draft, pageId, source });
+  item.sync.ownerId = getWorkspaceOwnerId();
   const store = readStore(kind);
   writeStore(kind, { ...store, items: [...store.items, item] });
   emitUpdated(kind, { type: 'create', id: item.id, source: 'local' });
@@ -246,7 +252,7 @@ function fromRow(kind, row, userId, existing) {
 }
 
 function isOwnedBy(item, userId) {
-  return !item.sync.ownerId || item.sync.ownerId === userId;
+  return item.sync.ownerId === userId;
 }
 
 /**
@@ -278,7 +284,7 @@ function markSynced(kind, id, row, userId, pushedUpdatedAt) {
  * version keeps the id, and this device's version becomes a new item.
  */
 function keepBoth(kind, store, local, row, userId) {
-  const copy = { ...local, id: buildCreateId(), updatedAt: Date.now(), sync: { ownerId: '', remoteUpdatedAt: 0, pending: true } };
+  const copy = { ...local, id: buildCreateId(), updatedAt: Date.now(), sync: { ownerId: getWorkspaceOwnerId(), remoteUpdatedAt: 0, pending: true } };
   return {
     store: {
       ...store,
@@ -289,6 +295,7 @@ function keepBoth(kind, store, local, row, userId) {
 }
 
 async function pushItem(kind, id, session, { skipQueue = false } = {}) {
+  assertSyncSession(session);
   const item = getNotebookItem(kind, id);
   if (!item || !item.sync.pending || !isOwnedBy(item, session.userId)) return item;
   const pageId = resolveRemotePageId(item, session.userId);
@@ -299,6 +306,7 @@ async function pushItem(kind, id, session, { skipQueue = false } = {}) {
 
   const reconcileWithRemote = async () => {
     const { data: remote, error } = await client.from(table).select(columns).eq('id', id).eq('user_id', userId).maybeSingle();
+    assertSyncSession(session);
     if (error) throw error;
     if (!remote) {
       // Deleted on another device while edited here: upload it again.
@@ -322,16 +330,19 @@ async function pushItem(kind, id, session, { skipQueue = false } = {}) {
     if (item.sync.remoteUpdatedAt > 0) {
       const query = client.from(table).update(toRow(kind, item, userId, pageId)).eq('id', id).eq('user_id', userId);
       const { data, error } = await applyExpectedUpdatedAtFilter(query, item.sync.remoteUpdatedAt).select(columns).maybeSingle();
+      assertSyncSession(session);
       if (error) throw error;
       if (data) return markSynced(kind, id, data, userId, pushedUpdatedAt);
       return reconcileWithRemote();
     }
 
     let { data, error } = await client.from(table).insert({ id, ...toRow(kind, item, userId, pageId) }).select(columns).single();
+    assertSyncSession(session);
     if (error?.code === '23503' && pageId) {
       // The page was deleted remotely a moment ago; the link goes with it.
       ({ data, error } = await client.from(table).insert({ id, ...toRow(kind, item, userId, null) }).select(columns).single());
     }
+    assertSyncSession(session);
     if (!error) return markSynced(kind, id, data, userId, pushedUpdatedAt);
     // Already inserted by an earlier attempt whose response was lost.
     if (error.code === '23505') return reconcileWithRemote();
@@ -368,12 +379,14 @@ function schedulePush(kind, id, session, options = {}) {
 
 async function pushDeletion(kind, id, { skipQueue = false } = {}) {
   const session = await getSyncSession();
-  if (!session) return;
+  if (!session || !readStore(kind).deletedIds.includes(id)) return;
   const { table } = configFor(kind);
   await tryRemoteOrEnqueue({ kind: NOTEBOOK_ITEM_QUEUE_KIND_DELETE, payload: { kind, id }, options: { skipQueue } }, async () => {
     const { error } = await session.client.from(table).delete().eq('id', id).eq('user_id', session.userId);
+    assertSyncSession(session);
     if (error) throw error;
   });
+  assertSyncSession(session);
   const store = readStore(kind);
   writeStore(kind, { ...store, deletedIds: store.deletedIds.filter((deletedId) => deletedId !== id) });
 }
@@ -391,17 +404,20 @@ export async function replayNotebookItemDeletion({ kind, id } = {}) {
 }
 
 async function syncKind(kind, session) {
+  assertSyncSession(session);
   const { client, userId } = session;
   const { table, columns } = configFor(kind);
   await Promise.allSettled([...pushesInFlight.entries()]
     .filter(([key]) => key.startsWith(`${kind}:`))
     .map(([, entry]) => entry.promise));
+  assertSyncSession(session);
 
   for (const id of readStore(kind).deletedIds) {
     await pushDeletion(kind, id);
   }
 
   const { data: rows, error } = await client.from(table).select(columns).eq('user_id', userId);
+  assertSyncSession(session);
   if (error) throw error;
 
   let store = readStore(kind);

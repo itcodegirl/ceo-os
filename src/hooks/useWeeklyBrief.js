@@ -14,9 +14,6 @@ import {
 } from '../lib/weeklyRepository';
 import {
   DEFAULT_REVIEW_NOTES,
-  defaultBlockers,
-  defaultPriorities,
-  defaultWins,
 } from '../lib/weeklyData';
 import { resolveNextValue, shallowEqualRecordArrays, shallowEqualRecords } from '../lib/stateUtils';
 import { isStaleRecordError } from '../lib/staleRecordError';
@@ -52,9 +49,9 @@ export function useWeeklyBrief() {
   const [loadError, setLoadError] = useState('');
   const [reviewNotes, setReviewNotesState] = useState(DEFAULT_REVIEW_NOTES);
   const [reviewNotesStatus, setReviewNotesStatus] = useState('idle');
-  const [priorities, setPrioritiesState] = useState(defaultPriorities);
-  const [wins, setWinsState] = useState(defaultWins);
-  const [blockers, setBlockersState] = useState(defaultBlockers);
+  const [priorities, setPrioritiesState] = useState([]);
+  const [wins, setWinsState] = useState([]);
+  const [blockers, setBlockersState] = useState([]);
 
   // Refs mirror the latest committed value of each editable collection so the
   // setters can read the "previous" value synchronously (like Journal.jsx's

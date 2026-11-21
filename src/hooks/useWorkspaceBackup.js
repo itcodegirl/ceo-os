@@ -3,7 +3,6 @@ import {
   buildWorkspaceBackup,
   buildWorkspaceBackupFileName,
   getLocalWorkspaceDataHealth,
-  importWorkspaceBackup,
 } from '../lib/workspacePortability';
 
 export function formatCount(count, singular, plural = `${singular}s`) {
@@ -103,6 +102,7 @@ export function useWorkspaceBackup({ onRefreshSettings } = {}) {
 
     try {
       const backupText = await readFileAsText(file);
+      const { importWorkspaceBackup } = await import('../lib/workspaceBackupImport');
       const result = importWorkspaceBackup(backupText);
       setDataHealthRefreshKey((current) => current + 1);
       if (typeof onRefreshSettings === 'function') {

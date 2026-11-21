@@ -176,22 +176,22 @@ export const STORAGE_SCHEMAS = Object.freeze({
   }),
   [STORAGE_DOMAINS.notebookCards]: Object.freeze({
     key: 'ceo-os-notebook-cards',
-    model: '{ items: NotebookCard[], deletedIds: string[] }',
+    model: '{ items: NotebookCard[], deletedIds: (string | { id, ownerId })[] }',
     version: CURRENT_DATA_SCHEMA_VERSION,
   }),
   [STORAGE_DOMAINS.notebookIdeas]: Object.freeze({
     key: 'ceo-os-notebook-ideas',
-    model: '{ items: NotebookIdea[], deletedIds: string[] }',
+    model: '{ items: NotebookIdea[], deletedIds: (string | { id, ownerId })[] }',
     version: CURRENT_DATA_SCHEMA_VERSION,
   }),
   [STORAGE_DOMAINS.notebookPages]: Object.freeze({
     key: 'ceo-os-notebook-pages',
-    model: '{ pages: NotebookPage[], deletedPageIds: string[], journalImported: boolean }',
+    model: '{ pages: NotebookPage[], deletedPageIds: (string | { id, ownerId })[], journalImported: boolean }',
     version: CURRENT_DATA_SCHEMA_VERSION,
   }),
   [STORAGE_DOMAINS.notebookQuestions]: Object.freeze({
     key: 'ceo-os-notebook-questions',
-    model: '{ items: NotebookQuestion[], deletedIds: string[] }',
+    model: '{ items: NotebookQuestion[], deletedIds: (string | { id, ownerId })[] }',
     version: CURRENT_DATA_SCHEMA_VERSION,
   }),
   [STORAGE_DOMAINS.opportunities]: Object.freeze({
@@ -203,7 +203,7 @@ export const STORAGE_SCHEMAS = Object.freeze({
   // reaches the account so a pull cannot bring them back.
   [STORAGE_DOMAINS.reminderDeletions]: Object.freeze({
     key: 'ceo-os-reminder-deletions',
-    model: 'string[]',
+    model: '(string | { id, ownerId })[]',
     version: CURRENT_DATA_SCHEMA_VERSION,
   }),
   [STORAGE_DOMAINS.reminders]: Object.freeze({

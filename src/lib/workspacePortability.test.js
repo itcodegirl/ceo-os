@@ -1,3 +1,4 @@
+import { importWorkspaceBackup } from './workspaceBackupImport';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   WORKSPACE_BACKUP_FORMAT,
@@ -5,7 +6,6 @@ import {
   buildWorkspaceBackup,
   buildWorkspaceBackupFileName,
   getLocalWorkspaceDataHealth,
-  importWorkspaceBackup,
 } from './workspacePortability';
 import { SETTINGS_UPDATED_EVENT } from './settingsRepository';
 import { CAPTURE_NOTES_UPDATED_EVENT } from './captureRepository';

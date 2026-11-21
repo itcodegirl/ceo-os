@@ -41,6 +41,7 @@ import {
 let fake;
 
 function signIn() {
+  window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: USER } }));
   runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(fake.client);
   runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockResolvedValue(USER);
 }
@@ -49,7 +50,7 @@ function signIn() {
 // asynchronously) finish before the test changes who is signed in.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function signOut() {
+function pauseCloud() {
   const authRequired = Object.assign(new Error('auth'), { code: 'SUPABASE_AUTH_REQUIRED' });
   runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockRejectedValue(authRequired);
 }
@@ -65,7 +66,7 @@ beforeEach(() => {
   window.localStorage.clear();
   fake = createFakeSupabase();
   runtimeModule.getSupabaseRuntime.mockResolvedValue(runtimeModule.__supabaseRuntime);
-  signOut();
+  pauseCloud();
 });
 
 describe('notebook items on this device', () => {
@@ -112,6 +113,9 @@ describe('notebook items on this device', () => {
 });
 
 describe('notebook items account sync', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: USER } }));
+  });
   it('waits for its page to reach the account, then uploads with the page link', async () => {
     const page = createNotebookPage({ section: 'learning', title: 'Pricing' });
     const card = createItem('card', { draft: CARD, pageId: page.id });
@@ -160,7 +164,7 @@ describe('notebook items account sync', () => {
     const card = createItem('card', { draft: CARD });
     await syncNotebookItems();
 
-    signOut();
+    pauseCloud();
     updateItem('card', card.id, { prompt: 'Mine', answer: CARD.answer });
     fake.editElsewhere('notebook_cards', card.id, { prompt: 'Theirs' });
     await settle();
@@ -182,7 +186,7 @@ describe('notebook items account sync', () => {
     const dropped = createItem('idea', { draft: { title: 'Untouched', description: '', category: '' } });
     await syncNotebookItems();
 
-    signOut();
+    pauseCloud();
     updateItem('idea', kept.id, { title: 'Edited here, again', description: '', category: '' });
     fake.deleteElsewhere('notebook_ideas', kept.id);
     fake.deleteElsewhere('notebook_ideas', dropped.id);
@@ -212,7 +216,7 @@ describe('notebook items account sync', () => {
     signIn();
     const page = createNotebookPage({ section: 'learning', title: 'Pricing' });
     await syncNotebookPages();
-    signOut();
+    pauseCloud();
     const card = createItem('card', { draft: CARD, pageId: page.id });
     fake.deleteElsewhere('notebook_pages', page.id);
     await settle();
@@ -261,7 +265,7 @@ describe('notebook items account sync', () => {
     const card = createItem('card', { draft: CARD });
     await syncNotebookItems();
 
-    signOut();
+    pauseCloud();
     deleteItem('card', card.id);
     await settle();
     signIn();

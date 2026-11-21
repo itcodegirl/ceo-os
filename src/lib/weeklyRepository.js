@@ -1,3 +1,4 @@
+import { isDemoWorkspaceEnabled } from './workspaceSetup';
 import {
   DEFAULT_REVIEW_NOTES,
   defaultBlockers,
@@ -153,7 +154,7 @@ export function getCurrentWeekStart() {
 
 function getFallbackCollection(type) {
   const descriptor = getDescriptor(type);
-  return descriptor.fallbackSource.map((item) => normalizeItem(type, item, { includeUpdatedAt: false }));
+  return (isDemoWorkspaceEnabled() ? descriptor.fallbackSource : []).map((item) => normalizeItem(type, item, { includeUpdatedAt: false }));
 }
 
 function getDemoPriorities() {

@@ -10,7 +10,7 @@ import { registerNotebookSyncFlush, saveNotebookPage } from '../lib/notebook/not
 export function useNotebookAutosave(page) {
   const [autosave] = useState(() => createNotebookAutosave({
     page,
-    save: (changes, options) => saveNotebookPage(page.id, changes, options),
+    save: (changes, options) => saveNotebookPage(page.id, changes, { ...options, ownerId: page.sync?.ownerId || '' }),
   }));
   const snapshot = useSyncExternalStore(autosave.subscribe, autosave.getSnapshot, autosave.getSnapshot);
 

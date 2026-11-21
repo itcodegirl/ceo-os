@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, normalizeDeletionRecords, visibleDeletionIds, mergeDeletionIds, visibleRecords, mergeWorkspaceRecords } from './workspaceOwnership';
 // remindersRepository — reminders and notebook to-dos. Local-first with
 // account sync, like notebook pages (notebookPagesRepository.js explains the
 // design): the API stays synchronous because Focus Home, Capture promotions,
@@ -15,7 +16,7 @@ import { STORAGE_DOMAINS } from './dataSchema';
 import { readVersionedLocalStorage, writeVersionedLocalStorage } from './versionedStorage';
 import { tryRemoteOrEnqueue } from './offlineWriteQueueIntegration';
 import { applyExpectedUpdatedAtFilter } from './staleRecordError';
-import { getSyncSession } from './syncSession';
+import { getSyncSession, assertSyncSession } from './syncSession';
 
 export const REMINDERS_UPDATED_EVENT = 'ceo-os:reminders-updated';
 export const REMINDER_DELETIONS_STORAGE_KEY = 'ceo-os-reminder-deletions';
@@ -112,7 +113,7 @@ export function isReminderSnoozed(reminder, now = new Date()) {
   return wakeAt > now.getTime();
 }
 
-function readStorage() {
+function readRawStorage() {
   if (typeof window === 'undefined') {
     return [];
   }
@@ -129,10 +130,14 @@ function readStorage() {
   }
 }
 
+function readStorage() {
+  return visibleRecords(readRawStorage());
+}
+
 function writeStorage(reminders) {
   writeVersionedLocalStorage(
     STORAGE_DOMAINS.reminders,
-    reminders,
+    mergeWorkspaceRecords(readRawStorage(), reminders),
     'Failed to persist reminders to localStorage',
   );
 }
@@ -140,11 +145,11 @@ function writeStorage(reminders) {
 function readDeletedIds() {
   if (typeof window === 'undefined') return [];
   const value = readVersionedLocalStorage(STORAGE_DOMAINS.reminderDeletions, []);
-  return Array.isArray(value) ? value.filter((id) => typeof id === 'string') : [];
+  return visibleDeletionIds(normalizeDeletionRecords(value));
 }
 
 function writeDeletedIds(ids) {
-  writeVersionedLocalStorage(STORAGE_DOMAINS.reminderDeletions, ids.slice(-MAX_TOMBSTONES), 'Failed to save on this device.');
+  writeVersionedLocalStorage(STORAGE_DOMAINS.reminderDeletions, mergeDeletionIds(normalizeDeletionRecords(readVersionedLocalStorage(STORAGE_DOMAINS.reminderDeletions, [])), ids.slice(-MAX_TOMBSTONES)), 'Failed to save on this device.');
 }
 
 function emitReminderUpdated(detail = {}) {
@@ -204,7 +209,7 @@ export function createReminder(payload) {
     sourceId: source?.id,
     sourceTitle: source?.title,
     sourceHref: source?.href,
-    sync: { pending: true },
+    sync: { ownerId: getWorkspaceOwnerId(), pending: true },
   });
 
   const current = readStorage();
@@ -372,7 +377,7 @@ function fromRow(row, userId) {
 }
 
 function isOwnedBy(reminder, userId) {
-  return !reminder.sync.ownerId || reminder.sync.ownerId === userId;
+  return reminder.sync.ownerId === userId;
 }
 
 function replaceReminder(reminders, reminder) {
@@ -392,6 +397,7 @@ function markSynced(id, row, userId, pushedUpdatedAt) {
 }
 
 async function pushReminder(id, session, { skipQueue = false } = {}) {
+  assertSyncSession(session);
   const reminder = readStorage().find((candidate) => candidate.id === id);
   if (!reminder || !reminder.sync.pending || !isOwnedBy(reminder, session.userId)) return reminder || null;
   const { client, userId } = session;
@@ -403,6 +409,7 @@ async function pushReminder(id, session, { skipQueue = false } = {}) {
       const { data, error } = await applyExpectedUpdatedAtFilter(query, reminder.sync.remoteUpdatedAt)
         .select(SELECT_COLUMNS)
         .maybeSingle();
+      assertSyncSession(session);
       if (error) throw error;
       if (data) return markSynced(id, data, userId, pushedUpdatedAt);
     }
@@ -414,6 +421,7 @@ async function pushReminder(id, session, { skipQueue = false } = {}) {
       .upsert({ id, ...toRow(reminder, userId) }, { onConflict: 'id' })
       .select(SELECT_COLUMNS)
       .single();
+    assertSyncSession(session);
     if (error) throw error;
     return markSynced(id, data, userId, pushedUpdatedAt);
   });
@@ -448,11 +456,13 @@ function schedulePush(id, session, options = {}) {
 
 async function pushDeletion(id, { skipQueue = false } = {}) {
   const session = await getSyncSession();
-  if (!session) return;
+  if (!session || !readDeletedIds().includes(id)) return;
   await tryRemoteOrEnqueue({ kind: REMINDER_QUEUE_KIND_DELETE, payload: { id }, options: { skipQueue } }, async () => {
     const { error } = await session.client.from(TABLE).delete().eq('id', id).eq('user_id', session.userId);
+    assertSyncSession(session);
     if (error) throw error;
   });
+  assertSyncSession(session);
   writeDeletedIds(readDeletedIds().filter((deletedId) => deletedId !== id));
 }
 
@@ -469,20 +479,22 @@ export async function replayReminderDeletion({ id } = {}) {
 
 /**
  * Pulls the signed-in account's reminders, merges them into this device,
- * then pushes local changes (including reminders saved before sync existed,
- * once). Returns 'local' when sync is unavailable.
+ * then pushes changes owned by that account. Signed-out and legacy reminders
+ * stay local. Returns 'local' when sync is unavailable.
  */
 export async function syncReminders() {
   const session = await getSyncSession();
   if (!session) return 'local';
   const { client, userId } = session;
   await Promise.allSettled([...pushesInFlight.values()].map((entry) => entry.promise));
+  assertSyncSession(session);
 
   for (const id of readDeletedIds()) {
     await pushDeletion(id);
   }
 
   const { data: rows, error } = await client.from(TABLE).select(SELECT_COLUMNS).eq('user_id', userId);
+  assertSyncSession(session);
   if (error) throw error;
 
   let reminders = readStorage();

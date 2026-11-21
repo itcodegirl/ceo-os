@@ -1,3 +1,4 @@
+import { getSupabaseRuntime } from './supabaseRuntime';
 import { getChiefActionConfig } from './chiefActions';
 import { buildCreateId } from './utils';
 import {
@@ -110,10 +111,16 @@ async function fetchChiefProxy(payload, options = {}) {
   }, REQUEST_TIMEOUT_MS);
 
   try {
+    const runtime = await getSupabaseRuntime();
+    const client = runtime ? await runtime.getSupabaseClient() : null;
+    const sessionResult = client ? await client.auth.getSession() : null;
+    if (sessionResult?.error) throw sessionResult.error;
+    const accessToken = sessionResult?.data?.session?.access_token;
     return await fetch(aiConfig.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...(correlationId ? { 'x-chief-correlation-id': correlationId } : {}),
       },
       signal: controller.signal,

@@ -1,3 +1,4 @@
+import { WORKSPACE_ACCOUNT_EVENT } from './workspaceOwnership';
 const supabaseEnv = {
   url: import.meta.env.VITE_SUPABASE_URL,
   anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -23,7 +24,7 @@ let cachedSupabaseClientPromise = null;
 
 async function createSupabaseClient() {
   const { createClient } = await import('@supabase/supabase-js');
-  return createClient(supabaseEnv.url, supabaseEnv.anonKey, {
+  const client = createClient(supabaseEnv.url, supabaseEnv.anonKey, {
     auth: {
       // Persist the session so the magic-link sign-in flow survives reloads
       // and tab switches. Authenticated repository calls require a session
@@ -35,6 +36,10 @@ async function createSupabaseClient() {
       storageKey: 'ceo-os:auth',
     },
   });
+  client.auth.onAuthStateChange(() => {
+    window.dispatchEvent(new Event(WORKSPACE_ACCOUNT_EVENT));
+  });
+  return client;
 }
 
 export async function getSupabaseSession() {

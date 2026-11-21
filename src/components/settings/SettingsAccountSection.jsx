@@ -38,6 +38,11 @@ function SettingsAccountSection() {
 
   return (
     <SectionCard title="Account" iconName="settings">
+      <p className="helper-text">
+        Notebook pages and reminders stay with the account that created them.
+        Signed-out notes stay on this device and are not uploaded automatically.
+        Sign out to return to those local notes.
+      </p>
       {!isSupabaseConfigured || isAuthDisabled ? (
         <p className="helper-text">
           Cloud sync is not configured for this build. Local data on this device is the

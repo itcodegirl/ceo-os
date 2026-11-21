@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, assertWorkspaceOwner } from './workspaceOwnership';
 /**
  * Bridges the framework-agnostic offline write queue (offlineWriteQueue.js)
  * with the repository call sites. Repositories use `tryRemoteOrEnqueue` to
@@ -39,6 +40,8 @@ export function shouldEnqueueWriteFailure(error) {
     return false;
   }
 
+  if (error?.code === 'WORKSPACE_ACCOUNT_CHANGED' || error?.code === 'SUPABASE_AUTH_REQUIRED') return false;
+
   // Stale-record conflicts are user-action problems — don't replay blindly.
   if (error instanceof StaleRecordError || error?.name === 'StaleRecordError') {
     return false;
@@ -67,11 +70,15 @@ export function shouldEnqueueWriteFailure(error) {
  * doesn't enqueue itself a second time.
  */
 export async function tryRemoteOrEnqueue({ kind, payload, options = {} }, attempt) {
+  const ownerId = options.ownerId ?? getWorkspaceOwnerId();
   try {
-    return await attempt();
+    assertWorkspaceOwner(ownerId);
+    const result = await attempt();
+    assertWorkspaceOwner(ownerId);
+    return result;
   } catch (error) {
     if (!options.skipQueue && shouldEnqueueWriteFailure(error)) {
-      enqueueOfflineWrite({ kind, payload });
+      enqueueOfflineWrite({ kind, payload, ownerId });
     }
     throw error;
   }

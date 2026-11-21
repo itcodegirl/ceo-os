@@ -84,6 +84,7 @@ function buildSupabaseClientStub({ storedUpdatedAt = null, row = null } = {}) {
 
 describe('updateOpportunity (Supabase optimistic locking)', () => {
   beforeEach(() => {
+    window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: 'user-1' } }));
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockReset();
     runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockResolvedValue('user-1');
     runtimeModule.getSupabaseRuntime.mockResolvedValue(runtimeModule.__supabaseRuntime);

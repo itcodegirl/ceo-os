@@ -14,7 +14,7 @@ function normalizeText(value) {
     return '';
   }
 
-  return value.trim();
+  return value;
 }
 
 function normalizeCategory(value) {
@@ -112,7 +112,7 @@ export function listCaptureNotes() {
 }
 
 export function createCaptureNote(payload) {
-  const text = normalizeText(payload?.text);
+  const text = normalizeText(payload?.text).trim();
   if (!text) {
     throw new Error('Capture note text is required');
   }
@@ -149,7 +149,7 @@ export function updateCaptureNote(id, payload) {
     didUpdate = true;
     return normalizeCaptureNote({
       ...note,
-      text: nextText || note.text,
+      text: typeof payload?.text === 'string' ? nextText : note.text,
       category: nextCategory,
       updatedAt: now,
     });

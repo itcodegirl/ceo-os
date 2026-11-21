@@ -227,9 +227,11 @@ keep the required check set to `Unit + E2E`.
 
 - `OPENAI_API_KEY` (required for proxy responses)
 - `OPENAI_MODEL` (optional)
-- `CHIEF_STAFF_PROXY_TOKEN` (optional)
-- `CHIEF_STAFF_REQUIRE_TOKEN` (optional; `true` rejects requests when no
-  proxy token is configured — recommended for production)
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` (verify browser AI sessions; defaults
+  to the matching `VITE_SUPABASE_*` values when available at runtime)
+- `CHIEF_STAFF_PROXY_TOKEN` (optional, trusted server integrations only)
+- `CHIEF_STAFF_REQUIRE_TOKEN` (leave unset or `true` in production; browser
+  requests authenticate with their short-lived Supabase session token)
 - `CHIEF_STAFF_RATE_LIMIT_PER_MINUTE` (optional)
 - `APP_ERROR_TELEMETRY_INGEST_TOKEN` (optional ingest token validation)
 - `APP_ERROR_TELEMETRY_HMAC_SECRET_CURRENT` / `..._NEXT` (optional rotating

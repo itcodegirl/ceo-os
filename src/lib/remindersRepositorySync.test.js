@@ -30,11 +30,12 @@ import {
 let fake;
 
 function signIn() {
+  window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: USER } }));
   runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(fake.client);
   runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockResolvedValue(USER);
 }
 
-function signOut() {
+function pauseCloud() {
   const authRequired = Object.assign(new Error('auth'), { code: 'SUPABASE_AUTH_REQUIRED' });
   runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockRejectedValue(authRequired);
 }
@@ -53,7 +54,7 @@ beforeEach(() => {
   window.localStorage.clear();
   fake = createFakeSupabase();
   runtimeModule.getSupabaseRuntime.mockResolvedValue(runtimeModule.__supabaseRuntime);
-  signOut();
+  pauseCloud();
 });
 
 describe('notebook to-dos', () => {
@@ -87,7 +88,7 @@ describe('reminders account sync', () => {
     expect(fake.tables.reminders).toEqual([]);
   });
 
-  it('uploads reminders saved before sync existed, once, keeping their fields', async () => {
+  it('preserves unowned legacy reminders locally without uploading them to the next account', async () => {
     window.localStorage.setItem('ceo-os-reminders', JSON.stringify([
       { id: 'legacy-1', text: 'Legacy reminder', isDone: true, completedAt: '2026-09-01T10:00:00.000Z', createdAt: '2026-08-30T09:00:00.000Z' },
     ]));
@@ -96,15 +97,10 @@ describe('reminders account sync', () => {
     await syncReminders();
     await syncReminders();
 
-    expect(fake.tables.reminders).toEqual([expect.objectContaining({
-      id: 'legacy-1',
-      user_id: USER,
-      text: 'Legacy reminder',
-      is_done: true,
-      completed_at: '2026-09-01T10:00:00.000Z',
-      created_at: '2026-08-30T09:00:00.000Z',
-    })]);
-    expect(find('legacy-1').sync).toMatchObject({ pending: false, ownerId: USER });
+    expect(fake.tables.reminders).toEqual([]);
+    expect(find('legacy-1')).toBeUndefined();
+    window.localStorage.removeItem('ceo-os:auth');
+    expect(find('legacy-1')).toMatchObject({ text: 'Legacy reminder', isDone: true, sync: { ownerId: '' } });
   });
 
   it('pushes changes and brings in reminders and changes from other devices', async () => {
@@ -129,7 +125,7 @@ describe('reminders account sync', () => {
     await syncReminders();
 
     await settle();
-    signOut();
+    pauseCloud();
     updateReminderText(todo.id, 'Changed here, later');
     fake.editElsewhere('reminders', todo.id, { text: 'Changed elsewhere' });
     await settle();
@@ -148,7 +144,7 @@ describe('reminders account sync', () => {
     await syncReminders();
 
     await settle();
-    signOut();
+    pauseCloud();
     deleteReminder(deletedHere.id);
     fake.deleteElsewhere('reminders', deletedElsewhere.id);
     await settle();

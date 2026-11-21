@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, assertWorkspaceOwner } from './workspaceOwnership';
 /**
  * Persistent queue for writes that could not reach Supabase (network down,
  * auth blip, etc.). Repositories can opt in: when a remote write fails with
@@ -8,7 +9,7 @@
  *
  *   - Persisted in localStorage under `ceo-os-offline-write-queue`. Survives
  *     reloads and tab restarts.
- *   - Each entry: { id, kind, payload, createdAt, attempts }.
+ *   - Each entry: { id, ownerId, kind, payload, createdAt, attempts }.
  *   - Drain stops on first failure to avoid hammering a still-down service.
  *     Callers can manually re-drain on a window 'online' event or a UI retry.
  *   - Emits `ceo-os:offline-queue-updated` on every queue change so the
@@ -98,7 +99,7 @@ export function getOfflineQueue() {
  *
  * Returns the persisted entry, or null if storage is unavailable.
  */
-export function enqueueOfflineWrite({ kind, payload }) {
+export function enqueueOfflineWrite({ kind, payload, ownerId = getWorkspaceOwnerId() }) {
   const storage = safeStorage();
   if (!storage || typeof kind !== 'string' || !kind.trim()) {
     return null;
@@ -108,6 +109,7 @@ export function enqueueOfflineWrite({ kind, payload }) {
   const entry = {
     id: buildEntryId(),
     kind: kind.trim(),
+    ownerId,
     payload: payload === undefined ? null : payload,
     createdAt: Date.now(),
     attempts: 0,
@@ -182,22 +184,27 @@ export async function drainOfflineQueue(handlerByKind = {}) {
     return { drained: 0, failed: 0, remaining: 0 };
   }
 
+  const ownerId = getWorkspaceOwnerId();
   let drained = 0;
   let failed = 0;
   let stopOnFailure = false;
 
   for (let index = 0; index < queue.length && !stopOnFailure; index += 1) {
     const entry = queue[index];
+    // Older entries without ownership stay preserved for manual recovery.
+    if (entry.ownerId !== ownerId) continue;
     const handler = handlerByKind[entry.kind];
     if (typeof handler !== 'function') {
       // Unknown kinds stay in place.
       continue;
     }
     try {
+      assertWorkspaceOwner(ownerId);
       await handler(entry.payload, entry);
+      assertWorkspaceOwner(ownerId);
       // Re-read the queue in case other tabs changed it; remove this entry by id.
       queue = readQueue(storage).filter((candidate) => candidate.id !== entry.id);
-      writeQueue(storage, queue);
+      if (!writeQueue(storage, queue)) throw new Error('Unable to acknowledge queued write on this device.');
       drained += 1;
       // After mutation, restart loop from current index against the fresh queue.
       index -= 1;

@@ -33,9 +33,22 @@ intend to run signed error-event ingest in production.
 | --- | --- |
 | `OPENAI_API_KEY` | Required for proxy responses. Never exposed to the browser. |
 | `OPENAI_MODEL` | Optional override (default `gpt-4.1-mini`). |
-| `CHIEF_STAFF_PROXY_TOKEN` | Shared secret token that clients must send in `Authorization: Bearer <token>` or `X-Chief-Staff-Token`. The proxy fails closed by default, so production deployments MUST set this. |
+| `CHIEF_STAFF_PROXY_TOKEN` | Optional shared secret for trusted server integrations via `X-Chief-Staff-Token` or bearer header. Never embed it in browser code or a `VITE_*` variable. Browser calls use the signed-in Supabase access token instead. |
 | `CHIEF_STAFF_REQUIRE_TOKEN` | Set to `false` to explicitly disable token auth for local dev. When unset, the proxy refuses unauthenticated requests. |
-| `CHIEF_STAFF_RATE_LIMIT_PER_MINUTE` | Default `10` per source IP/header. Set to `0` to disable. |
+| `CHIEF_STAFF_RATE_LIMIT_PER_MINUTE` | Default `10` per verified user (source IP/header for server integrations). Set to `0` to disable. |
+
+The browser sends its short-lived Supabase session token. The proxy verifies it
+with the same project's `/auth/v1/user` endpoint before calling OpenAI. Set
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` in the function environment, or expose the
+existing `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` values to the function
+runtime as well as the build. No service-role key is needed for this check.
+`VITE_OPENAI_PROXY_URL` must point to a trusted proxy because it receives that
+session credential. The default same-origin Netlify function is preferred.
+
+Signed-out, expired-session, and unavailable-auth requests fail closed and show
+the labeled local template. Keep `CHIEF_STAFF_REQUIRE_TOKEN` unset or `true` in
+production. After configuring deployment variables, verify a real sign-in and
+AI response; a successful local-template fallback does not establish AI health.
 
 ### Error telemetry ingest
 

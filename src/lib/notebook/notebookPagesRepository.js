@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, normalizeDeletionRecords, selectWorkspaceStore, mergeWorkspaceStore } from '../workspaceOwnership';
 // notebookPagesRepository — Notebook pages, local-first with account sync.
 //
 // Why this differs from the opportunities/content repositories (which pick ONE
@@ -16,7 +17,7 @@
 import { buildCreateId } from '../utils';
 import { STORAGE_DOMAINS } from '../dataSchema';
 import { readVersionedLocalStorage, writeVersionedLocalStorage } from '../versionedStorage';
-import { getSyncSession } from '../syncSession';
+import { getSyncSession, assertSyncSession } from '../syncSession';
 import { tryRemoteOrEnqueue } from '../offlineWriteQueueIntegration';
 import { applyExpectedUpdatedAtFilter, assertRecordIsFresh } from '../staleRecordError';
 import { getTodayJournalDateKey, listJournalEntries } from '../journalRepository';
@@ -79,9 +80,7 @@ function normalizePage(page) {
 function normalizeStore(value) {
   const store = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   const pages = Array.isArray(store.pages) ? store.pages.map(normalizePage).filter(Boolean) : [];
-  const deletedPageIds = Array.isArray(store.deletedPageIds)
-    ? store.deletedPageIds.filter((id) => typeof id === 'string')
-    : [];
+  const deletedPageIds = normalizeDeletionRecords(store.deletedPageIds);
   return { pages, deletedPageIds, journalImported: store.journalImported === true };
 }
 
@@ -95,11 +94,11 @@ function readRawStore() {
 // Every read first runs the one-time Journal import, so Focus Home sees the
 // learner's existing entries even before the Notebook page is ever opened.
 function readStore() {
-  return migrateLegacyJournal(readRawStore()).store;
+  return selectWorkspaceStore(migrateLegacyJournal(readRawStore()).store, 'pages', 'deletedPageIds');
 }
 
-function writeStore(store) {
-  writeVersionedLocalStorage(STORAGE_DOMAINS.notebookPages, store, 'Failed to save your notebook page on this device.');
+function writeStore(store, ownerId = getWorkspaceOwnerId()) {
+  writeVersionedLocalStorage(STORAGE_DOMAINS.notebookPages, mergeWorkspaceStore(readRawStore(), store, 'pages', 'deletedPageIds', ownerId), 'Failed to save your notebook page on this device.');
 }
 
 function emitUpdated(detail = {}) {
@@ -177,7 +176,7 @@ function buildPage({ section, title, pageDate = '', sourceUrl = '', blocks = {},
     blocks,
     createdAt: new Date(now).toISOString(),
     updatedAt: now,
-    sync: { pending: true },
+    sync: { ownerId: getWorkspaceOwnerId(), pending: true },
   });
 }
 
@@ -219,8 +218,8 @@ export function createNotebookPage({ section, title, sourceUrl = '' }) {
  * Saves edits made in this browser. `expectedUpdatedAt` guards against a
  * second tab having saved the same page in the meantime (StaleRecordError).
  */
-export function saveNotebookPage(pageId, changes = {}, { expectedUpdatedAt } = {}) {
-  const store = readStore();
+export function saveNotebookPage(pageId, changes = {}, { expectedUpdatedAt, ownerId = getWorkspaceOwnerId() } = {}) {
+  const store = selectWorkspaceStore(readRawStore(), 'pages', 'deletedPageIds', ownerId);
   const current = store.pages.find((page) => page.id === pageId);
   if (!current) {
     throw new Error('This page no longer exists.');
@@ -235,9 +234,9 @@ export function saveNotebookPage(pageId, changes = {}, { expectedUpdatedAt } = {
     updatedAt: Math.max(Date.now(), current.updatedAt + 1),
     sync: { ...current.sync, pending: true },
   });
-  writeStore(updatePageInStore(store, next));
+  writeStore(updatePageInStore(store, next), ownerId);
   emitUpdated({ type: 'save', id: next.id, source: 'local' });
-  void syncNotebookPage(next.id).catch(() => {});
+  if (ownerId === getWorkspaceOwnerId()) void syncNotebookPage(next.id).catch(() => {});
   return next;
 }
 
@@ -264,9 +263,9 @@ export function deleteNotebookPage(pageId) {
  * mid-render).
  */
 function migrateLegacyJournal(store) {
-  if (store.journalImported) return { store, importedCount: 0 };
+  if (store.journalImported || getWorkspaceOwnerId()) return { store, importedCount: 0 };
 
-  const existingDates = new Set(store.pages.filter((page) => page.section === PERSONAL).map((page) => page.pageDate));
+  const existingDates = new Set(store.pages.filter((page) => page.section === PERSONAL && !page.sync.ownerId).map((page) => page.pageDate));
   const imported = [];
   for (const entry of listJournalEntries()) {
     if (!entry?.dateKey || existingDates.has(entry.dateKey)) continue;
@@ -284,7 +283,7 @@ function migrateLegacyJournal(store) {
 
   const next = { ...store, pages: [...store.pages, ...imported], journalImported: true };
   try {
-    writeStore(next);
+    writeVersionedLocalStorage(STORAGE_DOMAINS.notebookPages, next, 'Failed to import your journal.');
   } catch {
     // Still show the imported pages; the import retries on the next read.
     return { store: { ...next, journalImported: false }, importedCount: imported.length };
@@ -336,7 +335,7 @@ function sameContent(page, row) {
 }
 
 function isOwnedBy(page, userId) {
-  return !page.sync.ownerId || page.sync.ownerId === userId;
+  return page.sync.ownerId === userId;
 }
 
 function markSynced(pageId, row, userId, pushedUpdatedAt) {
@@ -398,6 +397,7 @@ function applyRemoteRow(store, row, userId) {
 }
 
 async function pushPage(pageId, session, { skipQueue = false } = {}) {
+  assertSyncSession(session);
   const page = getNotebookPage(pageId);
   if (!page || !page.sync.pending || page.sync.conflict || !isOwnedBy(page, session.userId)) return page;
   const { client, userId } = session;
@@ -409,12 +409,14 @@ async function pushPage(pageId, session, { skipQueue = false } = {}) {
       const { data, error } = await applyExpectedUpdatedAtFilter(query, page.sync.remoteUpdatedAt)
         .select(SELECT_COLUMNS)
         .maybeSingle();
+      assertSyncSession(session);
       if (error) throw error;
       if (data) return markSynced(page.id, data, userId, pushedUpdatedAt);
 
       // The guard matched nothing: the row changed or vanished elsewhere.
       const { data: remote, error: readError } = await client
         .from(TABLE).select(SELECT_COLUMNS).eq('id', page.id).eq('user_id', userId).maybeSingle();
+      assertSyncSession(session);
       if (readError) throw readError;
       if (remote && sameContent(page, remote)) return markSynced(page.id, remote, userId, pushedUpdatedAt);
       markConflict(page.id, remote);
@@ -426,6 +428,7 @@ async function pushPage(pageId, session, { skipQueue = false } = {}) {
       .insert({ id: page.id, ...toRow(page, userId) })
       .select(SELECT_COLUMNS)
       .single();
+    assertSyncSession(session);
     if (!error) return markSynced(page.id, data, userId, pushedUpdatedAt);
     if (error.code !== '23505' || page.section !== PERSONAL) throw error;
 
@@ -434,6 +437,7 @@ async function pushPage(pageId, session, { skipQueue = false } = {}) {
       .from(TABLE).select(SELECT_COLUMNS)
       .eq('user_id', userId).eq('section', PERSONAL).eq('page_date', page.pageDate)
       .maybeSingle();
+    assertSyncSession(session);
     if (dailyError) throw dailyError;
     if (!remoteDaily) throw error;
     return adoptRemoteDaily(page.id, remoteDaily, session, { skipQueue });
@@ -470,12 +474,14 @@ function schedulePush(pageId, session, options = {}) {
   return entry.promise;
 }
 
-async function settlePushesInFlight() {
+async function settlePushesInFlight(session) {
   await Promise.allSettled([...pushesInFlight.values()].map((entry) => entry.promise));
+  assertSyncSession(session);
 }
 
 /** Merges a local daily page into the remote page for the same date. */
 async function adoptRemoteDaily(localId, row, session, options) {
+  assertSyncSession(session);
   const store = readStore();
   const local = store.pages.find((page) => page.id === localId);
   if (!local) return null;
@@ -507,11 +513,13 @@ async function adoptRemoteDaily(localId, row, session, options) {
 
 async function pushDeletion(pageId, { skipQueue = false } = {}) {
   const session = await getSyncSession();
-  if (!session) return;
+  if (!session || !readStore().deletedPageIds.includes(pageId)) return;
   await tryRemoteOrEnqueue({ kind: NOTEBOOK_PAGE_QUEUE_KIND_DELETE, payload: { id: pageId }, options: { skipQueue } }, async () => {
     const { error } = await session.client.from(TABLE).delete().eq('id', pageId).eq('user_id', session.userId);
+    assertSyncSession(session);
     if (error) throw error;
   });
+  assertSyncSession(session);
   const store = readStore();
   writeStore({ ...store, deletedPageIds: store.deletedPageIds.filter((id) => id !== pageId) });
 }
@@ -546,7 +554,8 @@ export async function syncNotebookPages() {
   if (!session) return 'local';
   const { client, userId } = session;
   beforeSyncFlushers.forEach((flush) => flush());
-  await settlePushesInFlight();
+  await settlePushesInFlight(session);
+  assertSyncSession(session);
 
   let store = readStore();
   for (const pageId of store.deletedPageIds) {
@@ -554,6 +563,7 @@ export async function syncNotebookPages() {
   }
 
   const { data: rows, error } = await client.from(TABLE).select(SELECT_COLUMNS).eq('user_id', userId);
+  assertSyncSession(session);
   if (error) throw error;
 
   // Save anything typed during the fetch; the merge below is synchronous.

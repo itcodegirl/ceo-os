@@ -89,6 +89,7 @@ function buildSupabaseClientStub({
 
 describe('contentRepository Supabase timestamp coverage', () => {
   beforeEach(() => {
+    window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: 'user-1' } }));
     runtimeModule.__supabaseRuntime.getSupabaseClient.mockReset();
     runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockResolvedValue('user-1');
     runtimeModule.getSupabaseRuntime.mockResolvedValue(runtimeModule.__supabaseRuntime);

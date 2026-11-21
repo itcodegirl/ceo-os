@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { contentItems as mockContentItems } from '../data/mockData';
 import { deleteRecordById, replaceRecordById } from './stateUtils';
 import { buildCreateId } from './utils';
@@ -179,6 +180,8 @@ export async function listContentItems() {
 }
 
 export async function createContentItem(payload, options = {}) {
+  options = { ...options, ownerId: options.ownerId ?? getWorkspaceOwnerId() };
+  assertWorkspaceOwner(options.ownerId);
   const normalizedPayload = normalizeContentItem({
     id: buildCreateId(),
     updatedAt: Date.now(),
@@ -190,12 +193,15 @@ export async function createContentItem(payload, options = {}) {
   if (supabaseClient) {
     const attempt = async () => {
       const userId = await supabase.requireSupabaseUserId();
+      assertWorkspaceOwner(options.ownerId);
+      if (userId !== options.ownerId) throw accountChangedError();
       await assertNoSupabaseContentDuplicate({
         supabaseClient,
         userId,
         payload: normalizedPayload,
       });
 
+      assertWorkspaceOwner(options.ownerId);
       const { data, error } = await supabaseClient
         .from('content_items')
         .insert({
@@ -231,12 +237,16 @@ export async function createContentItem(payload, options = {}) {
 }
 
 export async function updateContentItem(id, payload, options = {}) {
+  options = { ...options, ownerId: options.ownerId ?? getWorkspaceOwnerId() };
+  assertWorkspaceOwner(options.ownerId);
   const supabase = await getSupabaseRuntime();
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
   if (supabaseClient) {
     const attempt = async () => {
       const normalizedPayload = normalizeContentItem({ id, ...payload });
       const userId = await supabase.requireSupabaseUserId();
+      assertWorkspaceOwner(options.ownerId);
+      if (userId !== options.ownerId) throw accountChangedError();
       await assertNoSupabaseContentDuplicate({
         supabaseClient,
         userId,
@@ -244,6 +254,7 @@ export async function updateContentItem(id, payload, options = {}) {
         excludeId: id,
       });
 
+      assertWorkspaceOwner(options.ownerId);
       let query = supabaseClient
         .from('content_items')
         .update(toContentItemRow(normalizedPayload))
@@ -308,11 +319,15 @@ export async function updateContentItem(id, payload, options = {}) {
 }
 
 export async function deleteContentItem(id, options = {}) {
+  options = { ...options, ownerId: options.ownerId ?? getWorkspaceOwnerId() };
+  assertWorkspaceOwner(options.ownerId);
   const supabase = await getSupabaseRuntime();
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
   if (supabaseClient) {
     const attempt = async () => {
       const userId = await supabase.requireSupabaseUserId();
+      assertWorkspaceOwner(options.ownerId);
+      if (userId !== options.ownerId) throw accountChangedError();
       const { error } = await supabaseClient
         .from('content_items')
         .delete()

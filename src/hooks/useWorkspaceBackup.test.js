@@ -19,11 +19,12 @@ const {
   importWorkspaceBackupMock: vi.fn(),
 }));
 
+vi.mock('../lib/workspaceBackupImport', () => ({ importWorkspaceBackup: importWorkspaceBackupMock }));
+
 vi.mock('../lib/workspacePortability', () => ({
   buildWorkspaceBackup: buildWorkspaceBackupMock,
   buildWorkspaceBackupFileName: buildWorkspaceBackupFileNameMock,
   getLocalWorkspaceDataHealth: getLocalWorkspaceDataHealthMock,
-  importWorkspaceBackup: importWorkspaceBackupMock,
 }));
 
 import { formatCount, useWorkspaceBackup } from './useWorkspaceBackup';

@@ -159,6 +159,7 @@ function createFakeSupabase() {
 let fake;
 
 function signIn() {
+  window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: USER } }));
   runtimeModule.__supabaseRuntime.getSupabaseClient.mockResolvedValue(fake.client);
   runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockResolvedValue(USER);
 }
@@ -368,6 +369,26 @@ describe('notebook pages account sync', () => {
     expect(getNotebookPage(page.id).sync).toMatchObject({ pending: false, conflict: null });
   });
 
+  it('keeps a pending account-A edit when its response arrives after switching to B', async () => {
+    const page = createNotebookPage({ section: 'learning', title: 'A work' });
+    await syncNotebookPages();
+    const release = fake.holdWrites();
+    saveNotebookPage(page.id, { title: 'A final edit' });
+    const pending = syncNotebookPage(page.id);
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: 'account-B' } }));
+    runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockResolvedValue('account-B');
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'WORKSPACE_ACCOUNT_CHANGED' });
+    release();
+    await rejected;
+    expect(getNotebookPage(page.id)).toBeNull();
+    signIn();
+    expect(getNotebookPage(page.id)).toMatchObject({ title: 'A final edit', sync: { pending: true, ownerId: USER } });
+    await syncNotebookPages();
+    expect(getNotebookPage(page.id).sync.pending).toBe(false);
+    expect(fake.rows[0]).toMatchObject({ user_id: USER, title: 'A final edit' });
+  });
+
   it('drops pages deleted on another device, but asks before dropping unsynced edits', async () => {
     const quiet = createNotebookPage({ section: 'professional', title: 'Quiet' });
     const edited = createNotebookPage({ section: 'professional', title: 'Edited' });
@@ -400,7 +421,7 @@ describe('notebook pages account sync', () => {
     expect(fake.rows).toEqual([]);
   });
 
-  it('deletes synced pages remotely, retrying deletions made while signed out', async () => {
+  it('deletes synced pages remotely, retrying while the same account is offline', async () => {
     const page = createNotebookPage({ section: 'ventures', title: 'Old idea' });
     await syncNotebookPages();
 
@@ -455,12 +476,15 @@ describe('notebook pages account sync', () => {
     const page = createNotebookPage({ section: 'learning', title: 'Theirs' });
     await syncNotebookPages();
 
+    window.localStorage.setItem('ceo-os:auth', JSON.stringify({ user: { id: 'user-2' } }));
     runtimeModule.__supabaseRuntime.requireSupabaseUserId.mockResolvedValue('user-2');
-    saveNotebookPage(page.id, { blocks: { notes: textToDoc('edited while user-2 is signed in') } });
+    expect(() => saveNotebookPage(page.id, { blocks: { notes: textToDoc('not allowed') } })).toThrow();
     await syncNotebookPages();
 
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0].user_id).toBe(USER);
-    expect(getNotebookPage(page.id)).not.toBeNull();
+    expect(getNotebookPage(page.id)).toBeNull();
+    signIn();
+    expect(getNotebookPage(page.id).title).toBe('Theirs');
   });
 });

@@ -1,3 +1,4 @@
+import { authenticateChiefRequest } from './chiefAuth.js';
 import { getChiefActionConfig, getChiefActionKeys } from '../shared/chiefActions.js';
 import { MAX_NOTES_LENGTH } from '../shared/chiefConfig.js';
 import { extractStructuredPayloadIfPresent } from '../shared/chiefStructuredPayload.js';
@@ -96,7 +97,7 @@ function extractCorrelationId(headers) {
   return normalizeCorrelationId(correlationHeader);
 }
 
-function isRateLimited(headers) {
+function isRateLimited(headers, userId) {
   const limit = parseRateLimit(process.env.CHIEF_STAFF_RATE_LIMIT_PER_MINUTE);
   if (limit <= 0) {
     return false;
@@ -105,7 +106,7 @@ function isRateLimited(headers) {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
   pruneStaleClients(windowStart);
-  const clientKey = parseClientKey(headers);
+  const clientKey = userId ? `user:${userId}` : parseClientKey(headers);
   const requestHistory = requestTimestampsByClient.get(clientKey) || [];
 
   const activeRequests = requestHistory.filter((timestamp) => timestamp >= windowStart);
@@ -161,43 +162,6 @@ function normalizeActionKey(actionKey, allowedActionKeys) {
   return allowedActionKeys.has(actionKey) ? actionKey : 'summarize';
 }
 
-function extractRequestToken(headers) {
-  if (!headers || typeof headers !== 'object') {
-    return '';
-  }
-
-  const headerToken = headers['x-chief-staff-token']
-    || headers['X-Chief-Staff-Token']
-    || headers['X-CHIEF-STAFF-TOKEN']
-    || headers.authorization;
-
-  if (typeof headerToken !== 'string') {
-    return '';
-  }
-
-  if (headerToken.startsWith('Bearer ')) {
-    return headerToken.slice(7).trim();
-  }
-
-  return headerToken.trim();
-}
-
-function hasValidProxyToken(headers) {
-  const configuredToken = process.env.CHIEF_STAFF_PROXY_TOKEN?.trim();
-  const requestToken = extractRequestToken(headers);
-
-  if (!configuredToken) {
-    // Fail closed by default: any environment that did not explicitly opt
-    // out of token auth (e.g. local dev with CHIEF_STAFF_REQUIRE_TOKEN=false)
-    // must configure CHIEF_STAFF_PROXY_TOKEN. This protects production
-    // deployments from accidentally exposing the OpenAI key.
-    const explicitlyDisabled = process.env.CHIEF_STAFF_REQUIRE_TOKEN === 'false';
-    return explicitlyDisabled;
-  }
-
-  return requestToken === configuredToken;
-}
-
 function buildInput({ instruction, notes }) {
   return [
     {
@@ -245,14 +209,15 @@ export async function handleChiefOfStaffProxy({ method, body, headers = {} }) {
     }, requestId, correlationId);
   }
 
-  if (!hasValidProxyToken(headers)) {
-    return buildResponse(401, {
-      error: 'Missing or invalid proxy authentication token',
-      error_code: 'PROXY_AUTH_INVALID',
+  const auth = await authenticateChiefRequest(headers);
+  if (!auth.authorized) {
+    return buildResponse(auth.unavailable ? 503 : 401, {
+      error: auth.unavailable ? 'Unable to verify your session. Try again shortly.' : 'Sign in to use AI generation, or continue with a local template.',
+      error_code: auth.unavailable ? 'PROXY_AUTH_UNAVAILABLE' : 'PROXY_AUTH_INVALID',
     }, requestId, correlationId);
   }
 
-  if (isRateLimited(headers)) {
+  if (isRateLimited(headers, auth.userId)) {
     return buildResponse(429, {
       error: 'Rate limit exceeded for this client',
       error_code: 'RATE_LIMITED',

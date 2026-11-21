@@ -1,3 +1,4 @@
+import { getWorkspaceOwnerId, assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { opportunities as mockOpportunities } from '../data/mockData';
 import { deleteRecordById, replaceRecordById } from './stateUtils';
 import { buildCreateId } from './utils';
@@ -165,6 +166,8 @@ export async function listOpportunities() {
 }
 
 export async function createOpportunity(payload, options = {}) {
+  options = { ...options, ownerId: options.ownerId ?? getWorkspaceOwnerId() };
+  assertWorkspaceOwner(options.ownerId);
   const normalizedPayload = normalizeOpportunity({
     id: buildCreateId(),
     updatedAt: Date.now(),
@@ -176,12 +179,15 @@ export async function createOpportunity(payload, options = {}) {
   if (supabaseClient) {
     const attempt = async () => {
       const userId = await supabase.requireSupabaseUserId();
+      assertWorkspaceOwner(options.ownerId);
+      if (userId !== options.ownerId) throw accountChangedError();
       await assertNoSupabaseOpportunityDuplicate({
         supabaseClient,
         userId,
         payload: normalizedPayload,
       });
 
+      assertWorkspaceOwner(options.ownerId);
       const { data, error } = await supabaseClient
         .from('opportunities')
         .insert(formatForSupabase({ ...normalizedPayload, userId }))
@@ -214,12 +220,16 @@ export async function createOpportunity(payload, options = {}) {
 }
 
 export async function updateOpportunity(id, payload, options = {}) {
+  options = { ...options, ownerId: options.ownerId ?? getWorkspaceOwnerId() };
+  assertWorkspaceOwner(options.ownerId);
   const supabase = await getSupabaseRuntime();
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
   if (supabaseClient) {
     const attempt = async () => {
       const normalizedPayload = normalizeOpportunity({ id, ...payload });
       const userId = await supabase.requireSupabaseUserId();
+      assertWorkspaceOwner(options.ownerId);
+      if (userId !== options.ownerId) throw accountChangedError();
       await assertNoSupabaseOpportunityDuplicate({
         supabaseClient,
         userId,
@@ -227,6 +237,7 @@ export async function updateOpportunity(id, payload, options = {}) {
         excludeId: id,
       });
 
+      assertWorkspaceOwner(options.ownerId);
       let query = supabaseClient
         .from('opportunities')
         .update(formatForSupabase(normalizedPayload))
@@ -297,11 +308,15 @@ export async function updateOpportunity(id, payload, options = {}) {
 }
 
 export async function deleteOpportunity(id, options = {}) {
+  options = { ...options, ownerId: options.ownerId ?? getWorkspaceOwnerId() };
+  assertWorkspaceOwner(options.ownerId);
   const supabase = await getSupabaseRuntime();
   const supabaseClient = supabase ? await supabase.getSupabaseClient() : null;
   if (supabaseClient) {
     const attempt = async () => {
       const userId = await supabase.requireSupabaseUserId();
+      assertWorkspaceOwner(options.ownerId);
+      if (userId !== options.ownerId) throw accountChangedError();
       const { error } = await supabaseClient
         .from('opportunities')
         .delete()
