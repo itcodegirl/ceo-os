@@ -9,14 +9,14 @@ function resolveInitialValue(initialValue) {
   return typeof initialValue === 'function' ? initialValue() : initialValue;
 }
 
-function loadValue(key, initialValue) {
+function loadValue(key, initialValue, tabDraft = false) {
   if (typeof window === 'undefined') {
     return resolveInitialValue(initialValue);
   }
 
   let rawItem = null;
   try {
-    rawItem = window.localStorage.getItem(key);
+    rawItem = (tabDraft ? window.sessionStorage.getItem(key) : null) ?? window.localStorage.getItem(key);
     if (rawItem === null) {
       return resolveInitialValue(initialValue);
     }
@@ -77,12 +77,14 @@ function valuesEqual(left, right) {
   return true;
 }
 
-export function usePersistentState(key, initialValue) {
+// Tab drafts keep a session copy across reloads and never follow another tab's
+// composer. The local copy remains a fallback for a newly opened session.
+export function usePersistentState(key, initialValue, { tabDraft = false } = {}) {
   const initialValueRef = useRef(initialValue);
 
   const [state, setState] = useState(() => ({
     key,
-    value: loadValue(key, initialValue),
+    value: loadValue(key, initialValue, tabDraft),
   }));
 
   useEffect(() => {
@@ -97,18 +99,18 @@ export function usePersistentState(key, initialValue) {
 
       return {
         key,
-        value: loadValue(key, initialValueRef.current),
+        value: loadValue(key, initialValueRef.current, tabDraft),
       };
     });
-  }, [key]);
+  }, [key, tabDraft]);
 
-  const value = state.key === key ? state.value : loadValue(key, initialValue);
+  const value = state.key === key ? state.value : loadValue(key, initialValue, tabDraft);
 
   const setValue = useCallback((nextValue) => {
     setState((currentState) => {
       const currentValue = currentState.key === key
         ? currentState.value
-        : loadValue(key, initialValueRef.current);
+        : loadValue(key, initialValueRef.current, tabDraft);
       const resolvedValue = resolveNextValue(nextValue, currentValue);
 
       if (currentState.key === key && valuesEqual(currentState.value, resolvedValue)) {
@@ -117,7 +119,7 @@ export function usePersistentState(key, initialValue) {
 
       return { key, value: resolvedValue };
     });
-  }, [key]);
+  }, [key, tabDraft]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -129,6 +131,7 @@ export function usePersistentState(key, initialValue) {
     }
 
     try {
+      if (tabDraft) window.sessionStorage.setItem(key, JSON.stringify(value));
       window.localStorage.setItem(key, JSON.stringify(value));
       window.dispatchEvent(
         new CustomEvent(PERSISTENT_STATE_EVENT, {
@@ -142,10 +145,10 @@ export function usePersistentState(key, initialValue) {
         console.error('localStorage save failed', error);
       }
     }
-  }, [key, state.key, value]);
+  }, [key, state.key, value, tabDraft]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || tabDraft) {
       return undefined;
     }
 
@@ -216,7 +219,7 @@ export function usePersistentState(key, initialValue) {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener(PERSISTENT_STATE_EVENT, handleInPageStateChange);
     };
-  }, [key]);
+  }, [key, tabDraft]);
 
   return [value, setValue];
 }

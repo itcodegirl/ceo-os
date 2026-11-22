@@ -14,7 +14,7 @@ export default function ChiefContentList(props) {
           <h4>{item.title}</h4>
           <p>{item.summary}</p>
           <small>
-            {item.platform} · {item.status || "Drafting"}
+            {item.platform || "Platform not specified"} · {item.status || "Drafting (default)"}
           </small>
         </>
       )}

@@ -14,7 +14,7 @@ export default function ChiefPriorityList(props) {
           <h4>{item.title}</h4>
           <p>{item.reason}</p>
           <small>
-            Owner: {item.owner || "You"} · Status: {item.status || "Planned"}
+            Owner: {item.owner || "Not specified"} · Status: {item.status || "Planned (default)"}
           </small>
         </>
       )}

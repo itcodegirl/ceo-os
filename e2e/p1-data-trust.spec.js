@@ -23,6 +23,8 @@ test('a blank Weekly Brief stays blank after the next Monday', async ({ page }) 
   await page.clock.setFixedTime(new Date('2026-11-23T12:00:00Z'));
   await page.goto('/');
   await page.getByRole('button', { name: 'Start blank', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm demo cleanup' }).click();
+  await expect(page.getByRole('dialog', { name: 'Review demo cleanup' })).toBeHidden();
   await page.goto('/weekly-brief');
   await expect(page.getByText(/Nothing here yet. What are the/)).toBeVisible();
   await expect(page.getByText(/No wins logged. Start with one/)).toBeVisible();

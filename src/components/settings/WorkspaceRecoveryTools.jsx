@@ -57,7 +57,7 @@ export default function WorkspaceRecoveryTools() {
       </div>
     </li>)}</ul>
     <h3>Before-restore snapshots</h3>
-    <p>Each backup restore preserves the original stores here. Download a snapshot to review or import it through the normal backup preview. It contains previously existing stores; importing it does not delete stores added later.</p>
+    <p>Each backup restore or demo change preserves the original stores here. Download a snapshot to review or import it through the normal backup preview. It contains previously existing stores; importing it does not delete stores added later.</p>
     <ul>{snapshots.map((snapshot) => <li key={snapshot.key}>
       {snapshot.createdAt}
       <Button onClick={() => downloadTextFile(JSON.stringify({ format: 'codeherway-ceo-os-local-backup', schemaVersion: 1, workspaceOwnerId: snapshot.ownerId,

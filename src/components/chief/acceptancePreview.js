@@ -48,7 +48,7 @@ export function getAcceptancePreviewCaption(section, item) {
       return platform ? `Content OS · ${platform}` : 'Content OS';
     }
     case 'tasks':
-      return 'Weekly Brief · task';
+      return 'Weekly Brief · priority (from task)';
     default:
       return '';
   }
@@ -84,8 +84,8 @@ export function getAcceptancePreviewSentence(section, item) {
     }
     case 'tasks':
       return title
-        ? `Add task ${quoted} to this week's Weekly Brief`
-        : 'Add task to this week\'s Weekly Brief';
+        ? `Add task ${quoted} as a priority in this week's Weekly Brief`
+        : 'Add task as a priority in this week\'s Weekly Brief';
     default:
       return title ? `Add ${quoted}` : 'Add structured item';
   }

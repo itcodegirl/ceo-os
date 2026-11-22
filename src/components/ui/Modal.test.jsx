@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Modal from './Modal';
@@ -152,4 +153,36 @@ describe('src/components/ui/Modal', () => {
       document.body.removeChild(main);
     }
   });
+});
+
+function NestedDialogs() {
+  const [details, showDetails] = useState(false);
+  const [edit, showEdit] = useState(false);
+  return <>
+    <button onClick={() => showDetails(true)}>Open details</button>
+    <Modal isOpen={details} title="Details" onClose={() => showDetails(false)}>
+      <button onClick={() => showEdit(true)}>Edit record</button>
+      <Modal isOpen={edit} title="Edit" onClose={() => showEdit(false)}><input aria-label="Draft" /></Modal>
+    </Modal>
+  </>;
+}
+it('keeps only the top dialog interactive and restores focus and scroll ownership on each Escape', async () => {
+  const view = render(<NestedDialogs />);
+  const opener = screen.getByRole('button', { name: 'Open details' });
+  opener.focus(); fireEvent.click(opener);
+  const editButton = screen.getByRole('button', { name: 'Edit record' });
+  editButton.focus(); fireEvent.click(editButton);
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(screen.getByRole('dialog')).toHaveAccessibleName('Edit');
+  expect(view.container).toHaveAttribute('inert');
+  expect(document.body.style.overflow).toBe('hidden');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.getByRole('dialog')).toHaveAccessibleName('Details');
+  expect(editButton).toHaveFocus();
+  expect(document.body.style.overflow).toBe('hidden');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
+  expect(view.container).not.toHaveAttribute('inert');
+  expect(document.body.style.overflow).toBe('');
 });

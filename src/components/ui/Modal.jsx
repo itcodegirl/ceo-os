@@ -1,8 +1,51 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useId, useRef } from 'react';
 import Button from './Button';
 
 const FOCUSABLE_SELECTORS =
   'a[href], area[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+
+// All dialogs share one keyboard, background, and scroll-lock owner.
+const modalStack = [];
+const originalInert = new Map();
+let bodyOverflow = '';
+let backgroundObserver;
+function syncModalBackground() {
+  const top = modalStack.at(-1);
+  if (!top) return;
+  for (const node of document.body.children) {
+    if (!originalInert.has(node)) originalInert.set(node, node.hasAttribute('inert'));
+    node.toggleAttribute('inert', node !== top.overlay || originalInert.get(node));
+  }
+  modalStack.forEach((entry, index) => {
+    entry.overlay.style.zIndex = String(50 + index);
+    if (entry !== top) entry.overlay.setAttribute('aria-hidden', 'true');
+    else entry.overlay.removeAttribute('aria-hidden');
+  });
+}
+function registerModal(entry) {
+  if (!modalStack.length) {
+    bodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    backgroundObserver = new MutationObserver(syncModalBackground);
+    backgroundObserver.observe(document.body, { childList: true });
+  }
+  modalStack.push(entry);
+  syncModalBackground();
+}
+function unregisterModal(entry) {
+  const wasTop = modalStack.at(-1) === entry;
+  const index = modalStack.indexOf(entry);
+  if (index >= 0) modalStack.splice(index, 1);
+  if (modalStack.length) syncModalBackground();
+  else {
+    backgroundObserver?.disconnect();
+    for (const [node, inert] of originalInert) node.toggleAttribute('inert', inert);
+    originalInert.clear();
+    document.body.style.overflow = bodyOverflow;
+  }
+  return wasTop;
+}
 
 function getFocusableElements(root) {
   if (!root) {
@@ -41,10 +84,11 @@ function Modal({ isOpen, title, onClose, children, className = '', initialFocusR
     }
 
     focusReturnRef.current = document.activeElement;
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const entry = { overlay: overlayRef.current, panel: panelRef.current };
+    registerModal(entry);
 
     const handleKeyDown = (event) => {
+      if (modalStack.at(-1) !== entry) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         onCloseRef.current?.();
@@ -66,7 +110,10 @@ function Modal({ isOpen, title, onClose, children, className = '', initialFocusR
       const isShift = event.shiftKey;
       const active = document.activeElement;
 
-      if (isShift && active === firstElement) {
+      if (!panelRef.current?.contains(active)) {
+        event.preventDefault();
+        (isShift ? lastElement : firstElement).focus();
+      } else if (isShift && active === firstElement) {
         event.preventDefault();
         lastElement.focus();
       } else if (!isShift && active === lastElement) {
@@ -78,7 +125,7 @@ function Modal({ isOpen, title, onClose, children, className = '', initialFocusR
     const requestInitialFocus = () => {
       // Opening focus runs on the next frame. Respect a control the user
       // already focused in the meantime (including in a child dialog).
-      if (panelRef.current?.contains(document.activeElement)) return;
+      if (modalStack.at(-1) !== entry || panelRef.current?.contains(document.activeElement)) return;
       if (initialFocusRef?.current) {
         initialFocusRef.current.focus();
         return;
@@ -96,13 +143,16 @@ function Modal({ isOpen, title, onClose, children, className = '', initialFocusR
     return () => {
       cancelAnimationFrame(initialFocusFrame);
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousBodyOverflow || '';
+      if (!unregisterModal(entry)) return;
 
       const focusTarget = focusReturnRef.current;
-      if (focusTarget && typeof focusTarget.focus === 'function' && focusTarget.isConnected) {
+      if (focusTarget && typeof focusTarget.focus === 'function' && focusTarget.isConnected && !focusTarget.closest('[inert]')) {
         focusTarget.focus();
         return;
       }
+
+      const activePanel = modalStack.at(-1)?.panel;
+      if (activePanel) { (getFocusableElements(activePanel)[0] || activePanel).focus(); return; }
 
       // The element that opened the dialog left the DOM while the dialog was
       // open (a common case — e.g. a row action button whose row re-rendered).
@@ -128,7 +178,7 @@ function Modal({ isOpen, title, onClose, children, className = '', initialFocusR
     }
   };
 
-  return (
+  return createPortal(
     <div
       ref={overlayRef}
       className={['modal-overlay', ...className.split(/\s+/).filter(Boolean).map((name) => `${name}-overlay`)].join(' ')}
@@ -157,7 +207,7 @@ function Modal({ isOpen, title, onClose, children, className = '', initialFocusR
         </header>
         <div className="modal-panel__body">{children}</div>
       </div>
-    </div>
+    </div>, document.body,
   );
 }
 

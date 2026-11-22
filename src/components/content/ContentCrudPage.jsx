@@ -97,6 +97,7 @@ function ContentCrudPage() {
     deletePrompt,
     deleteError,
   } = useCrudPage({
+    storageKey: 'ceo-os-content-items',
     defaultFormValues: DEFAULT_FORM,
     listItems: listContentItems,
     createItem: createContentItem,

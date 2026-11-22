@@ -51,7 +51,7 @@ describe('acceptancePreview', () => {
     });
 
     it('names the Weekly Brief destination for tasks', () => {
-      expect(getAcceptancePreviewCaption('tasks', { title: 'T' })).toBe('Weekly Brief · task');
+      expect(getAcceptancePreviewCaption('tasks', { title: 'T' })).toBe('Weekly Brief · priority (from task)');
     });
 
     it('returns empty for unknown sections or missing items', () => {

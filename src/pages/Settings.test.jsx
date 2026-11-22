@@ -141,7 +141,7 @@ describe('src/pages/Settings', () => {
     expect(saveSettings).not.toHaveBeenCalled();
   });
 
-  it('shows explicit local data setup actions and coming-soon paths', () => {
+  it('shows explicit local data setup actions and coming-soon paths', async () => {
     const clearDemoData = vi.fn();
     useSettings.mockReturnValue(createSettingsState());
     useWorkspaceSetup.mockReturnValue({
@@ -150,6 +150,8 @@ describe('src/pages/Settings', () => {
       startBlankWorkspace: vi.fn(),
       loadDemoWorkspace: vi.fn(),
       clearDemoData,
+      previewSetupChange: vi.fn(async () => ({ weeks: [], removed: 0, added: 0, preserved: 0 })),
+      applySetupChange: clearDemoData,
     });
 
     renderSettings();
@@ -163,8 +165,9 @@ describe('src/pages/Settings', () => {
     // test failure rather than silently regressing the audit fix.
     expect(screen.queryByText(/Connect Supabase account: setup required/)).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear demo data from this device' }));
-    expect(clearDemoData).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear demo data' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm demo cleanup' }));
+    await waitFor(() => expect(clearDemoData).toHaveBeenCalledTimes(1));
   });
 
   it('summarizes local data health and pending sync calmly', () => {

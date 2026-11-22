@@ -1,3 +1,4 @@
+import { retainAuthoredRecords, mergeDemoSeeds } from './demoProvenance';
 import { getWorkspaceOwnerId, assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { contentItems as mockContentItems } from '../data/mockData';
 import { deleteRecordById, replaceRecordById } from './stateUtils';
@@ -26,7 +27,6 @@ export const CONTENT_QUEUE_KIND_DELETE = 'content:delete';
 const DUPLICATE_CONTENT_MESSAGE = 'This content item already exists for that platform.';
 
 export const CONTENT_ITEMS_UPDATED_EVENT = 'ceo-os:content-items-updated';
-const DEMO_CONTENT_ITEM_IDS = new Set(mockContentItems.map((item) => String(item.id)));
 
 function normalizeDateOnly(value) {
   if (typeof value !== 'string') {
@@ -52,6 +52,7 @@ function normalizeContentItem(item) {
     scheduledFor: normalizeDateOnly(item.scheduledFor ?? item.scheduled_for),
     notes: item.notes || '',
     updatedAt: readUpdatedAtMs(item),
+    ...(typeof item.demoSeed === 'string' ? { demoSeed: item.demoSeed } : {}),
   };
 }
 
@@ -74,10 +75,10 @@ function getSeededLocalItems() {
     return [];
   }
 
-  return getDemoLocalItems();
+  return getContentDemoSeed();
 }
 
-function getDemoLocalItems() {
+export function getContentDemoSeed() {
   return mockContentItems.map((item) => normalizeContentItem(item));
 }
 
@@ -313,6 +314,7 @@ export async function updateContentItem(id, payload, options = {}) {
   const normalizedPayload = normalizeContentItem({
     id,
     ...payload,
+    demoSeed: undefined,
     updatedAt: Math.max(Date.now(), (persisted?.updatedAt || 0) + 1),
   });
   const next = replaceRecordById(current, id, normalizedPayload, {
@@ -374,7 +376,7 @@ export async function deleteContentItem(id, options = {}) {
 
 export function clearLocalContentDemoData() {
   const current = readLocalContentItems();
-  const next = current.filter((item) => !DEMO_CONTENT_ITEM_IDS.has(String(item.id)));
+  const next = retainAuthoredRecords(current, getContentDemoSeed());
   writeLocalContentItems(next);
   notifyContentItemsUpdated({ source: 'local', type: 'clear_demo' });
   return next;
@@ -385,13 +387,11 @@ export function clearLocalContentDemoData() {
  * `countNonDemoLocalOpportunities` for why this exists.
  */
 export function countNonDemoLocalContentItems() {
-  return readLocalContentItems()
-    .filter((item) => !DEMO_CONTENT_ITEM_IDS.has(String(item.id)))
-    .length;
+  return retainAuthoredRecords(readLocalContentItems(), getContentDemoSeed()).length;
 }
 
 export function resetLocalContentDemoData() {
-  const seeded = getDemoLocalItems();
+  const seeded = mergeDemoSeeds(readLocalContentItems(), getContentDemoSeed());
   writeLocalContentItems(seeded);
   notifyContentItemsUpdated({ source: 'local', type: 'load_demo' });
   return seeded;

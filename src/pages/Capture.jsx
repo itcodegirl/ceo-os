@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSilentRefresh } from '../hooks/useSilentRefresh';
+import { useMemo, useRef, useState } from 'react';
 import PageHeader from '../components/ui/PageHeader';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
@@ -42,15 +43,19 @@ function formatRelativeDate(value) {
   }).format(date);
 }
 
+const CAPTURE_REFRESH_EVENTS = [CAPTURE_NOTES_UPDATED_EVENT];
+const CAPTURE_STORAGE_KEYS = ['ceo-os-capture-notes'];
+
 function Capture() {
   const [notes, setNotes] = useState(() => listCaptureNotes());
   // Composer state survives reloads + navigation so a long brain-dump in
   // progress is never lost. The category remembers the last choice so the
   // user does not have to reselect it for every note.
-  const [draftText, setDraftText] = usePersistentState('ceo-os-capture-draft-text', '');
+  const [draftText, setDraftText] = usePersistentState('ceo-os-capture-draft-text', '', { tabDraft: true });
   const [storedCategory, setStoredCategory] = usePersistentState(
     'ceo-os-capture-draft-category',
     CAPTURE_CATEGORY_OPTIONS[0],
+    { tabDraft: true },
   );
   const draftCategory = CAPTURE_CATEGORY_OPTIONS.includes(storedCategory)
     ? storedCategory
@@ -61,16 +66,10 @@ function Capture() {
   const composerTextareaRef = useRef(null);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    const handleCaptureUpdate = () => {
-      setNotes(listCaptureNotes());
-    };
-
-    window.addEventListener(CAPTURE_NOTES_UPDATED_EVENT, handleCaptureUpdate);
-    return () => {
-      window.removeEventListener(CAPTURE_NOTES_UPDATED_EVENT, handleCaptureUpdate);
-    };
-  }, []);
+  useSilentRefresh({
+    events: CAPTURE_REFRESH_EVENTS, storageKeys: CAPTURE_STORAGE_KEYS,
+    forceEvents: CAPTURE_REFRESH_EVENTS, onRefresh: () => setNotes(listCaptureNotes()),
+  });
 
   const sortedNotes = useMemo(() => {
     // Coerce missing/invalid updatedAt to 0 so older or partially-normalized

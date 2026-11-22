@@ -167,7 +167,7 @@ export function importWorkspaceBackup(input, options = {}) {
   if (options.preview && options.preview.ownerId !== getWorkspaceOwnerId()) throw new Error('Your account changed. Choose the backup again in the correct workspace.');
   const plan = previewWorkspaceBackup(input, options);
   if (options.preview && Object.entries(options.preview.before).some(([key, raw]) => storage.getItem(key) !== raw)) {
-    throw new Error('The workspace changed since this preview. Choose the backup again before replacing data.');
+    throw new Error('The workspace changed since this preview. Close it and review the change again before replacing data.');
   }
   const recoveryKey = applyStorageImport(plan.entries, { storage, ownerId: plan.ownerId });
   dispatchImportEvents(plan.entries.map((entry) => entry.definition));

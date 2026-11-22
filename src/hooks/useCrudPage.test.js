@@ -78,7 +78,7 @@ describe('useCrudPage', () => {
       await result.current.handleFormSubmit(createSubmitEvent());
     });
 
-    expect(updateItem).toHaveBeenCalledWith('2', { name: 'Opportunity B', status: 'Active' });
+    expect(updateItem).toHaveBeenCalledWith('2', { name: 'Opportunity B', status: 'Active' }, { expectedUpdatedAt: 0 });
     expect(result.current.items.find((item) => item.id === '2')).toEqual({ id: '2', name: 'Opportunity B', status: 'Active' });
 
     act(() => {
@@ -343,7 +343,7 @@ describe('useCrudPage', () => {
       await result.current.handleFormSubmit(createSubmitEvent());
     });
 
-    expect(updateItem).toHaveBeenCalledWith('1', { name: 'Opportunity A', status: 'Active' });
+    expect(updateItem).toHaveBeenCalledWith('1', { name: 'Opportunity A', status: 'Active' }, { expectedUpdatedAt: 0 });
     expect(result.current.formError).toBe('Unable to update this record right now.');
     expect(result.current.isFormOpen).toBe(true);
     expect(result.current.items).toEqual([{ id: '1', name: 'Opportunity A', status: 'Draft' }]);

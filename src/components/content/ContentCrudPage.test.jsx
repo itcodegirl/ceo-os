@@ -176,11 +176,20 @@ describe('ContentCrudPage', () => {
     );
     getContentSource.mockReturnValue('local');
 
-    renderWithRouter(<ContentCrudPage />);
-
+    const state = useCrudPage();
+    state.isFormOpen = false; state.isDeleteConfirmOpen = false;
+    const view = renderWithRouter(<ContentCrudPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit selected content item' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete selected content item' }));
+    state.isFormOpen = true;
+    view.rerender(<MemoryRouter><ContentCrudPage /></MemoryRouter>);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Save content changes' }));
+    state.isFormOpen = false;
+    view.rerender(<MemoryRouter><ContentCrudPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected content item' }));
+    state.isDeleteConfirmOpen = true;
+    view.rerender(<MemoryRouter><ContentCrudPage /></MemoryRouter>);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
 
     expect(handleOpenEditModal).toHaveBeenCalledTimes(1);

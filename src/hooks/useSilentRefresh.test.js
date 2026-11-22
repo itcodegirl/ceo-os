@@ -173,3 +173,20 @@ describe('useSilentRefresh', () => {
     expect(onRefresh).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('last update in a refresh burst', () => {
+  it('delivers a trailing refresh so the newest cross-tab value is not missed', () => {
+    vi.useFakeTimers();
+    const read = vi.fn();
+    const { unmount } = renderHook(() => useSilentRefresh({ storageKeys: ['watched'], onRefresh: read, coalesceMs: 400 }));
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'watched' })));
+    act(() => { vi.advanceTimersByTime(100); window.dispatchEvent(new StorageEvent('storage', { key: 'watched' })); });
+    expect(read).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(300));
+    expect(read).toHaveBeenCalledTimes(2);
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'watched' })));
+    unmount(); vi.advanceTimersByTime(1000);
+    expect(read).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+});

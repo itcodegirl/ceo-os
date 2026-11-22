@@ -30,7 +30,7 @@ export default function ImportRecoveryGate({ children }) {
   return <main className="page-content" style={{ maxWidth: 720, margin: '48px auto', padding: 24 }}>
     <h1>Finish recovering your workspace</h1>
     {error ? <p role="alert">{error}</p> : null}
-    <p role="alert">A backup restore was interrupted. Your original data is preserved. Some stores could not be rolled back, so editing is paused.</p>
+    <p role="alert">A workspace update was interrupted. Your original data is preserved. Some stores could not be rolled back, so editing is paused.</p>
     <p>Download the recovery snapshot first. You can retry restoring the original data, or deliberately keep the current data after reviewing it.</p>
     <ul>{recovery.failedKeys.map((key) => <li key={key}>{key.replace(/^ceo-os-/, '').replaceAll('-', ' ')}</li>)}</ul>
     <div className="modal-actions">

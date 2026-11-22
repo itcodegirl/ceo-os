@@ -50,7 +50,7 @@ describe('toPanelResult', () => {
     expect(result.title).toBe('Weekly Focus');
     expect(result.summary).toBe('Three priorities this week.');
     expect(result.structured.priorities).toEqual([
-      { title: 'Close the round', owner: 'You', status: 'Planned', reason: '' },
+      { title: 'Close the round', owner: '', status: '', reason: '' },
     ]);
   });
 
@@ -62,7 +62,7 @@ describe('toPanelResult', () => {
 
     expect(result.summary).toBe('plain text');
     expect(result.structured.tasks).toEqual([
-      { title: 'Reply to investor', type: 'task', status: 'Planned' },
+      { title: 'Reply to investor', type: 'task', owner: '', status: '' },
     ]);
   });
 });

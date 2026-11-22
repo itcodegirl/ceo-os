@@ -353,6 +353,8 @@ describe('src/pages/Dashboard', () => {
     useWorkspaceSetup.mockReturnValue({
       hasChoice: false,
       isDemoMode: true,
+      previewSetupChange: vi.fn(async (mode) => ({ mode, weeks: [], preserved: 0, removed: 0, added: 0 })),
+      applySetupChange: async (plan) => plan.mode === 'blank' ? startBlankWorkspace() : loadDemoWorkspace(),
       startBlankWorkspace,
       loadDemoWorkspace,
       // A first-run device holds only demo seed, so nothing is at risk and
@@ -376,9 +378,12 @@ describe('src/pages/Dashboard', () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Start blank' }));
-    expect(startBlankWorkspace).toHaveBeenCalledTimes(1);
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm demo cleanup' }));
+    await waitFor(() => expect(startBlankWorkspace).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm demo workspace changes' }));
     await waitFor(() => expect(loadDemoWorkspace).toHaveBeenCalledTimes(1));
   });
 

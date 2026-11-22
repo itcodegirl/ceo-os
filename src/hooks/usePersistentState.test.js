@@ -8,6 +8,7 @@ describe('usePersistentState', () => {
 
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it('initializes from localStorage or fallback value', () => {
@@ -56,6 +57,28 @@ describe('usePersistentState', () => {
     await waitFor(() => {
       expect(result.current[0]).toBe('Remote update');
     });
+  });
+
+  it('keeps a tab draft through external saves, navigation, and reloads', () => {
+    localStorage.setItem(storageKey, JSON.stringify('Recovered draft'));
+    const first = renderHook(() => usePersistentState(storageKey, '', { tabDraft: true }));
+    expect(first.result.current[0]).toBe('Recovered draft');
+    act(() => first.result.current[1]('My unfinished thought'));
+    act(() => {
+      localStorage.setItem(storageKey, JSON.stringify(''));
+      const event = new Event('storage');
+      Object.defineProperties(event, {
+        storageArea: { value: localStorage }, key: { value: storageKey }, newValue: { value: '""' },
+      });
+      window.dispatchEvent(event);
+      window.dispatchEvent(new CustomEvent('ceo-os:persistent-state', { detail: { key: storageKey, value: '' } }));
+    });
+    expect(first.result.current[0]).toBe('My unfinished thought');
+    first.unmount();
+    const reloaded = renderHook(() => usePersistentState(storageKey, '', { tabDraft: true }));
+    expect(reloaded.result.current[0]).toBe('My unfinished thought');
+    act(() => reloaded.result.current[1](''));
+    expect(sessionStorage.getItem(storageKey)).toBe('""');
   });
 
   it('syncs updates from in-page persistent-state events', async () => {

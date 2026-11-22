@@ -1,3 +1,4 @@
+import { retainAuthoredRecords, mergeDemoSeeds } from './demoProvenance';
 import { getWorkspaceOwnerId, assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { opportunities as mockOpportunities } from '../data/mockData';
 import { deleteRecordById, replaceRecordById } from './stateUtils';
@@ -26,7 +27,6 @@ export const OPPORTUNITY_QUEUE_KIND_DELETE = 'opportunity:delete';
 const DUPLICATE_OPPORTUNITY_MESSAGE = 'This opportunity already exists for that company.';
 
 export const OPPORTUNITIES_UPDATED_EVENT = 'ceo-os:opportunities-updated';
-const DEMO_OPPORTUNITY_IDS = new Set(mockOpportunities.map((item) => String(item.id)));
 
 function normalizeOpportunity(item) {
   return {
@@ -37,6 +37,7 @@ function normalizeOpportunity(item) {
     stage: item.stage || 'New',
     nextStep: item.nextStep || item.next_step || '',
     updatedAt: readUpdatedAtMs(item),
+    ...(typeof item.demoSeed === 'string' ? { demoSeed: item.demoSeed } : {}),
   };
 }
 
@@ -45,10 +46,10 @@ function getSeededLocalItems() {
     return [];
   }
 
-  return getDemoLocalItems();
+  return getOpportunityDemoSeed();
 }
 
-function getDemoLocalItems() {
+export function getOpportunityDemoSeed() {
   return mockOpportunities.map((item) => normalizeOpportunity(item));
 }
 
@@ -302,6 +303,7 @@ export async function updateOpportunity(id, payload, options = {}) {
   const normalizedPayload = normalizeOpportunity({
     id,
     ...payload,
+    demoSeed: undefined,
     updatedAt: Math.max(Date.now(), (persisted?.updatedAt || 0) + 1),
   });
   const next = replaceRecordById(current, id, normalizedPayload, {
@@ -363,26 +365,19 @@ export async function deleteOpportunity(id, options = {}) {
 
 export function clearLocalOpportunityDemoData() {
   const current = readLocalOpportunities();
-  const next = current.filter((item) => !DEMO_OPPORTUNITY_IDS.has(String(item.id)));
+  const next = retainAuthoredRecords(current, getOpportunityDemoSeed());
   writeLocalOpportunities(next);
   notifyOpportunitiesUpdated({ source: 'local', type: 'clear_demo' });
   return next;
 }
 
-/**
- * Counts local opportunities that are NOT part of the demo seed — i.e. the
- * records a "Load demo workspace" reset would destroy. Callers use this to
- * decide whether that action needs confirmation; a first-run device holding
- * only demo records returns 0 and is not worth prompting about.
- */
+/** Counts authored records, including examples edited after creation. */
 export function countNonDemoLocalOpportunities() {
-  return readLocalOpportunities()
-    .filter((item) => !DEMO_OPPORTUNITY_IDS.has(String(item.id)))
-    .length;
+  return retainAuthoredRecords(readLocalOpportunities(), getOpportunityDemoSeed()).length;
 }
 
 export function resetLocalOpportunityDemoData() {
-  const seeded = getDemoLocalItems();
+  const seeded = mergeDemoSeeds(readLocalOpportunities(), getOpportunityDemoSeed());
   writeLocalOpportunities(seeded);
   notifyOpportunitiesUpdated({ source: 'local', type: 'load_demo' });
   return seeded;

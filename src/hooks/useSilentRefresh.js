@@ -64,6 +64,13 @@ export function useSilentRefresh({
     const customEventNames = Array.isArray(events) ? events : [];
     const forcedEventNames = new Set(Array.isArray(forceEvents) ? forceEvents : []);
 
+    let trailingTimer;
+    const deliver = () => {
+      window.clearTimeout(trailingTimer);
+      trailingTimer = undefined;
+      lastFireAtRef.current = Date.now();
+      onRefreshRef.current?.();
+    };
     const fireRefresh = (event) => {
       if (typeof onRefreshRef.current !== 'function') {
         return;
@@ -81,10 +88,10 @@ export function useSilentRefresh({
       const isForced = Boolean(event && event.type && forcedEventNames.has(event.type));
       const now = Date.now();
       if (!isForced && now - lastFireAtRef.current < coalesceMs) {
+        if (trailingTimer === undefined) trailingTimer = window.setTimeout(deliver, coalesceMs - (now - lastFireAtRef.current));
         return;
       }
-      lastFireAtRef.current = now;
-      onRefreshRef.current();
+      deliver();
     };
 
     const handleStorageChange = (storageEvent) => {
@@ -121,6 +128,7 @@ export function useSilentRefresh({
     }
 
     return () => {
+      window.clearTimeout(trailingTimer);
       customEventNames.forEach((eventName) => {
         window.removeEventListener(eventName, fireRefresh);
       });

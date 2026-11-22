@@ -185,11 +185,20 @@ describe('OpportunityCrudPage', () => {
     );
     getOpportunitiesSource.mockReturnValue('local');
 
-    renderWithRouter(<OpportunityCrudPage />);
-
+    const state = useCrudPage();
+    state.isFormOpen = false; state.isDeleteConfirmOpen = false;
+    const view = renderWithRouter(<OpportunityCrudPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit selected opportunity' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete selected opportunity' }));
+    state.isFormOpen = true;
+    view.rerender(<MemoryRouter><OpportunityCrudPage /></MemoryRouter>);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Save opportunity changes' }));
+    state.isFormOpen = false;
+    view.rerender(<MemoryRouter><OpportunityCrudPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected opportunity' }));
+    state.isDeleteConfirmOpen = true;
+    view.rerender(<MemoryRouter><OpportunityCrudPage /></MemoryRouter>);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
 
     expect(handleOpenEditModal).toHaveBeenCalledTimes(1);

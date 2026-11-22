@@ -160,7 +160,7 @@ describe("src/pages/ChiefOfStaff", () => {
     expect(screen.getByText("→ Opportunities · New")).toBeInTheDocument();
     expect(screen.getByText("→ Content OS · Drafting")).toBeInTheDocument();
     expect(screen.getByText("→ Weekly Brief priority")).toBeInTheDocument();
-    expect(screen.getByText("→ Weekly Brief task")).toBeInTheDocument();
+    expect(screen.getByText("→ Weekly Brief priority (from task)")).toBeInTheDocument();
   });
 
   it("labels fallback output and disables add all when no structured actions exist", () => {

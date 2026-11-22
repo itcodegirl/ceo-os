@@ -71,6 +71,7 @@ function OpportunityCrudPage() {
     deletePrompt,
     deleteError,
   } = useCrudPage({
+    storageKey: 'ceo-os-opportunities',
     defaultFormValues: DEFAULT_FORM,
     listItems: listOpportunities,
     createItem: createOpportunity,

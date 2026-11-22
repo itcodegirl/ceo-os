@@ -1,130 +1,39 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('../../hooks/useWorkspaceSetup', () => ({
-  useWorkspaceSetup: vi.fn(),
-}));
-
 import LoadDemoWorkspaceButton from './LoadDemoWorkspaceButton';
-import { useWorkspaceSetup } from '../../hooks/useWorkspaceSetup';
-
-function mockWorkspaceSetup({ loadDemoWorkspace, countLocalRecordsAtRisk }) {
-  useWorkspaceSetup.mockReturnValue({
-    loadDemoWorkspace,
-    countLocalRecordsAtRisk,
-  });
-}
-
-const CONFIRM_BUTTON = { name: 'Replace local workspace with demo data' };
-const CANCEL_BUTTON = { name: 'Keep local workspace data' };
-
-describe('LoadDemoWorkspaceButton', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('loads straight through when the device holds nothing but demo seed', async () => {
-    const loadDemoWorkspace = vi.fn().mockResolvedValue();
-    mockWorkspaceSetup({
-      loadDemoWorkspace,
-      countLocalRecordsAtRisk: vi.fn().mockResolvedValue(0),
-    });
-
+const { preview, apply } = vi.hoisted(() => ({ preview: vi.fn(), apply: vi.fn() }));
+vi.mock('../../hooks/useWorkspaceSetup', () => ({ useWorkspaceSetup: () => ({ previewSetupChange: preview, applySetupChange: apply }) }));
+const plan = { preserved: 3, removed: 4, added: 5, weeks: ['2026-11-16'] };
+beforeEach(() => { vi.resetAllMocks(); preview.mockResolvedValue(plan); apply.mockResolvedValue(); });
+describe('workspace setup preview', () => {
+  it('shows scope and preservation before any mutation, even on a demo-only device', async () => {
     render(<LoadDemoWorkspaceButton />);
     fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
-
-    await waitFor(() => expect(loadDemoWorkspace).toHaveBeenCalledTimes(1));
-    expect(screen.queryByRole('button', CONFIRM_BUTTON)).not.toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Keep 3 edited or authored records');
+    expect(apply).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel action' }));
+    expect(apply).not.toHaveBeenCalled();
   });
-
-  it('asks first when the reset would destroy records the user created', async () => {
-    const loadDemoWorkspace = vi.fn().mockResolvedValue();
-    mockWorkspaceSetup({
-      loadDemoWorkspace,
-      countLocalRecordsAtRisk: vi.fn().mockResolvedValue(3),
-    });
-
+  it('confirms exactly the reviewed plan', async () => {
+    render(<LoadDemoWorkspaceButton action="blank">Start blank</LoadDemoWorkspaceButton>);
+    fireEvent.click(screen.getByRole('button', { name: 'Start blank' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm demo cleanup' }));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith(plan));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+  it('keeps an actionable error in the dialog when a change fails', async () => {
+    apply.mockRejectedValue(new Error('Changes rolled back. Original workspace is intact.'));
     render(<LoadDemoWorkspaceButton />);
     fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
-
-    await screen.findByRole('button', CONFIRM_BUTTON);
-    expect(loadDemoWorkspace).not.toHaveBeenCalled();
-    expect(screen.getByText(/3 records you created here will be removed/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm demo workspace changes' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Original workspace is intact');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
-
-  it('cancelling keeps the local data intact', async () => {
-    const loadDemoWorkspace = vi.fn().mockResolvedValue();
-    mockWorkspaceSetup({
-      loadDemoWorkspace,
-      countLocalRecordsAtRisk: vi.fn().mockResolvedValue(1),
-    });
-
+  it('fails closed when stores cannot be inspected', async () => {
+    preview.mockRejectedValue(new Error('Unreadable original data.'));
     render(<LoadDemoWorkspaceButton />);
     fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
-
-    fireEvent.click(await screen.findByRole('button', CANCEL_BUTTON));
-
-    await waitFor(() => {
-      expect(screen.queryByRole('button', CONFIRM_BUTTON)).not.toBeInTheDocument();
-    });
-    expect(loadDemoWorkspace).not.toHaveBeenCalled();
-  });
-
-  it('confirming proceeds with the reset', async () => {
-    const loadDemoWorkspace = vi.fn().mockResolvedValue();
-    mockWorkspaceSetup({
-      loadDemoWorkspace,
-      countLocalRecordsAtRisk: vi.fn().mockResolvedValue(2),
-    });
-
-    render(<LoadDemoWorkspaceButton />);
-    fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
-    fireEvent.click(await screen.findByRole('button', CONFIRM_BUTTON));
-
-    await waitFor(() => expect(loadDemoWorkspace).toHaveBeenCalledTimes(1));
-  });
-
-  // Failing open on a destructive action is how data gets lost silently, so an
-  // undeterminable count must prompt rather than proceed.
-  it('asks when the at-risk count cannot be determined', async () => {
-    const loadDemoWorkspace = vi.fn().mockResolvedValue();
-    mockWorkspaceSetup({
-      loadDemoWorkspace,
-      countLocalRecordsAtRisk: vi.fn().mockResolvedValue(null),
-    });
-
-    render(<LoadDemoWorkspaceButton />);
-    fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
-
-    await screen.findByRole('button', CONFIRM_BUTTON);
-    expect(loadDemoWorkspace).not.toHaveBeenCalled();
-    expect(screen.getByText(/Any records you created here will be removed/)).toBeInTheDocument();
-  });
-
-  it('asks when the count throws rather than crashing the click handler', async () => {
-    const loadDemoWorkspace = vi.fn().mockResolvedValue();
-    mockWorkspaceSetup({
-      loadDemoWorkspace,
-      countLocalRecordsAtRisk: vi.fn().mockRejectedValue(new Error('storage unavailable')),
-    });
-
-    render(<LoadDemoWorkspaceButton />);
-    fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
-
-    await screen.findByRole('button', CONFIRM_BUTTON);
-    expect(loadDemoWorkspace).not.toHaveBeenCalled();
-  });
-
-  it('reports failures through onError instead of leaving the dialog open', async () => {
-    const onError = vi.fn();
-    mockWorkspaceSetup({
-      loadDemoWorkspace: vi.fn().mockRejectedValue(new Error('write failed')),
-      countLocalRecordsAtRisk: vi.fn().mockResolvedValue(0),
-    });
-
-    render(<LoadDemoWorkspaceButton onError={onError} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Load demo workspace' }));
-
-    await waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unreadable original data');
+    expect(apply).not.toHaveBeenCalled();
   });
 });

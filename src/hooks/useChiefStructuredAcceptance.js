@@ -1,3 +1,5 @@
+import { normalizeChiefSuggestion, readChiefTextField } from '../lib/normalizeChiefOutput';
+import { toPanelResult } from '../lib/chiefPanelResult';
 import { useCallback, useRef, useState } from 'react';
 import { createOpportunity, listOpportunities } from '../lib/opportunitiesRepository';
 import { createContentItem, listContentItems } from '../lib/contentRepository';
@@ -18,30 +20,8 @@ function normalizeComparableValue(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-function pickFirstString(value, fields) {
-  if (!value || typeof value !== 'object') return '';
-  for (const field of fields) {
-    const candidate = value[field];
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-    if (candidate != null && typeof candidate !== 'object') {
-      const coerced = String(candidate).trim();
-      if (coerced) return coerced;
-    }
-  }
-  return '';
-}
-
 function pickFirstNormalized(value, fields) {
-  return normalizeComparableValue(pickFirstString(value, fields));
-}
-
-function resolveStructuredText(item) {
-  if (typeof item === 'string') {
-    return item.trim();
-  }
-  return pickFirstString(item, SHARED_TEXT_FIELDS);
+  return normalizeComparableValue(readChiefTextField(value, ...fields));
 }
 
 function combineParts(primary, secondary) {
@@ -71,7 +51,7 @@ const SECTION_DESCRIPTORS = {
       company: itemValue.company || '',
       priority: itemValue.priority || 'Medium',
       stage: itemValue.stage || 'New',
-      nextStep: itemValue.nextStep || itemValue.next_step || '',
+      nextStep: itemValue.nextStep,
     }),
   },
   contentItems: {
@@ -85,8 +65,10 @@ const SECTION_DESCRIPTORS = {
     successMessage: 'Added a content item from the structured AI output.',
     save: ({ itemValue, primaryText }) => createContentItem({
       title: primaryText,
-      platform: itemValue.platform || itemValue.channel || '',
+      platform: itemValue.platform,
       status: itemValue.status || 'Drafting',
+      notes: itemValue.notes, purpose: itemValue.purpose,
+      contentType: itemValue.contentType, scheduledFor: itemValue.scheduledFor,
     }),
   },
   priorities: {
@@ -104,7 +86,7 @@ const SECTION_DESCRIPTORS = {
       item: {
         id: buildCreateId(),
         title: primaryText,
-        owner: itemValue.owner || 'Team Member',
+        owner: itemValue.owner || '',
         status: itemValue.status || 'Planned',
       },
     }),
@@ -119,9 +101,7 @@ SECTION_DESCRIPTORS.tasks = SECTION_DESCRIPTORS.priorities;
 function buildItemKey(sectionKey, item) {
   const descriptor = SECTION_DESCRIPTORS[sectionKey];
   if (!descriptor) return '';
-  const itemValue = item && typeof item === 'object'
-    ? item
-    : { title: resolveStructuredText(item) };
+  const itemValue = normalizeChiefSuggestion(sectionKey, item);
   const primary = pickFirstNormalized(itemValue, descriptor.primaryFields);
   if (!primary) return '';
   const secondary = pickFirstNormalized(itemValue, descriptor.keySecondaryFields);
@@ -283,7 +263,7 @@ export function useChiefStructuredAcceptance({
       const accepted = {};
 
       responseEntries.forEach((entry) => {
-        const payload = entry?.structuredPayload;
+        const payload = toPanelResult(entry)?.structured;
         if (!payload || typeof payload !== 'object') {
           return;
         }
@@ -327,7 +307,7 @@ export function useChiefStructuredAcceptance({
     const { suppressFeedback = false } = options;
     const sectionKey = typeof section === 'string' ? section : '';
     const descriptor = SECTION_DESCRIPTORS[sectionKey];
-    const itemValue = item && typeof item === 'object' ? item : resolveStructuredText(item);
+    const itemValue = normalizeChiefSuggestion(sectionKey, item);
     const itemKey = buildItemKey(sectionKey, itemValue);
 
     if (!itemKey) {
@@ -375,10 +355,8 @@ export function useChiefStructuredAcceptance({
     }));
 
     try {
-      const itemAsObject = typeof itemValue === 'object' && itemValue
-        ? itemValue
-        : { title: resolveStructuredText(itemValue) };
-      const primaryText = pickFirstString(itemAsObject, descriptor.primaryFields);
+      const itemAsObject = itemValue;
+      const primaryText = readChiefTextField(itemAsObject, ...descriptor.primaryFields);
       if (!primaryText) {
         pushFeedbackIfAllowed(FEEDBACK_KIND.error, descriptor.missingTextMessage, suppressFeedback);
         notifyTelemetry('accept_item_skipped', {

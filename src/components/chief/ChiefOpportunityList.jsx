@@ -12,9 +12,9 @@ export default function ChiefOpportunityList(props) {
       renderCopy={(item) => (
         <>
           <h4>{item.name}</h4>
-          <p>{item.company}</p>
+          <p>{item.company || "Company not specified"}</p>
           <small>
-            {item.priority} priority · {item.stage || "New"}
+            {item.priority || "Medium (default)"} priority · {item.stage || "New (default)"}
           </small>
           <p className="chief-next-step">Next step: {item.nextStep}</p>
         </>

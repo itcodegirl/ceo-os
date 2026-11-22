@@ -1,58 +1,44 @@
-function normalizeText(value, fallback = "") {
-  if (value === null || value === undefined) return fallback;
-  return String(value).trim();
+function text(value, fallback = '') {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+    ? String(value).trim() : fallback;
+}
+export function readChiefTextField(item, ...keys) {
+  for (const key of keys) {
+    const value = text(item?.[key]);
+    if (value) return value;
+  }
+  return '';
 }
 
-function normalizeArray(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-export function normalizeChiefOutput(payload = {}) {
-  const structured = payload?.structured ?? {};
-
+// The panel, acceptance identity, save payload, and history hydration all use
+// these canonical fields. Missing metadata stays empty; only the UI labels it.
+export function normalizeChiefSuggestion(section, input) {
+  const item = input && typeof input === 'object' ? input : { title: text(input) };
+  const title = readChiefTextField(item, 'title', 'name', 'text', 'summary', 'task');
+  if (section === 'opportunities') return {
+    name: readChiefTextField(item, 'name', 'title', 'text', 'summary', 'task'),
+    company: readChiefTextField(item, 'company', 'organization'), priority: readChiefTextField(item, 'priority'),
+    stage: readChiefTextField(item, 'stage'), nextStep: readChiefTextField(item, 'nextStep', 'next_step'),
+  };
+  if (section === 'contentItems') return {
+    title, platform: readChiefTextField(item, 'platform', 'channel'), status: readChiefTextField(item, 'status'),
+    summary: readChiefTextField(item, 'summary'), notes: readChiefTextField(item, 'notes', 'summary'),
+    purpose: readChiefTextField(item, 'purpose'), contentType: readChiefTextField(item, 'contentType', 'content_type'),
+    scheduledFor: readChiefTextField(item, 'scheduledFor', 'scheduled_for'),
+  };
   return {
-    title: normalizeText(payload.title, "Executive Action Plan"),
-    summary: normalizeText(payload.summary, ""),
-    source: normalizeText(payload.source, "proxy"),
-    fallbackReason: normalizeText(payload.fallbackReason),
-    errorCode: normalizeText(payload.errorCode),
-    errorMessage: normalizeText(payload.errorMessage),
-    structured: {
-      priorities: normalizeArray(structured.priorities)
-        .map((item) => ({
-          title: normalizeText(item?.title),
-          owner: normalizeText(item?.owner, "You"),
-          status: normalizeText(item?.status, "Planned"),
-          reason: normalizeText(item?.reason)
-        }))
-        .filter((item) => item.title),
-
-      opportunities: normalizeArray(structured.opportunities)
-        .map((item) => ({
-          name: normalizeText(item?.name),
-          company: normalizeText(item?.company, "Unknown"),
-          priority: normalizeText(item?.priority, "Medium"),
-          stage: normalizeText(item?.stage, "New"),
-          nextStep: normalizeText(item?.nextStep)
-        }))
-        .filter((item) => item.name),
-
-      contentItems: normalizeArray(structured.contentItems)
-        .map((item) => ({
-          title: normalizeText(item?.title),
-          platform: normalizeText(item?.platform, "LinkedIn"),
-          status: normalizeText(item?.status, "Drafting"),
-          summary: normalizeText(item?.summary)
-        }))
-        .filter((item) => item.title),
-
-      tasks: normalizeArray(structured.tasks)
-        .map((item) => ({
-          title: normalizeText(item?.title),
-          type: normalizeText(item?.type, "task"),
-          status: normalizeText(item?.status, "Planned")
-        }))
-        .filter((item) => item.title)
-    }
+    title, owner: readChiefTextField(item, 'owner', 'assignee'), status: readChiefTextField(item, 'status'),
+    ...(section === 'tasks' ? { type: readChiefTextField(item, 'type') || 'task' } : { reason: readChiefTextField(item, 'reason') }),
+  };
+}
+export function normalizeChiefOutput(payload = {}) {
+  return {
+    title: text(payload.title, 'Executive Action Plan'), summary: text(payload.summary),
+    source: text(payload.source, 'proxy'), fallbackReason: text(payload.fallbackReason),
+    errorCode: text(payload.errorCode), errorMessage: text(payload.errorMessage),
+    structured: Object.fromEntries(['priorities', 'opportunities', 'contentItems', 'tasks'].map((section) => [section,
+      (Array.isArray(payload.structured?.[section]) ? payload.structured[section] : [])
+        .map((item) => normalizeChiefSuggestion(section, item)).filter((item) => item.title || item.name),
+    ])),
   };
 }

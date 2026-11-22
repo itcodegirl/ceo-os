@@ -68,7 +68,6 @@ function Dashboard() {
   const { captureNotes, journalEntry, reminders } = useFocusHomeSignals();
   const {
     hasChoice: hasWorkspaceSetupChoice,
-    startBlankWorkspace,
   } = useWorkspaceSetup();
   const {
     reminderDraft,
@@ -287,16 +286,6 @@ function Dashboard() {
     setIsFocusToolsExpanded((current) => !current);
   }, [setIsFocusToolsExpanded]);
 
-  const handleStartBlankWorkspace = useCallback(() => {
-    Promise.resolve(startBlankWorkspace())
-      .then(() => {
-        showToast('Blank local workspace ready. Demo records are cleared from this device.');
-      })
-      .catch(() => {
-        showToast('Unable to update local workspace setup right now.');
-      });
-  }, [showToast, startBlankWorkspace]);
-
   return (
     <section
       className={`dashboard-page focus-home-page focus-home-page--${modeClassName}`}
@@ -363,9 +352,9 @@ function Dashboard() {
             </p>
           </div>
           <div className="focus-home__setup-actions">
-            <Button type="button" onClick={handleStartBlankWorkspace} icon={{ name: 'check', size: 14 }}>
+            <LoadDemoWorkspaceButton action="blank" onLoaded={() => showToast('Unchanged demo examples cleared. Your own work is kept.')}>
               Start blank
-            </Button>
+            </LoadDemoWorkspaceButton>
             <LoadDemoWorkspaceButton
               onLoaded={() => showToast('Demo workspace loaded on this device.')}
               onError={() => showToast('Unable to load demo workspace right now.')}

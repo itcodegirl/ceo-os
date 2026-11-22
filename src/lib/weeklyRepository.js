@@ -1,3 +1,4 @@
+import { retainAuthoredRecords, mergeDemoSeeds } from './demoProvenance';
 import { getWorkspaceOwnerId, assertWorkspaceOwner, accountChangedError } from './workspaceOwnership';
 import { isDemoWorkspaceEnabled } from './workspaceSetup';
 import {
@@ -31,9 +32,6 @@ const WEEKLY_ITEM_TYPES = {
   win: 'win',
   blocker: 'blocker',
 };
-const DEMO_PRIORITY_IDS = new Set(defaultPriorities.map((item) => String(item.id)));
-const DEMO_WIN_IDS = new Set(defaultWins.map((item) => String(item.id)));
-const DEMO_BLOCKER_IDS = new Set(defaultBlockers.map((item) => String(item.id)));
 
 /**
  * Single source of truth for the three item types in a weekly brief. Each
@@ -125,7 +123,7 @@ function resolveItemType(itemType) {
 
 function normalizeItem(type, item, { includeUpdatedAt = true } = {}) {
   const descriptor = getDescriptor(type);
-  const normalized = { id: String(item?.id || buildCreateId()) };
+  const normalized = { id: String(item?.id || buildCreateId()), ...(typeof item?.demoSeed === 'string' ? { demoSeed: item.demoSeed } : {}) };
   for (const [field, defaultValue] of Object.entries(descriptor.fields)) {
     normalized[field] = item?.[field] || defaultValue;
   }
@@ -211,7 +209,7 @@ function createDefaultWeekPayload() {
   };
 }
 
-function createDemoWeekPayload() {
+export function createDemoWeekPayload() {
   return {
     reviewNotes: DEFAULT_REVIEW_NOTES,
     priorities: getDemoPriorities(),
@@ -704,7 +702,7 @@ export async function updateWeeklyItem({
       'This weekly item was changed in another window. Reload to see the latest version before saving.',
     );
 
-    const itemWithStamp = { ...item, id: normalizedItemId, updatedAt: Math.max(stamp, (persisted?.updatedAt || 0) + 1) };
+    const itemWithStamp = { ...item, demoSeed: undefined, id: normalizedItemId, updatedAt: Math.max(stamp, (persisted?.updatedAt || 0) + 1) };
     const updatedCollection = current[descriptor.collectionKey].map((currentItem) => {
       if (String(currentItem.id) !== normalizedItemId) {
         return currentItem;
@@ -827,54 +825,28 @@ export async function deleteWeeklyItem({
 }
 
 export function clearLocalWeeklyDemoData(weekStart = getCurrentWeekStart()) {
-  const normalizedWeekStart = typeof weekStart === 'string' && weekStart
-    ? weekStart
-    : getCurrentWeekStart();
   const store = readLocalWeekStore();
-  const current = resolveLocalWeekPayload(normalizedWeekStart);
-
-  store[normalizedWeekStart] = {
-    reviewNotes: current.reviewNotes,
-    priorities: normalizeCollection(
-      WEEKLY_ITEM_TYPES.priority,
-      current.priorities.filter((item) => !DEMO_PRIORITY_IDS.has(String(item.id))),
-    ),
-    wins: normalizeCollection(
-      WEEKLY_ITEM_TYPES.win,
-      current.wins.filter((item) => !DEMO_WIN_IDS.has(String(item.id))),
-    ),
-    blockers: normalizeCollection(
-      WEEKLY_ITEM_TYPES.blocker,
-      current.blockers.filter((item) => !DEMO_BLOCKER_IDS.has(String(item.id))),
-    ),
-  };
-
+  if (!store[weekStart]) store[weekStart] = resolveLocalWeekPayload(weekStart);
+  const seed = createDemoWeekPayload();
+  for (const [week, current] of Object.entries(store)) {
+    store[week] = { ...current };
+    for (const key of ['priorities', 'wins', 'blockers']) store[week][key] = retainAuthoredRecords(current[key], seed[key]);
+  }
   writeLocalWeekStore(store);
-  removeLegacyWeeklyKeys();
-  notifyWeeklyUpdated({
-    weekStart: normalizedWeekStart,
-    source: 'local',
-    mutation: 'clear_demo',
-  });
-  return store[normalizedWeekStart];
+  notifyWeeklyUpdated({ source: 'local', mutation: 'clear_demo' });
+  return store[weekStart];
 }
 
-/**
- * Counts the week's local records that are NOT part of the demo seed — the
- * priorities, wins and blockers a "Load demo workspace" reset would replace,
- * plus the review notes it would overwrite (reset swaps the whole payload, so
- * notes are lost too even though they carry no id). See
- * `countNonDemoLocalOpportunities` for why callers need this.
- */
+/** Counts authored weekly records and reflections preserved by demo changes. */
 export function countNonDemoLocalWeeklyRecords(weekStart = getCurrentWeekStart()) {
   const normalizedWeekStart = typeof weekStart === 'string' && weekStart
     ? weekStart
     : getCurrentWeekStart();
   const current = resolveLocalWeekPayload(normalizedWeekStart);
 
-  const itemCount = current.priorities.filter((item) => !DEMO_PRIORITY_IDS.has(String(item.id))).length
-    + current.wins.filter((item) => !DEMO_WIN_IDS.has(String(item.id))).length
-    + current.blockers.filter((item) => !DEMO_BLOCKER_IDS.has(String(item.id))).length;
+  const itemCount = retainAuthoredRecords(current.priorities, getDemoPriorities()).length
+    + retainAuthoredRecords(current.wins, getDemoWins()).length
+    + retainAuthoredRecords(current.blockers, getDemoBlockers()).length;
 
   const hasOwnNotes = typeof current.reviewNotes === 'string'
     && current.reviewNotes.trim() !== ''
@@ -888,7 +860,10 @@ export function resetLocalWeeklyDemoData(weekStart = getCurrentWeekStart()) {
     ? weekStart
     : getCurrentWeekStart();
   const store = readLocalWeekStore();
-  store[normalizedWeekStart] = createDemoWeekPayload();
+  const current = resolveLocalWeekPayload(normalizedWeekStart);
+  const seed = createDemoWeekPayload();
+  store[normalizedWeekStart] = { ...current };
+  for (const key of ['priorities', 'wins', 'blockers']) store[normalizedWeekStart][key] = mergeDemoSeeds(current[key], seed[key]);
 
   writeLocalWeekStore(store);
   removeLegacyWeeklyKeys();

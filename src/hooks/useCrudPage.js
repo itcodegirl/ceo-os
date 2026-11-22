@@ -1,3 +1,4 @@
+import { useSilentRefresh } from './useSilentRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useConfirmDelete } from './useConfirmDelete';
 import { useIsMountedRef } from './useIsMountedRef';
@@ -24,6 +25,7 @@ export function useCrudPage(config) {
     updateItem,
     deleteItem,
     updatedEventName,
+    storageKey,
     mapItemToFormValues,
     mapFormValuesToPayload,
     getDeleteLabel,
@@ -188,28 +190,12 @@ export function useCrudPage(config) {
     setRefreshToken((current) => current + 1);
   }, []);
 
-  // When the repository advertises an updated-event name, subscribe so that
-  // writes from other surfaces (cross-page promotions, other tabs) silently
-  // refresh this page's list without forcing the user to reload. We
-  // intentionally ignore detail.source so events fired by both local and
-  // supabase paths trigger a refetch.
-  useEffect(() => {
-    if (typeof updatedEventName !== 'string' || !updatedEventName) {
-      return undefined;
-    }
-    if (typeof window === 'undefined') {
-      return undefined;
-    }
-
-    const handleUpdate = () => {
-      refreshItems();
-    };
-
-    window.addEventListener(updatedEventName, handleUpdate);
-    return () => {
-      window.removeEventListener(updatedEventName, handleUpdate);
-    };
-  }, [refreshItems, updatedEventName]);
+  const refreshEvents = useMemo(() => updatedEventName ? [updatedEventName] : [], [updatedEventName]);
+  const refreshStorageKeys = useMemo(() => storageKey ? [storageKey] : [], [storageKey]);
+  useSilentRefresh({
+    events: refreshEvents, storageKeys: refreshStorageKeys, forceEvents: refreshEvents,
+    enabled: Boolean(updatedEventName || storageKey), onRefresh: refreshItems,
+  });
 
   const resetForm = useCallback(() => {
     setFormValues(defaultFormValuesResolved);
@@ -308,10 +294,7 @@ export function useCrudPage(config) {
 
     try {
       if (selectedItem) {
-        const expectedUpdatedAt = Number(selectedItem.updatedAt);
-        const updated = Number.isFinite(expectedUpdatedAt) && expectedUpdatedAt > 0
-          ? await updateItem(selectedItem.id, payload, { expectedUpdatedAt })
-          : await updateItem(selectedItem.id, payload);
+        const updated = await updateItem(selectedItem.id, payload, { expectedUpdatedAt: selectedItem.updatedAt ?? 0 });
         if (!isMountedRef.current) {
           return;
         }

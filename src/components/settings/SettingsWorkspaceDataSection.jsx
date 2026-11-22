@@ -38,8 +38,6 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
   const {
     hasChoice: hasWorkspaceSetupChoice,
     isDemoMode,
-    startBlankWorkspace,
-    clearDemoData,
   } = useWorkspaceSetup();
   const { hash } = useLocation();
   const [recoveryDisclosure, setRecoveryDisclosure] = useState({ hash: null, open: false });
@@ -84,20 +82,9 @@ function SettingsWorkspaceDataSection({ source, onRefreshSettings }) {
             : 'No setup choice has been saved yet. Demo records are shown for review until you choose.'}
         </p>
         <div className="settings-workspace-setup__actions">
-          <Button type="button" size="small" onClick={startBlankWorkspace} icon={{ name: 'check', size: 14 }}>
-            Start blank
-          </Button>
+          <LoadDemoWorkspaceButton size="small" action="blank">Start blank</LoadDemoWorkspaceButton>
           <LoadDemoWorkspaceButton size="small" />
-          <Button
-            type="button"
-            size="small"
-            variant="ghost"
-            onClick={clearDemoData}
-            disabled={!isDemoMode}
-            ariaLabel={isDemoMode ? 'Clear demo data from this device' : 'Clear demo data unavailable'}
-          >
-            Clear demo data
-          </Button>
+          <LoadDemoWorkspaceButton size="small" action="blank" disabled={!isDemoMode}>Clear demo data</LoadDemoWorkspaceButton>
         </div>
       </div>
 

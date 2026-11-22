@@ -15,6 +15,7 @@ function readStoredData(key) {
 describe('src/pages/Capture', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it('renders empty state when no notes exist', () => {
